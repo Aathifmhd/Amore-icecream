@@ -72,6 +72,7 @@ import {
   Sliders,
   Printer,
   ChevronDown,
+  ChevronUp,
   X,
   Save,
   Check,
@@ -111,6 +112,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<OrderRecord | null>(null);
   const [selectedOrderForEdit, setSelectedOrderForEdit] = useState<OrderRecord | null>(null);
   const [isCreateOrderModalOpen, setIsCreateOrderModalOpen] = useState(false);
+  const [expandedOrderItems, setExpandedOrderItems] = useState<Record<string, boolean>>({});
+
+  const toggleOrderItemsExpanded = (orderRef: string) => {
+    setExpandedOrderItems((prev) => ({
+      ...prev,
+      [orderRef]: !prev[orderRef],
+    }));
+  };
 
   // Confirm Order Modal State
   const [confirmingOrder, setConfirmingOrder] = useState<OrderRecord | null>(null);
@@ -696,6 +705,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         const isConfirmed = order.status === 'confirmed';
                         const remainingSeconds = getRemainingGraceSeconds(order);
                         const inGracePeriod = (remainingSeconds > 0 || !!order.isGracePeriodPaused) && order.status === 'pending_confirmation';
+                        const isItemsExpanded = !!expandedOrderItems[order.orderReference];
+                        const hasManyItems = order.items.length > 2;
+                        const displayedItems = hasManyItems && !isItemsExpanded ? order.items.slice(0, 2) : order.items;
 
                         return (
                           <tr
@@ -770,43 +782,65 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   {order.items.reduce((sum, it) => sum + it.quantity, 0)}{' '}
                                   {order.items.reduce((sum, it) => sum + it.quantity, 0) === 1 ? 'Item' : 'Items'} Total
                                 </span>
-                                <span className="text-[10px] text-[#8C102A] font-semibold">
+                                <span className="text-[10px] text-[#8C102A] font-semibold bg-[#8C102A]/8 px-1.5 py-0.5 rounded">
                                   {order.items.length}{' '}
-                                  {order.items.length === 1 ? 'flavor/type' : 'flavors/types'}
+                                  {order.items.length === 1 ? 'flavor' : 'flavors'}
                                 </span>
                               </div>
 
                               {/* Items list */}
-                              <div className="space-y-1.5">
-                                {order.items.map((item, idx) => (
+                              <div className={`space-y-1.5 ${isItemsExpanded ? 'max-h-60 overflow-y-auto pr-0.5' : ''}`}>
+                                {displayedItems.map((item, idx) => (
                                   <div
                                     key={idx}
-                                    className="flex items-start gap-2 bg-[#FAF7F2] p-1.5 rounded-lg border border-[#E8DFC8]/80 hover:border-[#D9CBB7] transition-all"
+                                    className="flex items-center justify-between gap-1.5 bg-[#FAF7F2] py-1 px-2 rounded-lg border border-[#E8DFC8]/80 hover:border-[#D9CBB7] transition-all text-xs"
                                   >
-                                    {/* Bold Quantity Pill */}
-                                    <span className="inline-flex items-center justify-center min-w-[26px] px-1.5 py-0.5 rounded-md bg-[#8C102A] text-white font-black text-xs shadow-2xs shrink-0 mt-0.5">
-                                      {item.quantity}×
-                                    </span>
+                                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                      {/* Bold Quantity Badge */}
+                                      <span className="inline-flex items-center justify-center min-w-[22px] px-1 py-0.5 rounded-md bg-[#8C102A] text-white font-black text-[10px] shadow-2xs shrink-0">
+                                        {item.quantity}×
+                                      </span>
 
-                                    {/* Name & Format Details */}
-                                    <div className="flex-1 min-w-0">
-                                      <div className="font-bold text-xs sm:text-[13px] text-[#241A18] leading-snug">
+                                      {/* Item Name */}
+                                      <span className="font-bold text-xs sm:text-[13px] text-[#241A18] truncate" title={item.name}>
                                         {item.name}
-                                      </div>
-                                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                                        {item.format && (
-                                          <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-white text-[#5D4E46] border border-[#D9CBB7] capitalize tracking-wide">
-                                            {item.format.replace(/-/g, ' ')}
-                                          </span>
-                                        )}
-                                        <span className="text-[11px] font-bold text-[#8C102A]">
-                                          {formatPrice(item.priceLKR * item.quantity, currency)}
+                                      </span>
+
+                                      {/* Format Badge */}
+                                      {item.format && (
+                                        <span className="inline-block px-1.5 py-0.2 rounded text-[9px] font-semibold bg-white text-[#5D4E46] border border-[#D9CBB7] capitalize shrink-0">
+                                          {item.format.replace(/-/g, ' ')}
                                         </span>
-                                      </div>
+                                      )}
                                     </div>
+
+                                    {/* Subtotal */}
+                                    <span className="text-[11px] font-bold text-[#8C102A] shrink-0 ml-1">
+                                      {formatPrice(item.priceLKR * item.quantity, currency)}
+                                    </span>
                                   </div>
                                 ))}
                               </div>
+
+                              {/* Collapsible Accordion Toggle Button for multi-item orders */}
+                              {hasManyItems && (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleOrderItemsExpanded(order.orderReference)}
+                                  className="w-full mt-1.5 py-1 px-2.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-[#8C102A] border border-amber-200 text-xs font-bold flex items-center justify-between transition-all cursor-pointer active:scale-98 shadow-2xs"
+                                >
+                                  <span>
+                                    {isItemsExpanded
+                                      ? 'Collapse items'
+                                      : `+${order.items.length - 2} more ${order.items.length - 2 === 1 ? 'item' : 'items'} (${order.items.length} total)`}
+                                  </span>
+                                  {isItemsExpanded ? (
+                                    <ChevronUp className="w-3.5 h-3.5 text-[#8C102A]" />
+                                  ) : (
+                                    <ChevronDown className="w-3.5 h-3.5 text-[#8C102A]" />
+                                  )}
+                                </button>
+                              )}
                             </td>
 
                             {/* Total & Payment Method */}
