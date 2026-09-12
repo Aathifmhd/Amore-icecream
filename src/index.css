@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Playfair Display", Georgia, serif;
+  --font-sans: "Outfit", system-ui, -apple-system, sans-serif;
+  --color-amore-crimson: #8C102A;
+  --color-amore-darkcrimson: #680A1E;
+  --color-amore-blush: #FDE8EC;
+  --color-amore-cream: #FAF7F2;
+  --color-amore-sand: #F3EDE3;
+  --color-amore-wood: #2D1D18;
+}
+
+html {
+  scroll-behavior: smooth;
+  font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+}
+
+.font-serif-title {
+  font-family: 'Playfair Display', Georgia, serif;
+}
+
+@keyframes kenBurnsSlow {
+  0% {
+    transform: scale(1) translate(0, 0);
+  }
+  50% {
+    transform: scale(1.08) translate(-1%, -0.8%);
+  }
+  100% {
+    transform: scale(1) translate(0, 0);
+  }
+}
+
+@keyframes floatGentle {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(1.04);
+  }
+}
+
+.animate-ken-burns {
+  animation: kenBurnsSlow 24s ease-in-out infinite alternate;
+}
+
+.animate-float-gentle {
+  animation: floatGentle 6s ease-in-out infinite;
+}
+
+@keyframes slideInFromRight {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(0%);
+  }
+}
+
+@keyframes slideOutToLeft {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+.animate-slide-in-right {
+  animation: slideInFromRight 0.75s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+.animate-slide-out-left {
+  animation: slideOutToLeft 0.75s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 8s ease-in-out infinite;
+}
+
+@keyframes popSlideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(100%) scale(0.96);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.015);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-pop-slide-up {
+  animation: popSlideUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+

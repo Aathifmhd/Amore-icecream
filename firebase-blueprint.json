@@ -1,0 +1,223 @@
+{
+  "entities": {
+    "Order": {
+      "title": "Order",
+      "description": "Artisanal ice cream and parlour orders across all branches",
+      "type": "object",
+      "properties": {
+        "orderReference": {
+          "type": "string",
+          "description": "Unique order reference code (e.g. AMO-XXXX)",
+          "maxLength": 64
+        },
+        "customerName": {
+          "type": "string",
+          "description": "Customer full name",
+          "maxLength": 100
+        },
+        "contactNumber": {
+          "type": "string",
+          "description": "Customer phone contact number",
+          "maxLength": 30
+        },
+        "whatsappNumber": {
+          "type": "string",
+          "description": "WhatsApp number for live updates",
+          "maxLength": 30
+        },
+        "emailAddress": {
+          "type": "string",
+          "description": "Customer email address",
+          "maxLength": 120
+        },
+        "orderType": {
+          "type": "string",
+          "description": "Delivery or Takeaway Pickup",
+          "enum": ["delivery", "pickup"]
+        },
+        "deliveryAddress": {
+          "type": "string",
+          "description": "Street delivery address",
+          "maxLength": 300
+        },
+        "city": {
+          "type": "string",
+          "description": "Delivery city or destination",
+          "maxLength": 100
+        },
+        "branchId": {
+          "type": "string",
+          "description": "Branch fulfilling the order",
+          "enum": ["akurana", "colombo", "arugambay"]
+        },
+        "branchName": {
+          "type": "string",
+          "description": "Branch display name",
+          "maxLength": 100
+        },
+        "branchCity": {
+          "type": "string",
+          "description": "Branch locality",
+          "maxLength": 100
+        },
+        "items": {
+          "type": "array",
+          "description": "List of ordered gelato scoops, coffees, and cakes"
+        },
+        "subtotalLKR": {
+          "type": "number",
+          "description": "Subtotal in Sri Lankan Rupees"
+        },
+        "deliveryFeeLKR": {
+          "type": "number",
+          "description": "Delivery fee in Sri Lankan Rupees"
+        },
+        "grandTotalLKR": {
+          "type": "number",
+          "description": "Final grand total in Sri Lankan Rupees"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Currency used",
+          "enum": ["LKR", "USD"]
+        },
+        "status": {
+          "type": "string",
+          "description": "Order status",
+          "enum": ["pending_confirmation", "paid", "confirmed", "completed", "cancelled"]
+        },
+        "paymentMethod": {
+          "type": "string",
+          "description": "Payment method chosen",
+          "enum": ["card", "cash"]
+        },
+        "specialNote": {
+          "type": "string",
+          "description": "Customer special instructions or dietary notes",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp ISO string"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Optional customer Firebase Auth UID",
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "orderReference",
+        "customerName",
+        "contactNumber",
+        "orderType",
+        "branchId",
+        "items",
+        "grandTotalLKR",
+        "status"
+      ]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Customer parlour rating and flavour review",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Review unique identifier",
+          "maxLength": 128
+        },
+        "authorName": {
+          "type": "string",
+          "description": "Reviewer display name",
+          "maxLength": 100
+        },
+        "rating": {
+          "type": "number",
+          "description": "Rating score from 1 to 5"
+        },
+        "flavourOrBranch": {
+          "type": "string",
+          "description": "Flavour or branch reviewed (e.g., Durian, Arugam Bay)",
+          "maxLength": 100
+        },
+        "comment": {
+          "type": "string",
+          "description": "Customer comments and feedback",
+          "maxLength": 500
+        },
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of reviewer",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": [
+        "authorName",
+        "rating",
+        "comment"
+      ]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with preferences and contact info",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase user UID",
+          "maxLength": 128
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name",
+          "maxLength": 100
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address",
+          "maxLength": 120
+        },
+        "phone": {
+          "type": "string",
+          "description": "Contact phone number",
+          "maxLength": 30
+        },
+        "preferredBranch": {
+          "type": "string",
+          "description": "Preferred parlour branch",
+          "enum": ["akurana", "colombo", "arugambay"]
+        },
+        "favoriteFlavours": {
+          "type": "array",
+          "description": "List of favorite flavour IDs"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Account creation timestamp"
+        }
+      },
+      "required": [
+        "uid"
+      ]
+    }
+  },
+  "firestore": {
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Collection of customer orders placed for pickup or delivery."
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Customer reviews and parlour feedback."
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User account profiles."
+    }
+  }
+}

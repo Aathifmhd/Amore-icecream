@@ -1,0 +1,6 @@
+{
+  "name": "Amore — Speciality Ice Cream, Coffee & Cakes",
+  "description": "Artisanal ice cream, specialty coffee, and bakery parlour with 3 branches in Akurana, Colombo, and Arugam Bay (Sri Lanka) — featuring iconic Durian custard, 20 flavours in edible biscuit cups, USD tourist currency, and quick ordering.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

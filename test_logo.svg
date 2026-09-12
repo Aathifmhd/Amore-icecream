@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" width="320" height="320">
+  <!-- Background Crimson Circle -->
+  <circle cx="160" cy="160" r="150" fill="#8C102A" />
+
+  <g fill="white">
+    <!-- 'a' letter: single-story geometric sans -->
+    <!-- bowl + stem -->
+    <path d="
+      M 78 135
+      V 185
+      H 68
+      V 175.5
+      C 64.5 182, 57 186, 49 186
+      C 35 186, 24 174, 24 160
+      C 24 146, 35 134, 49 134
+      C 57 134, 64.5 138, 68 144.5
+      V 135
+      H 78
+      Z
+      M 68 160
+      C 68 151, 60 144, 51 144
+      C 42 144, 34 151, 34 160
+      C 34 169, 42 176, 51 176
+      C 60 176, 68 169, 68 160
+      Z
+    " />
+  </g>
+
+  <!-- 'm' letter: custom wavy ribbon matching exact logo -->
+  <path
+    d="M 86 181 C 98 181, 107 178, 116 156 C 122 141, 128 135, 137 135 C 145 135, 150 143, 155 158 C 160 143, 166 135, 175 135 C 184 135, 190 141, 196 156 C 201 169, 204 181, 209 181"
+    fill="none"
+    stroke="white"
+    stroke-width="10"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <g fill="white">
+    <!-- 'o' letter -->
+    <path d="
+      M 235 160
+      C 235 174.5, 223.5 186, 209 186
+      C 194.5 186, 183 174.5, 183 160
+      C 183 145.5, 194.5 134, 209 134
+      C 223.5 134, 235 145.5, 235 160
+      Z
+      M 225 160
+      C 225 151, 218 144, 209 144
+      C 200 144, 193 151, 193 160
+      C 193 169, 200 176, 209 176
+      C 218 176, 225 169, 225 160
+      Z
+    " />
+  </g>
+</svg>
