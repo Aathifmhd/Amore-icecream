@@ -314,11 +314,18 @@ export function getAllOrdersAdmin(): OrderRecord[] {
 
 /**
  * Admin: Permanently delete an order from storage & firestore
+ * CRUD Policy: Confirmed, preparing, on the way, or delivered orders cannot be deleted.
  */
 export function deleteOrder(orderReference: string): boolean {
   try {
     const all = getAllOrders();
-    if (all[orderReference]) {
+    const existing = all[orderReference];
+    if (existing) {
+      // CRUD Policy: Only unconfirmed (pending_confirmation) or cancelled orders can be deleted
+      if (existing.status !== 'pending_confirmation' && existing.status !== 'cancelled') {
+        console.warn(`CRUD Policy Restriction: Order ${orderReference} is ${existing.status} and cannot be deleted.`);
+        return false;
+      }
       delete all[orderReference];
       localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
       notifyOrdersUpdated();

@@ -80,6 +80,7 @@ import {
   Copy,
   FileText,
   Truck,
+  Lock,
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -217,16 +218,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // OVERVIEW / KPI CALCULATIONS
   // -----------------------------------------------------------
   const metrics = useMemo(() => {
-    const totalOrders = orders.length;
+    // ONLY delivery completed (Deliver/Picked) orders are counted for Gross Sales and Total Orders
+    const totalAllOrders = orders.length;
     const activeOrders = orders.filter((o) => o.status !== 'cancelled' && o.status !== 'delivered');
     const preparingOrders = orders.filter((o) => o.status === 'preparing');
     const onTheWayOrders = orders.filter((o) => o.status === 'on_the_way');
     const deliveredOrders = orders.filter((o) => o.status === 'delivered');
     const cancelledOrders = orders.filter((o) => o.status === 'cancelled');
 
-    const totalRevenueLKR = orders
-      .filter((o) => o.status !== 'cancelled')
-      .reduce((sum, o) => sum + (o.grandTotalLKR || 0), 0);
+    // Strictly calculate revenue from completed delivered/picked orders
+    const totalRevenueLKR = deliveredOrders.reduce((sum, o) => sum + (o.grandTotalLKR || 0), 0);
 
     const branchRevenue: Record<string, number> = {
       akurana: 0,
@@ -234,15 +235,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       arugambay: 0,
     };
 
-    orders.forEach((o) => {
-      if (o.status !== 'cancelled') {
-        const b = o.branchId || 'akurana';
-        branchRevenue[b] = (branchRevenue[b] || 0) + (o.grandTotalLKR || 0);
-      }
+    deliveredOrders.forEach((o) => {
+      const b = o.branchId || 'akurana';
+      branchRevenue[b] = (branchRevenue[b] || 0) + (o.grandTotalLKR || 0);
     });
 
     return {
-      totalOrders,
+      totalAllOrders,
+      totalOrders: deliveredOrders.length, // Only delivery completed orders count as Total Orders
       activeOrdersCount: activeOrders.length,
       preparingCount: preparingOrders.length,
       onTheWayCount: onTheWayOrders.length,
@@ -347,9 +347,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleDeleteOrder = (orderRef: string) => {
+    const targetOrder = orders.find((o) => o.orderReference === orderRef);
+    if (targetOrder && targetOrder.status !== 'pending_confirmation' && targetOrder.status !== 'cancelled') {
+      alert(`CRUD Policy Restriction: Order ${orderRef} is in stage "${targetOrder.status.replace(/_/g, ' ')}" and cannot be deleted. Confirmed orders must remain in the audit record.`);
+      return;
+    }
     if (window.confirm(`Are you sure you want to permanently delete order ${orderRef}?`)) {
-      deleteOrder(orderRef);
-      setOrders(getAllOrdersAdmin());
+      const deleted = deleteOrder(orderRef);
+      if (deleted) {
+        setOrders(getAllOrdersAdmin());
+      } else {
+        alert(`Order ${orderRef} could not be deleted due to policy restrictions.`);
+      }
     }
   };
 
@@ -546,7 +555,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   {formatPrice(metrics.totalRevenueLKR, currency)}
                 </div>
                 <div className="text-[11px] text-[#8A7970] mt-0.5">
-                  Across all active orders
+                  Delivered / Picked orders only
                 </div>
               </div>
 
@@ -565,14 +574,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
               <div className="bg-white p-4 rounded-2xl border border-[#E8DFC8] shadow-xs">
                 <div className="flex items-center justify-between text-xs font-bold text-[#7A6458] uppercase">
-                  <span>Delivered / Picked</span>
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>On The Way</span>
+                  <Truck className="w-4 h-4 text-blue-600" />
                 </div>
-                <div className="mt-2 text-xl sm:text-2xl font-black text-emerald-700">
-                  {metrics.deliveredCount} orders
+                <div className="mt-2 text-xl sm:text-2xl font-black text-blue-700">
+                  {metrics.onTheWayCount} orders
                 </div>
                 <div className="text-[11px] text-[#8A7970] mt-0.5">
-                  Successfully completed
+                  With delivery partner
                 </div>
               </div>
 
@@ -585,7 +594,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   {metrics.totalOrders}
                 </div>
                 <div className="text-[11px] text-[#8A7970] mt-0.5">
-                  {metrics.cancelledCount} cancelled
+                  Delivered / Picked ({metrics.totalAllOrders} placed)
                 </div>
               </div>
             </div>
@@ -661,7 +670,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <th className="px-4 py-3">Order Ref</th>
                       <th className="px-4 py-3">Customer & Contact</th>
                       <th className="px-4 py-3">Branch & Type</th>
-                      <th className="px-4 py-3">Items Summary</th>
+                      <th className="px-4 py-3 min-w-[260px]">Items Summary</th>
                       <th className="px-4 py-3">Total & Payment</th>
                       <th className="px-4 py-3">Stage & Status</th>
                       <th className="px-4 py-3">Lifecycle Action</th>
@@ -753,25 +762,50 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               </span>
                             </td>
 
-                            {/* Items */}
-                            <td className="px-4 py-3 align-top">
-                              <div className="space-y-1 max-w-[200px]">
-                                {order.items.slice(0, 3).map((item, idx) => (
-                                  <div key={idx} className="text-[11px] text-[#3D2C24] truncate">
-                                    <span className="font-bold text-[#8C102A]">{item.quantity}x</span>{' '}
-                                    {item.name}{' '}
-                                    {item.format && (
-                                      <span className="text-[9px] text-[#7A6458]">
-                                        ({item.format.replace('-', ' ')})
-                                      </span>
-                                    )}
+                            {/* Items Summary */}
+                            <td className="px-4 py-3 align-top min-w-[260px] max-w-[340px]">
+                              {/* Header badge with total count */}
+                              <div className="flex items-center justify-between text-[11px] font-bold text-[#7A6458] mb-1.5 pb-1 border-b border-[#EFE8DC]">
+                                <span>
+                                  {order.items.reduce((sum, it) => sum + it.quantity, 0)}{' '}
+                                  {order.items.reduce((sum, it) => sum + it.quantity, 0) === 1 ? 'Item' : 'Items'} Total
+                                </span>
+                                <span className="text-[10px] text-[#8C102A] font-semibold">
+                                  {order.items.length}{' '}
+                                  {order.items.length === 1 ? 'flavor/type' : 'flavors/types'}
+                                </span>
+                              </div>
+
+                              {/* Items list */}
+                              <div className="space-y-1.5">
+                                {order.items.map((item, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="flex items-start gap-2 bg-[#FAF7F2] p-1.5 rounded-lg border border-[#E8DFC8]/80 hover:border-[#D9CBB7] transition-all"
+                                  >
+                                    {/* Bold Quantity Pill */}
+                                    <span className="inline-flex items-center justify-center min-w-[26px] px-1.5 py-0.5 rounded-md bg-[#8C102A] text-white font-black text-xs shadow-2xs shrink-0 mt-0.5">
+                                      {item.quantity}×
+                                    </span>
+
+                                    {/* Name & Format Details */}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-bold text-xs sm:text-[13px] text-[#241A18] leading-snug">
+                                        {item.name}
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                        {item.format && (
+                                          <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-white text-[#5D4E46] border border-[#D9CBB7] capitalize tracking-wide">
+                                            {item.format.replace(/-/g, ' ')}
+                                          </span>
+                                        )}
+                                        <span className="text-[11px] font-bold text-[#8C102A]">
+                                          {formatPrice(item.priceLKR * item.quantity, currency)}
+                                        </span>
+                                      </div>
+                                    </div>
                                   </div>
                                 ))}
-                                {order.items.length > 3 && (
-                                  <span className="text-[10px] text-[#8C102A] font-bold">
-                                    +{order.items.length - 3} more items
-                                  </span>
-                                )}
                               </div>
                             </td>
 
@@ -1097,15 +1131,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   <Edit className="w-4 h-4" />
                                 </button>
 
-                                {/* Delete Order */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteOrder(order.orderReference)}
-                                  className="p-1.5 rounded-lg text-red-600 hover:text-red-800 hover:bg-red-50 transition-colors cursor-pointer"
-                                  title="Delete Order Record"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                                {/* Delete Order (CRUD Policy Protected) */}
+                                {order.status === 'pending_confirmation' || order.status === 'cancelled' ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteOrder(order.orderReference)}
+                                    className="p-1.5 rounded-lg text-red-600 hover:text-red-800 hover:bg-red-50 transition-colors cursor-pointer"
+                                    title="Delete Order Record (Allowed for unconfirmed or cancelled)"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                ) : (
+                                  <span
+                                    className="p-1.5 rounded-lg text-[#A69488]/60 inline-flex items-center justify-center cursor-not-allowed bg-gray-50 border border-gray-200/60"
+                                    title="CRUD Policy Restriction: Confirmed or in-progress orders cannot be deleted from the system"
+                                  >
+                                    <Lock className="w-3.5 h-3.5 text-[#A69488]" />
+                                  </span>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -1447,7 +1490,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     {formatPrice(metrics.totalRevenueLKR, currency)}
                   </span>
                   <span className="text-[11px] text-[#7A6458] block mt-0.5">
-                    ≈ ${convertLKRtoUSD(metrics.totalRevenueLKR).toFixed(2)} USD
+                    Delivered & Picked orders only • ≈ ${convertLKRtoUSD(metrics.totalRevenueLKR).toFixed(2)} USD
                   </span>
                 </div>
               </div>
