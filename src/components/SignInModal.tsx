@@ -24,6 +24,7 @@ import {
   ArrowLeft,
   Sparkles,
 } from 'lucide-react';
+import { verifyAdminCredentials, setAdminSession } from '../utils/adminAuth';
 
 interface SignInModalProps {
   isOpen: boolean;
@@ -92,6 +93,8 @@ export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose, curre
         return 'The sign-in popup was blocked by your browser. Please allow popups.';
       case 'auth/too-many-requests':
         return 'Too many unsuccessful attempts. Please wait a few moments and try again.';
+      case 'auth/operation-not-allowed':
+        return 'Email/Password sign-in is not enabled in Firebase Console. Please enable Email/Password under Firebase Console -> Authentication -> Sign-in method, or sign in using Google.';
       default:
         return error?.message || 'Authentication failed. Please try again.';
     }
@@ -153,6 +156,22 @@ export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose, curre
     }
 
     setIsLoading(true);
+
+    // Check if admin credentials were entered into this modal!
+    if (verifyAdminCredentials(email.trim(), password)) {
+      setAdminSession(rememberMe);
+      setIsLoading(false);
+      setSuccessMessage('Admin credentials verified! Entering Operations Console...');
+      setTimeout(() => {
+        onClose();
+        const url = new URL(window.location.href);
+        url.searchParams.set('page', 'admin');
+        window.history.pushState({}, '', url.toString());
+        window.dispatchEvent(new PopStateEvent('popstate'));
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 500);
+      return;
+    }
 
     try {
       if (mode === 'signup') {
