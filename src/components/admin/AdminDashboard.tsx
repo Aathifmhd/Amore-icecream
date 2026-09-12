@@ -138,6 +138,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [branches, setBranches] = useState<BranchInfo[]>(AMORE_BRANCHES);
   const [editingBranch, setEditingBranch] = useState<BranchInfo | null>(null);
 
+  // Live Clock State for Grace Period Countdowns
+  const [now, setNow] = useState<number>(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const getRemainingGraceSeconds = (createdAt: string): number => {
+    const createdTime = new Date(createdAt).getTime();
+    const elapsedSeconds = Math.floor((now - createdTime) / 1000);
+    return Math.max(0, 120 - elapsedSeconds);
+  };
+
+  const formatCountdown = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
   // Load Data
   const refreshAllData = () => {
     setOrders(getAllOrdersAdmin());
@@ -297,9 +319,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setCancellingOrder(null);
     refreshAllData();
 
-    // If customer has phone or email, open mailto link
+    // If customer has email, open mailto link
     try {
-      const mailto = `mailto:?subject=${encodeURIComponent(email.subject)}&body=${encodeURIComponent(email.body)}`;
+      const recipient = order.emailAddress ? encodeURIComponent(order.emailAddress) : '';
+      const mailto = `mailto:${recipient}?subject=${encodeURIComponent(email.subject)}&body=${encodeURIComponent(email.body)}`;
       window.open(mailto, '_blank');
     } catch (e) {
       console.warn('Could not launch mail client:', e);
@@ -648,6 +671,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         const isCancelled = order.status === 'cancelled';
                         const isDelivered = order.status === 'delivered';
                         const isPreparing = order.status === 'preparing';
+                        const isConfirmed = order.status === 'confirmed';
+                        const remainingSeconds = getRemainingGraceSeconds(order.createdAt);
+                        const inGracePeriod = remainingSeconds > 0 && order.status === 'pending_confirmation';
 
                         return (
                           <tr
@@ -688,6 +714,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 <span className="text-[10px] text-[#7A6458] block mt-0.5 truncate max-w-[180px]">
                                   {order.deliveryAddress}, {order.city}
                                 </span>
+                              )}
+                              {order.deliveryCoordinates && (
+                                <a
+                                  href={`https://www.google.com/maps?q=${order.deliveryCoordinates.lat},${order.deliveryCoordinates.lng}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 text-[10px] font-bold text-[#8C102A] hover:underline mt-1 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 w-fit"
+                                  title="View exact customer pin on Google Maps"
+                                >
+                                  <MapPin className="w-3 h-3 text-[#8C102A]" />
+                                  <span>Pin: {order.deliveryCoordinates.lat.toFixed(3)}, {order.deliveryCoordinates.lng.toFixed(3)}</span>
+                                </a>
                               )}
                             </td>
 
@@ -756,15 +794,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             {/* Stage & Status Display */}
                             <td className="px-4 py-3 align-top">
                               {order.status === 'pending_confirmation' ? (
-                                <div className="space-y-0.5">
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                                    <Clock className="w-3 h-3 text-amber-700 animate-spin" />
-                                    Order Placed
-                                  </span>
-                                  <span className="text-[10px] text-amber-900/80 block font-medium">
-                                    Awaiting Confirmation
-                                  </span>
-                                </div>
+                                inGracePeriod ? (
+                                  <div className="space-y-1">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-orange-100 text-orange-900 border border-orange-300 animate-pulse">
+                                      <Clock className="w-3 h-3 text-orange-700" />
+                                      Grace Period ({formatCountdown(remainingSeconds)})
+                                    </span>
+                                    <span className="text-[10px] text-amber-900/80 block font-medium">
+                                      Customer reviewing address
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-1">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                      <CheckCircle2 className="w-3 h-3 text-amber-700" />
+                                      Customer Waiting
+                                    </span>
+                                    <span className="text-[10px] text-emerald-800 block font-bold">
+                                      Address Confirmed
+                                    </span>
+                                  </div>
+                                )
                               ) : order.status === 'confirmed' ? (
                                 <div className="space-y-0.5">
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-blue-100 text-blue-900 border border-blue-300">
@@ -779,10 +829,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 <div className="space-y-0.5">
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-purple-100 text-purple-900 border border-purple-300">
                                     <Sparkles className="w-3 h-3 text-purple-700" />
-                                    In Kitchen
+                                    In Process
                                   </span>
                                   <span className="text-[10px] text-[#7A6458] block font-medium">
-                                    Scooping & Churning
+                                    In Kitchen (Preparing)
                                   </span>
                                 </div>
                               ) : order.status === 'delivered' ? (
@@ -792,7 +842,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     Delivered
                                   </span>
                                   <span className="text-[10px] text-emerald-800 block font-medium">
-                                    Completed
+                                    Fulfilled & Completed
                                   </span>
                                 </div>
                               ) : (
@@ -824,49 +874,76 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             {/* Lifecycle Action Buttons */}
                             <td className="px-4 py-3 align-top">
                               {order.status === 'pending_confirmation' ? (
-                                <div className="flex flex-col gap-1 min-w-[130px]">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleTriggerConfirmOrder(order)}
-                                    className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-2xs transition-colors cursor-pointer"
-                                    title="Open confirmation modal to approve order and process payment"
-                                  >
-                                    <Check className="w-3.5 h-3.5" />
-                                    <span>Confirm Order</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleTriggerCancelOrder(order)}
-                                    className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-[10px] font-bold transition-colors cursor-pointer"
-                                    title="Cancel order and send apology email with reason"
-                                  >
-                                    <Ban className="w-3 h-3" />
-                                    <span>Cancel Order</span>
-                                  </button>
-                                </div>
+                                inGracePeriod ? (
+                                  /* COUNTDOWN ACTIVE: DO NOT SHOW CONFIRM OR CANCEL BUTTONS */
+                                  <div className="flex flex-col gap-1 min-w-[150px] p-2.5 rounded-xl bg-amber-50/90 border border-amber-300 text-left shadow-2xs">
+                                    <div className="flex items-center gap-1.5 text-amber-950 font-bold text-[11px]">
+                                      <Clock className="w-3.5 h-3.5 text-amber-700 animate-spin" />
+                                      <span>Grace Period: {formatCountdown(remainingSeconds)}</span>
+                                    </div>
+                                    <p className="text-[10px] text-amber-800 leading-tight">
+                                      Customer is checking address or may cancel. Actions unlock when countdown completes.
+                                    </p>
+                                  </div>
+                                ) : (
+                                  /* COUNTDOWN EXPIRED: CUSTOMER WAITING FOR ORDER -> UNLOCK ADMIN ACTIONS */
+                                  <div className="flex flex-col gap-1.5 min-w-[140px]">
+                                    <div className="text-[9px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 text-center">
+                                      Ready for Parlour Action
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleTriggerConfirmOrder(order)}
+                                      className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-2xs transition-colors cursor-pointer"
+                                      title="Customer confirmed address. Open confirmation modal to approve order and process payment."
+                                    >
+                                      <Check className="w-3.5 h-3.5" />
+                                      <span>Confirm Order</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleTriggerCancelOrder(order)}
+                                      className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-[10px] font-bold transition-colors cursor-pointer"
+                                      title="Cancel order and send apology email from zenatiqcodes@gmail.com"
+                                    >
+                                      <Ban className="w-3 h-3" />
+                                      <span>Cancel Order</span>
+                                    </button>
+                                  </div>
+                                )
                               ) : order.status === 'confirmed' ? (
-                                <div className="flex flex-col gap-1 min-w-[130px]">
+                                <div className="flex flex-col gap-1.5 min-w-[150px]">
+                                  <div className="text-[9px] font-bold uppercase tracking-wider text-[#7A6458]">Select Status:</div>
                                   <button
                                     type="button"
                                     onClick={() => handleSendToKitchen(order.orderReference)}
                                     className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#8C102A] hover:bg-[#A31634] text-white text-[11px] font-bold shadow-2xs transition-colors cursor-pointer"
-                                    title="Transition order to Kitchen (Preparing)"
+                                    title="Transition order to Kitchen (In Process)"
                                   >
                                     <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                                    <span>Send to Kitchen</span>
+                                    <span>In Kitchen (Process)</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetDelivered(order.orderReference)}
+                                    className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold transition-colors cursor-pointer"
+                                    title="Mark order directly as Delivered"
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>Mark Delivered</span>
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => handleTriggerCancelOrder(order)}
-                                    className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-[10px] font-bold transition-colors cursor-pointer"
-                                    title="Cancel order and send apology email"
+                                    className="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-lg text-red-700 hover:bg-red-50 text-[10px] font-medium transition-colors cursor-pointer"
                                   >
                                     <Ban className="w-3 h-3" />
                                     <span>Cancel Order</span>
                                   </button>
                                 </div>
                               ) : order.status === 'preparing' ? (
-                                <div className="flex flex-col gap-1 min-w-[130px]">
+                                <div className="flex flex-col gap-1.5 min-w-[150px]">
+                                  <div className="text-[9px] font-bold uppercase tracking-wider text-[#7A6458]">Select Status:</div>
                                   <button
                                     type="button"
                                     onClick={() => handleSetDelivered(order.orderReference)}
@@ -876,12 +953,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     <CheckCircle2 className="w-3.5 h-3.5" />
                                     <span>Mark Delivered</span>
                                   </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStatusChange(order.orderReference, 'confirmed')}
+                                    className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 text-[10px] font-medium transition-colors cursor-pointer"
+                                    title="Revert back to Confirmed state"
+                                  >
+                                    <span>Back to Confirmed</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTriggerCancelOrder(order)}
+                                    className="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-lg text-red-700 hover:bg-red-50 text-[10px] font-medium transition-colors cursor-pointer"
+                                  >
+                                    <Ban className="w-3 h-3" />
+                                    <span>Cancel Order</span>
+                                  </button>
                                 </div>
                               ) : order.status === 'delivered' ? (
-                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700">
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  Fulfilled
-                                </span>
+                                <div className="flex flex-col gap-1 min-w-[120px]">
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700">
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    Fulfilled & Delivered
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSendToKitchen(order.orderReference)}
+                                    className="text-[9px] text-[#8C102A] hover:underline font-bold text-left cursor-pointer"
+                                  >
+                                    Re-send to Kitchen
+                                  </button>
+                                </div>
                               ) : (
                                 <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-600">
                                   <Ban className="w-3.5 h-3.5" />
@@ -2169,6 +2271,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </span>
                 </div>
               )}
+              {confirmingOrder.deliveryCoordinates && (
+                <div className="flex justify-between items-center">
+                  <span className="text-[#7A6458]">GPS Location:</span>
+                  <a
+                    href={`https://www.google.com/maps?q=${confirmingOrder.deliveryCoordinates.lat},${confirmingOrder.deliveryCoordinates.lng}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-bold text-[#8C102A] hover:underline flex items-center gap-1 text-[11px]"
+                  >
+                    <MapPin className="w-3 h-3 text-[#8C102A]" />
+                    <span>View Pinned Location on Map</span>
+                  </a>
+                </div>
+              )}
               <div className="pt-2 border-t border-[#E8DFC8]/80">
                 <div className="text-[11px] font-bold text-[#7A6458] mb-1">
                   Ordered Products ({confirmingOrder.items.length}):
@@ -2301,10 +2417,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="flex items-center justify-between text-xs font-bold text-[#7A6458]">
                 <span className="flex items-center gap-1.5">
                   <Mail className="w-3.5 h-3.5 text-[#8C102A]" />
-                  <span>Generated Amore Apology & Inconvenience Notice:</span>
+                  <span>Generated Amore Apology Notice:</span>
                 </span>
-                <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                  Includes 15% Voucher Code
+                <span className="text-[10px] text-[#8C102A] bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 font-semibold">
+                  From: zenatiqcodes@gmail.com
                 </span>
               </div>
 

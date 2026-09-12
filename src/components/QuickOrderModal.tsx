@@ -21,8 +21,10 @@ import {
   ArrowRight,
   Phone,
   User as UserIcon,
+  Navigation,
 } from 'lucide-react';
 import { type User } from '../firebase';
+import { LocationPickerModal } from './LocationPickerModal';
 
 interface QuickOrderModalProps {
   isOpen: boolean;
@@ -65,6 +67,8 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
   const [orderType, setOrderType] = useState<'delivery' | 'pickup'>('delivery');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [city, setCity] = useState('');
+  const [deliveryCoords, setDeliveryCoords] = useState<{ lat: number; lng: number } | undefined>(undefined);
+  const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [specialNote, setSpecialNote] = useState('');
 
   // Payment Method Selection
@@ -311,6 +315,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
         orderType,
         deliveryAddress: deliveryAddress.trim(),
         city: city.trim() || assignedBranch.city,
+        deliveryCoordinates: deliveryCoords,
         specialNote: specialNote.trim(),
         whatsappNumber: contactNumber.trim(),
         emailAddress: currentUser.email || '',
@@ -710,19 +715,40 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
               {/* Address Fields for Delivery */}
               {orderType === 'delivery' ? (
                 <div className="space-y-2 pt-1">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-[#5C4D44]">
                       Street Address & City <span className="text-[#8C102A]">*</span>
                     </label>
-                    <button
-                      type="button"
-                      onClick={handleUseCurrentLocation}
-                      disabled={isLocating}
-                      className="text-[10px] font-bold text-[#8C102A] hover:underline flex items-center gap-1 cursor-pointer"
-                    >
-                      <span>{isLocating ? 'Locating...' : 'Auto-detect location'}</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsLocationPickerOpen(true)}
+                        className="px-2.5 py-1 rounded-lg bg-[#8C102A]/10 hover:bg-[#8C102A]/20 text-[#8C102A] text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                        title="Detect GPS and drag pin to your exact delivery location"
+                      >
+                        <MapPin className="w-3 h-3 text-[#8C102A]" />
+                        <span>Detect Location & Drop Pin</span>
+                      </button>
+                    </div>
                   </div>
+
+                  {deliveryCoords && (
+                    <div className="flex items-center justify-between px-2.5 py-1.5 bg-emerald-50 rounded-xl border border-emerald-200 text-[10px] text-emerald-900 animate-fadeIn">
+                      <span className="flex items-center gap-1 font-semibold">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>
+                          Pin set: {deliveryCoords.lat.toFixed(4)}, {deliveryCoords.lng.toFixed(4)}
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setIsLocationPickerOpen(true)}
+                        className="font-bold text-[#8C102A] hover:underline cursor-pointer ml-2"
+                      >
+                        Move Pin
+                      </button>
+                    </div>
+                  )}
 
                   <input
                     type="text"
@@ -911,6 +937,20 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
           </form>
         )}
       </div>
+
+      {/* Interactive Map & GPS Location Picker Modal */}
+      <LocationPickerModal
+        isOpen={isLocationPickerOpen}
+        onClose={() => setIsLocationPickerOpen(false)}
+        initialAddress={deliveryAddress}
+        initialCity={city}
+        initialCoords={deliveryCoords}
+        onSelectLocation={(loc) => {
+          setDeliveryAddress(loc.address);
+          if (loc.city) setCity(loc.city);
+          setDeliveryCoords(loc.coords);
+        }}
+      />
     </div>
   );
 };

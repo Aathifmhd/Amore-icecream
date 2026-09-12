@@ -184,6 +184,7 @@ export function updateOrderDelivery(
     city?: string;
     contactNumber?: string;
     specialNote?: string;
+    deliveryCoordinates?: { lat: number; lng: number };
   }
 ): OrderRecord | null {
   return updateOrder(orderReference, {
@@ -357,7 +358,11 @@ export function generateInconvenienceEmail(
       ? 'Your card payment authorization has been immediately voided and no charges were made.'
       : 'As you selected Cash on Delivery, your order has been cancelled with no obligation or fee.';
 
-  const body = `Dear ${order.customerName},
+  const body = `From: zenatiqcodes@gmail.com
+To: ${order.emailAddress || order.customerName}
+Subject: ${subject}
+
+Dear ${order.customerName},
 
 We sincerely apologize, but we are unable to process your order (${order.orderReference}) placed for Amore Speciality Ice Cream (${order.branchName}).
 
@@ -369,12 +374,13 @@ ${paymentNotice}
 
 We deeply regret any inconvenience this may cause to your day or gathering. Every batch at Amore is churned fresh with authentic artisanal ingredients, and we hope to have the pleasure of serving you again soon.
 
-If you have any questions or need immediate assistance, please reply directly or contact our parlour manager.
+If you have any questions or need immediate assistance, please reply directly to this email at zenatiqcodes@gmail.com or contact our parlour manager.
 
 Warm regards,
 The Amore Parlour Team
+zenatiqcodes@gmail.com
 Amore Speciality Ice Cream, Coffee & Cakes
-${order.branchName} • Hotline: ${order.contactNumber || '+94 81 230 4567'}`;
+${order.branchName}`;
 
   return { subject, body };
 }

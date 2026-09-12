@@ -34,8 +34,10 @@ import {
   Copy,
   Check,
   AlertTriangle,
+  Navigation,
 } from 'lucide-react';
 import { type User } from '../firebase';
+import { LocationPickerModal } from './LocationPickerModal';
 
 interface YourOrdersModalProps {
   isOpen: boolean;
@@ -55,7 +57,6 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
   onBrowseMenu,
 }) => {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
-  const [activeTab, setActiveTab] = useState<'ongoing' | 'history'>('ongoing');
   const [now, setNow] = useState<number>(Date.now());
   const [expandedOrderRef, setExpandedOrderRef] = useState<string | null>(highlightOrderRef || null);
 
@@ -68,6 +69,8 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
   const [editCity, setEditCity] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editNote, setEditNote] = useState('');
+  const [editCoords, setEditCoords] = useState<{ lat: number; lng: number } | undefined>(undefined);
+  const [isEditLocationPickerOpen, setIsEditLocationPickerOpen] = useState(false);
 
   // Cancel confirmation state
   const [confirmCancelRef, setConfirmCancelRef] = useState<string | null>(null);
@@ -81,19 +84,13 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
     const list = getUserOrdersList(currentUser?.uid);
     setOrders(list);
 
-    // If highlightOrderRef is supplied, auto select the matching tab & expand
     if (highlightOrderRef) {
-      const target = list.find((o) => o.orderReference === highlightOrderRef);
-      if (target) {
-        if (target.status === 'cancelled' || target.status === 'delivered') {
-          setActiveTab('history');
-        } else {
-          setActiveTab('ongoing');
-        }
-        setExpandedOrderRef(highlightOrderRef);
-      }
+      setExpandedOrderRef(highlightOrderRef);
     } else if (list.length > 0 && !expandedOrderRef) {
-      setExpandedOrderRef(list[0].orderReference);
+      const activeList = list.filter((o) => o.status !== 'cancelled' && o.status !== 'delivered');
+      if (activeList.length > 0) {
+        setExpandedOrderRef(activeList[0].orderReference);
+      }
     }
   };
 
@@ -163,10 +160,8 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Split orders
+  // Strictly ongoing active orders only - Do not show past or cancelled order history
   const ongoingOrders = orders.filter((o) => o.status !== 'cancelled' && o.status !== 'delivered');
-  const historyOrders = orders.filter((o) => o.status === 'cancelled' || o.status === 'delivered');
-  const displayedOrders = activeTab === 'ongoing' ? ongoingOrders : historyOrders;
 
   // Calculate remaining seconds in 2-minute (120s) grace period
   const getRemainingSeconds = (createdAt: string): number => {
@@ -189,6 +184,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
     setEditCity(order.city || '');
     setEditPhone(order.contactNumber || '');
     setEditNote(order.specialNote || '');
+    setEditCoords(order.deliveryCoordinates);
   };
 
   // Save edited delivery details
@@ -202,6 +198,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
       city: editCity.trim(),
       contactNumber: editPhone.trim(),
       specialNote: editNote.trim(),
+      deliveryCoordinates: editCoords,
     });
     setEditingRef(null);
     refreshOrders();
@@ -246,7 +243,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                 Your Orders
               </h2>
               <p className="text-xs text-[#7A6458]">
-                {ongoingOrders.length} active • {historyOrders.length} past / completed
+                {ongoingOrders.length} {ongoingOrders.length === 1 ? 'active ongoing order' : 'active ongoing orders'}
               </p>
             </div>
           </div>
@@ -257,51 +254,6 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
             aria-label="Close orders"
           >
             <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Tab Navigation: Active Ongoing Orders vs Past & Cancelled */}
-        <div className="px-5 pt-3 pb-2 bg-[#FAF7F2] border-b border-[#E8DFC8]/70 flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => setActiveTab('ongoing')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'ongoing'
-                ? 'bg-[#8C102A] text-white shadow-xs'
-                : 'bg-white text-[#5D4E46] border border-[#E8DFC8] hover:bg-gray-50'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5" />
-            <span>Active Ongoing Orders</span>
-            {ongoingOrders.length > 0 && (
-              <span
-                className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                  activeTab === 'ongoing'
-                    ? 'bg-white text-[#8C102A]'
-                    : 'bg-[#8C102A] text-white'
-                }`}
-              >
-                {ongoingOrders.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('history')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'history'
-                ? 'bg-[#8C102A] text-white shadow-xs'
-                : 'bg-white text-[#5D4E46] border border-[#E8DFC8] hover:bg-gray-50'
-            }`}
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>History & Cancelled</span>
-            {historyOrders.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-gray-200 text-gray-700">
-                {historyOrders.length}
-              </span>
-            )}
           </button>
         </div>
 
@@ -324,30 +276,18 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
 
         {/* Orders List Container */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-          {displayedOrders.length === 0 ? (
+          {ongoingOrders.length === 0 ? (
             /* Empty State */
             <div className="text-center py-12 px-4">
               <div className="w-16 h-16 rounded-full bg-[#FAF5EE] border border-[#E8DFC8] flex items-center justify-center mx-auto mb-4 text-[#8C102A]">
                 <ShoppingBag className="w-8 h-8 text-[#8C102A]/80" />
               </div>
               <h3 className="font-serif-title text-lg font-bold text-[#241A18]">
-                {activeTab === 'ongoing' ? 'No active ongoing orders' : 'No past or cancelled orders'}
+                No active ongoing orders
               </h3>
               <p className="text-xs text-[#7A6458] max-w-xs mx-auto mt-1 mb-6">
-                {activeTab === 'ongoing'
-                  ? 'All cancelled or completed orders are automatically archived into your History tab.'
-                  : 'Your past fulfilled and cancelled orders will show here for your records.'}
+                When you place an order, live parlour status and your 2-minute change window will appear here.
               </p>
-
-              {activeTab === 'ongoing' && historyOrders.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('history')}
-                  className="px-4 py-2 mr-2 rounded-full bg-white border border-[#E0D5C3] text-xs font-bold text-[#5D4E46] hover:bg-gray-50 shadow-xs cursor-pointer"
-                >
-                  View Order History ({historyOrders.length})
-                </button>
-              )}
 
               {onBrowseMenu && (
                 <button
@@ -363,7 +303,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
               )}
             </div>
           ) : (
-            displayedOrders.map((order) => {
+            ongoingOrders.map((order) => {
               const remainingSeconds = getRemainingSeconds(order.createdAt);
               const inGracePeriod = remainingSeconds > 0 && order.status !== 'cancelled' && order.status === 'pending_confirmation';
               const isCancelled = order.status === 'cancelled';
@@ -632,9 +572,37 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
 
                       <div className="space-y-2">
                         <div>
-                          <label className="block text-[10px] font-bold uppercase text-slate-600 mb-0.5">
-                            Street Address
-                          </label>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-[10px] font-bold uppercase text-slate-600">
+                              Street Address
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setIsEditLocationPickerOpen(true)}
+                              className="text-[10px] font-bold text-[#8C102A] hover:underline flex items-center gap-1 cursor-pointer"
+                              title="Detect GPS or drag pin on map"
+                            >
+                              <MapPin className="w-3 h-3 text-[#8C102A]" />
+                              <span>Drop Pin on Map</span>
+                            </button>
+                          </div>
+
+                          {editCoords && (
+                            <div className="mb-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-[10px] text-emerald-800 flex items-center justify-between">
+                              <span className="flex items-center gap-1 font-semibold">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                Coordinates: {editCoords.lat.toFixed(4)}, {editCoords.lng.toFixed(4)}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setIsEditLocationPickerOpen(true)}
+                                className="font-bold text-[#8C102A] hover:underline cursor-pointer"
+                              >
+                                Move Pin
+                              </button>
+                            </div>
+                          )}
+
                           <input
                             type="text"
                             value={editAddress}
@@ -897,28 +865,6 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                 ).body}
             </div>
 
-            {/* Voucher Code Box */}
-            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 p-3 rounded-xl flex items-center justify-between gap-2">
-              <div>
-                <span className="text-[10px] font-bold uppercase text-amber-900 block">
-                  Complimentary 15% Courtesy Discount
-                </span>
-                <span className="font-mono font-black text-sm text-[#8C102A]">
-                  AMOREAPOLOGY15
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText('AMOREAPOLOGY15');
-                  alert('Voucher code AMOREAPOLOGY15 copied to clipboard!');
-                }}
-                className="px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-900 text-xs font-bold hover:bg-amber-100 cursor-pointer shadow-2xs"
-              >
-                Copy Code
-              </button>
-            </div>
-
             <div className="flex items-center justify-between pt-2">
               <button
                 type="button"
@@ -957,6 +903,20 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
           </div>
         </div>
       )}
+
+      {/* Interactive Map & GPS Location Picker Modal for editing delivery during grace period */}
+      <LocationPickerModal
+        isOpen={isEditLocationPickerOpen}
+        onClose={() => setIsEditLocationPickerOpen(false)}
+        initialAddress={editAddress}
+        initialCity={editCity}
+        initialCoords={editCoords}
+        onSelectLocation={(loc) => {
+          setEditAddress(loc.address);
+          if (loc.city) setEditCity(loc.city);
+          setEditCoords(loc.coords);
+        }}
+      />
     </div>
   );
 };

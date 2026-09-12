@@ -109,6 +109,7 @@ export interface OrderRecord {
   orderType: 'delivery' | 'pickup';
   deliveryAddress?: string;
   city?: string;
+  deliveryCoordinates?: { lat: number; lng: number };
   specialNote?: string;
   whatsappNumber?: string;
   emailAddress?: string;
