@@ -15,8 +15,11 @@ import {
   Check,
   Cake,
   SlidersHorizontal,
-  Plus
+  Plus,
+  LogIn,
+  User as UserIcon,
 } from 'lucide-react';
+import { type User } from '../firebase';
 
 interface MenuOrderingPageProps {
   currency: Currency;
@@ -29,6 +32,8 @@ interface MenuOrderingPageProps {
   onSelectItem: (item: ScoopItem | MenuItem) => void;
   onOpenTray: () => void;
   onBackToHome: () => void;
+  currentUser?: User | null;
+  onOpenSignInModal?: () => void;
 }
 
 export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
@@ -42,6 +47,8 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
   onSelectItem,
   onOpenTray,
   onBackToHome,
+  currentUser,
+  onOpenSignInModal,
 }) => {
   const [activeTab, setActiveTab] = useState<MenuTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -180,9 +187,43 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
             </p>
           </div>
 
-          {/* Right Controls: Currency Toggle & Tray Shortcut */}
+          {/* Right Controls: Currency Toggle, Sign In & Tray Shortcut */}
           <div className="flex items-center gap-2 shrink-0">
             <CurrencyToggle currency={currency} onToggle={onToggleCurrency} onToggleCurrency={onToggleCurrency} />
+
+            {/* Sign In / Account Button on Menu Page */}
+            {currentUser ? (
+              <button
+                type="button"
+                onClick={onOpenSignInModal}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#D9CBB7] hover:border-[#8C102A] text-xs font-bold text-[#241A18] transition-colors cursor-pointer shadow-2xs"
+                title={`Signed in as ${currentUser.displayName || currentUser.email}`}
+              >
+                {currentUser.photoURL ? (
+                  <img
+                    src={currentUser.photoURL}
+                    alt="Profile"
+                    referrerPolicy="no-referrer"
+                    className="w-4 h-4 rounded-full object-cover border border-[#8C102A]"
+                  />
+                ) : (
+                  <div className="w-4 h-4 rounded-full bg-[#8C102A] text-white flex items-center justify-center text-[9px] font-black">
+                    {(currentUser.displayName || currentUser.email || 'A')[0].toUpperCase()}
+                  </div>
+                )}
+                <span className="max-w-[80px] truncate">{currentUser.displayName?.split(' ')[0] || 'Account'}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onOpenSignInModal}
+                className="hidden sm:inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-white border border-[#D9CBB7] hover:border-[#8C102A] text-xs font-bold text-[#5D4E46] hover:text-[#8C102A] transition-colors cursor-pointer shadow-2xs"
+              >
+                <LogIn className="w-3.5 h-3.5 text-[#8C102A]" />
+                <span>Sign In</span>
+              </button>
+            )}
+
             <button
               onClick={onOpenTray}
               className="relative py-2 px-3 sm:px-4 rounded-xl bg-[#8C102A] text-white text-xs sm:text-sm font-bold flex items-center gap-2 hover:bg-[#730D22] active:scale-95 transition-all shadow-xs cursor-pointer"

@@ -15,6 +15,8 @@ import { ProductDetailModal } from './components/ProductDetailModal';
 import { QuickOrderModal } from './components/QuickOrderModal';
 import { MenuOrderingPage } from './components/MenuOrderingPage';
 import { OrderConfirmationPage } from './components/OrderConfirmationPage';
+import { SignInModal } from './components/SignInModal';
+import { auth, onAuthStateChanged, type User } from './firebase';
 import { Currency, BranchId, ScoopItem, MenuItem, SelectedOrderItem, ServingFormat } from './types';
 import { ALL_20_FLAVOURS } from './data/iceCreamData';
 import { ShoppingBag } from 'lucide-react';
@@ -32,6 +34,17 @@ export default function App() {
   const [orderItems, setOrderItems] = useState<SelectedOrderItem[]>([]);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [menuResetKey, setMenuResetKey] = useState(0);
+
+  // Authentication State & Sign-In Modal
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Mobile / Dedicated Page State (reads ?page=menu)
   const [currentPage, setCurrentPage] = useState<'home' | 'menu'>(() => {
@@ -257,6 +270,8 @@ export default function App() {
           onSelectItem={setDetailItem}
           onOpenTray={() => setIsOrderModalOpen(true)}
           onBackToHome={handleNavigateToHome}
+          currentUser={currentUser}
+          onOpenSignInModal={() => setIsSignInModalOpen(true)}
         />
 
         {/* Product Detail Modal */}
@@ -286,6 +301,13 @@ export default function App() {
             onOpenConfirmationPage={handleOpenConfirmationPage}
           />
         )}
+
+        {/* Sign In & Account Popup Modal */}
+        <SignInModal
+          isOpen={isSignInModalOpen}
+          onClose={() => setIsSignInModalOpen(false)}
+          currentUser={currentUser}
+        />
       </div>
     );
   }
@@ -301,6 +323,8 @@ export default function App() {
         orderItems={orderItems}
         onOpenOrderModal={() => setIsOrderModalOpen(true)}
         onNavigateToMenu={handleNavigateToMenu}
+        currentUser={currentUser}
+        onOpenSignInModal={() => setIsSignInModalOpen(true)}
       />
 
       <main className="flex-1">
@@ -423,6 +447,13 @@ export default function App() {
           onOpenConfirmationPage={handleOpenConfirmationPage}
         />
       )}
+
+      {/* Sign In & Account Popup Modal */}
+      <SignInModal
+        isOpen={isSignInModalOpen}
+        onClose={() => setIsSignInModalOpen(false)}
+        currentUser={currentUser}
+      />
     </div>
   );
 }

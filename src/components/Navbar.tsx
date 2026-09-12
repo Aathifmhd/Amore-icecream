@@ -3,7 +3,8 @@ import { AmoreLogo } from './AmoreLogo';
 import { Currency, BranchId, SelectedOrderItem } from '../types';
 import { AMORE_BRANCHES } from '../data/iceCreamData';
 import { CurrencyToggle } from './CurrencyToggle';
-import { Menu, X, MapPin, Phone, ShoppingBag } from 'lucide-react';
+import { Menu, X, MapPin, Phone, ShoppingBag, LogIn, User as UserIcon } from 'lucide-react';
+import { type User } from '../firebase';
 
 interface NavbarProps {
   currency: Currency;
@@ -13,6 +14,8 @@ interface NavbarProps {
   orderItems: SelectedOrderItem[];
   onOpenOrderModal: () => void;
   onNavigateToMenu?: () => void;
+  currentUser?: User | null;
+  onOpenSignInModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -23,6 +26,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   orderItems,
   onOpenOrderModal,
   onNavigateToMenu,
+  currentUser,
+  onOpenSignInModal,
 }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -123,9 +128,73 @@ export const Navbar: React.FC<NavbarProps> = ({
               <CurrencyToggle currency={currency} onToggle={onToggleCurrency} variant="compact" />
             </div>
 
+            {/* Sign In / Account Button (Tablet & Desktop) */}
+            {currentUser ? (
+              <button
+                type="button"
+                onClick={onOpenSignInModal}
+                className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-[#241A18] bg-white/90 hover:bg-white border border-[#D9CBB7] hover:border-[#8C102A] rounded-full transition-all duration-200 shadow-2xs cursor-pointer group active:scale-95"
+                title={`Signed in as ${currentUser.displayName || currentUser.email}`}
+              >
+                {currentUser.photoURL ? (
+                  <img
+                    src={currentUser.photoURL}
+                    alt="Profile"
+                    referrerPolicy="no-referrer"
+                    className="w-5 h-5 rounded-full object-cover border border-[#8C102A]"
+                  />
+                ) : (
+                  <div className="w-5 h-5 rounded-full bg-[#8C102A] text-white flex items-center justify-center text-[10px] font-black">
+                    {(currentUser.displayName || currentUser.email || 'A')[0].toUpperCase()}
+                  </div>
+                )}
+                <span className="max-w-[100px] truncate text-[#3D2C24] group-hover:text-[#8C102A]">
+                  {currentUser.displayName ? currentUser.displayName.split(' ')[0] : 'Account'}
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onOpenSignInModal}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-[#4D3E36] hover:text-[#8C102A] bg-white/80 hover:bg-white border border-[#D9CBB7] hover:border-[#8C102A] rounded-full transition-all duration-200 shadow-2xs cursor-pointer active:scale-95"
+                title="Sign In to Amore"
+              >
+                <LogIn className="w-3.5 h-3.5 text-[#8C102A]" />
+                <span>Sign In</span>
+              </button>
+            )}
+
             {/* Currency toggle on mobile view (replacing tray button on screens < sm) */}
             <div className="sm:hidden flex items-center">
               <CurrencyToggle currency={currency} onToggle={onToggleCurrency} />
+            </div>
+
+            {/* Mobile Sign In icon button on small screens */}
+            <div className="sm:hidden flex items-center">
+              <button
+                type="button"
+                onClick={onOpenSignInModal}
+                className="p-2 rounded-full text-[#5D4E46] hover:text-[#8C102A] hover:bg-[#EAE0D0] transition-colors cursor-pointer"
+                aria-label={currentUser ? 'View Account' : 'Sign In'}
+                title={currentUser ? 'Account' : 'Sign In'}
+              >
+                {currentUser ? (
+                  currentUser.photoURL ? (
+                    <img
+                      src={currentUser.photoURL}
+                      alt="Profile"
+                      referrerPolicy="no-referrer"
+                      className="w-6 h-6 rounded-full object-cover border border-[#8C102A]"
+                    />
+                  ) : (
+                    <div className="w-6 h-6 rounded-full bg-[#8C102A] text-white flex items-center justify-center text-[10px] font-bold">
+                      {(currentUser.displayName || currentUser.email || 'A')[0].toUpperCase()}
+                    </div>
+                  )
+                ) : (
+                  <UserIcon className="w-5 h-5 text-[#8C102A]" />
+                )}
+              </button>
             </div>
 
             {/* Your Tray Button with Badge (shown on sm+ screens; on mobile replaced by Currency Toggle) */}
@@ -175,6 +244,58 @@ export const Navbar: React.FC<NavbarProps> = ({
               <p className="text-xs font-semibold text-[#3D2C24]">
                 Akurana (Flagship) &bull; Colombo &bull; Arugam Bay
               </p>
+            </div>
+
+            {/* Account / Sign In in Mobile Drawer */}
+            <div className="px-3 py-2.5 bg-white rounded-xl border border-[#E8DFC8]">
+              {currentUser ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenSignInModal?.();
+                  }}
+                  className="w-full flex items-center justify-between text-left cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    {currentUser.photoURL ? (
+                      <img
+                        src={currentUser.photoURL}
+                        alt="Profile"
+                        referrerPolicy="no-referrer"
+                        className="w-8 h-8 rounded-full object-cover border border-[#8C102A]"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-[#8C102A] text-white flex items-center justify-center text-xs font-bold">
+                        {(currentUser.displayName || currentUser.email || 'A')[0].toUpperCase()}
+                      </div>
+                    )}
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-[#241A18] leading-tight">
+                        {currentUser.displayName || 'Amore Member'}
+                      </span>
+                      <span className="text-[10px] text-[#7A6458] truncate max-w-[170px]">
+                        {currentUser.email}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-bold text-[#8C102A] bg-[#8C102A]/10 px-2 py-0.5 rounded-md">
+                    Account
+                  </span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenSignInModal?.();
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-[#8C102A] text-white font-bold text-xs shadow-xs hover:bg-[#A31634] transition-colors cursor-pointer"
+                >
+                  <LogIn className="w-4 h-4 text-amber-200" />
+                  <span>Sign In to Amore</span>
+                </button>
+              )}
             </div>
 
             {/* Links */}
