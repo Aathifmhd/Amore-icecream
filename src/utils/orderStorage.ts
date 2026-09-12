@@ -230,8 +230,8 @@ export function resumeOrderGracePeriod(
     ...(deliveryDetails || {}),
     createdAt: newCreatedAt,
     isGracePeriodPaused: false,
-    gracePeriodRemainingSeconds: undefined,
-    gracePeriodPausedAt: undefined,
+    gracePeriodRemainingSeconds: 0,
+    gracePeriodPausedAt: '',
     updatedAt: new Date().toISOString(),
   });
 }

@@ -215,6 +215,11 @@ export async function updateOrderInFirestore(
     if (updates.deliveryAddress !== undefined) allowedUpdates.deliveryAddress = updates.deliveryAddress;
     if (updates.city !== undefined) allowedUpdates.city = updates.city;
     if (updates.contactNumber !== undefined) allowedUpdates.contactNumber = updates.contactNumber;
+    if (updates.deliveryCoordinates !== undefined) allowedUpdates.deliveryCoordinates = updates.deliveryCoordinates;
+    if (updates.createdAt !== undefined) allowedUpdates.createdAt = updates.createdAt;
+    if (updates.isGracePeriodPaused !== undefined) allowedUpdates.isGracePeriodPaused = updates.isGracePeriodPaused;
+    if (updates.gracePeriodRemainingSeconds !== undefined) allowedUpdates.gracePeriodRemainingSeconds = updates.gracePeriodRemainingSeconds;
+    if (updates.gracePeriodPausedAt !== undefined) allowedUpdates.gracePeriodPausedAt = updates.gracePeriodPausedAt;
     if (updates.updatedAt !== undefined) allowedUpdates.updatedAt = updates.updatedAt;
 
     await updateDoc(doc(db, 'orders', orderReference), allowedUpdates);
