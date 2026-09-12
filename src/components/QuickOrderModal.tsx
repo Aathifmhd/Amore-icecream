@@ -4,7 +4,6 @@ import { SelectedOrderItem, BranchId, Currency, OrderRecord } from '../types';
 import { AMORE_BRANCHES } from '../data/iceCreamData';
 import { formatPrice } from '../utils/currency';
 import { saveOrder, generateConfirmationLink } from '../utils/orderStorage';
-import { auth } from '../firebase';
 import {
   X,
   CheckCircle2,
@@ -92,18 +91,6 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-
-  // Prefill authenticated user profile if signed in via Firebase
-  useEffect(() => {
-    if (isOpen && auth.currentUser) {
-      if (!customerName && auth.currentUser.displayName) {
-        setCustomerName(auth.currentUser.displayName);
-      }
-      if (!emailAddress && auth.currentUser.email) {
-        setEmailAddress(auth.currentUser.email);
-      }
-    }
-  }, [isOpen]);
 
   // Sync WhatsApp number with Contact Number if toggled
   useEffect(() => {

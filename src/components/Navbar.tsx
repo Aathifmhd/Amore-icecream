@@ -3,8 +3,7 @@ import { AmoreLogo } from './AmoreLogo';
 import { Currency, BranchId, SelectedOrderItem } from '../types';
 import { AMORE_BRANCHES } from '../data/iceCreamData';
 import { CurrencyToggle } from './CurrencyToggle';
-import { Menu, X, MapPin, Clock, Phone, ShoppingBag, Utensils, Waves, LogIn, LogOut, User as UserIcon } from 'lucide-react';
-import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged, type User } from '../firebase';
+import { Menu, X, MapPin, Phone, ShoppingBag } from 'lucide-react';
 
 interface NavbarProps {
   currency: Currency;
@@ -28,37 +27,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState(false);
-
   const currentBranch = AMORE_BRANCHES.find((b) => b.id === selectedBranch) || AMORE_BRANCHES[0];
   const itemCount = orderItems.reduce((sum, it) => sum + it.quantity, 0);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  const handleSignIn = async () => {
-    try {
-      setAuthLoading(true);
-      await signInWithPopup(auth, googleProvider);
-    } catch (err) {
-      console.warn('Google sign-in error:', err);
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await signOut(auth);
-    } catch (err) {
-      console.warn('Sign-out error:', err);
-    }
-  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -153,46 +123,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               <CurrencyToggle currency={currency} onToggle={onToggleCurrency} variant="compact" />
             </div>
 
-            {/* Google Firebase Account Auth Button */}
-            {currentUser ? (
-              <div className="hidden sm:flex items-center gap-1.5 bg-white/80 border border-[#E8DFC8] rounded-full pl-1.5 pr-2.5 py-1 text-xs font-semibold text-[#4D3E36] shadow-2xs">
-                {currentUser.photoURL ? (
-                  <img
-                    src={currentUser.photoURL}
-                    alt={currentUser.displayName || 'User'}
-                    referrerPolicy="no-referrer"
-                    className="w-6 h-6 rounded-full object-cover border border-[#D9CBB7]"
-                  />
-                ) : (
-                  <div className="w-6 h-6 rounded-full bg-[#8C102A] text-white flex items-center justify-center text-[10px] font-bold">
-                    {(currentUser.displayName || currentUser.email || 'U')[0].toUpperCase()}
-                  </div>
-                )}
-                <span className="max-w-[70px] truncate text-[11px] font-medium hidden md:inline">
-                  {currentUser.displayName?.split(' ')[0] || 'Customer'}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleSignOut}
-                  className="text-[#8A7970] hover:text-[#8C102A] transition-colors p-0.5 ml-0.5 cursor-pointer"
-                  title="Sign Out"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={handleSignIn}
-                disabled={authLoading}
-                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-[#5D4E46] hover:text-[#8C102A] bg-white/70 hover:bg-white border border-[#D9CBB7] rounded-full transition-all cursor-pointer shadow-2xs"
-                title="Sign in with Google to sync orders"
-              >
-                <LogIn className="w-3.5 h-3.5 text-[#8C102A]" />
-                <span>{authLoading ? 'Signing In...' : 'Sign In'}</span>
-              </button>
-            )}
-
             {/* Currency toggle on mobile view (replacing tray button on screens < sm) */}
             <div className="sm:hidden flex items-center">
               <CurrencyToggle currency={currency} onToggle={onToggleCurrency} />
@@ -245,54 +175,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               <p className="text-xs font-semibold text-[#3D2C24]">
                 Akurana (Flagship) &bull; Colombo &bull; Arugam Bay
               </p>
-            </div>
-
-            {/* Google Firebase Account in Mobile Drawer */}
-            <div className="px-3 py-2.5 bg-white rounded-xl border border-[#E8DFC8] flex items-center justify-between">
-              {currentUser ? (
-                <div className="flex items-center justify-between w-full">
-                  <div className="flex items-center gap-2">
-                    {currentUser.photoURL ? (
-                      <img
-                        src={currentUser.photoURL}
-                        alt="User"
-                        referrerPolicy="no-referrer"
-                        className="w-7 h-7 rounded-full object-cover border border-[#D9CBB7]"
-                      />
-                    ) : (
-                      <div className="w-7 h-7 rounded-full bg-[#8C102A] text-white flex items-center justify-center text-xs font-bold">
-                        {(currentUser.displayName || currentUser.email || 'U')[0].toUpperCase()}
-                      </div>
-                    )}
-                    <div>
-                      <p className="text-xs font-bold text-[#241A18] leading-tight">
-                        {currentUser.displayName || 'Customer'}
-                      </p>
-                      <p className="text-[10px] text-[#7A6960] truncate max-w-[150px]">
-                        {currentUser.email}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleSignOut}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-[#8C102A] bg-red-50 hover:bg-red-100 transition-colors"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>Sign Out</span>
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleSignIn}
-                  disabled={authLoading}
-                  className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-white border border-[#D9CBB7] hover:bg-[#FAF7F2] text-xs font-bold text-[#3D2C24] transition-colors"
-                >
-                  <LogIn className="w-4 h-4 text-[#8C102A]" />
-                  <span>{authLoading ? 'Signing in...' : 'Sign In with Google'}</span>
-                </button>
-              )}
             </div>
 
             {/* Links */}

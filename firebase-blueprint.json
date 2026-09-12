@@ -2,13 +2,17 @@
   "entities": {
     "Order": {
       "title": "Order",
-      "description": "Artisanal ice cream and parlour orders across all branches",
+      "description": "An ice cream, coffee, or dessert order placed by a customer at Amore Speciality",
       "type": "object",
       "properties": {
         "orderReference": {
           "type": "string",
-          "description": "Unique order reference code (e.g. AMO-XXXX)",
+          "description": "Unique human-readable order reference like AMO-123456",
           "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO 8601 timestamp of order placement"
         },
         "customerName": {
           "type": "string",
@@ -17,37 +21,37 @@
         },
         "contactNumber": {
           "type": "string",
-          "description": "Customer phone contact number",
+          "description": "Phone number for order verification and delivery communication",
           "maxLength": 30
         },
         "whatsappNumber": {
           "type": "string",
-          "description": "WhatsApp number for live updates",
+          "description": "Optional WhatsApp number for receiving delivery receipt and order status",
           "maxLength": 30
         },
         "emailAddress": {
           "type": "string",
-          "description": "Customer email address",
+          "description": "Optional email address for e-receipt",
           "maxLength": 120
         },
         "orderType": {
           "type": "string",
-          "description": "Delivery or Takeaway Pickup",
+          "description": "Whether the order is for home delivery or branch pickup",
           "enum": ["delivery", "pickup"]
         },
         "deliveryAddress": {
           "type": "string",
-          "description": "Street delivery address",
+          "description": "Street address for home delivery orders",
           "maxLength": 300
         },
         "city": {
           "type": "string",
-          "description": "Delivery city or destination",
+          "description": "City or area name in Sri Lanka",
           "maxLength": 100
         },
         "branchId": {
           "type": "string",
-          "description": "Branch fulfilling the order",
+          "description": "Amore branch fulfilling the order",
           "enum": ["akurana", "colombo", "arugambay"]
         },
         "branchName": {
@@ -57,12 +61,13 @@
         },
         "branchCity": {
           "type": "string",
-          "description": "Branch locality",
+          "description": "City of fulfilling branch",
           "maxLength": 100
         },
-        "items": {
-          "type": "array",
-          "description": "List of ordered gelato scoops, coffees, and cakes"
+        "specialNote": {
+          "type": "string",
+          "description": "Custom preparation requests, napkin counts, or delivery instructions",
+          "maxLength": 500
         },
         "subtotalLKR": {
           "type": "number",
@@ -74,36 +79,41 @@
         },
         "grandTotalLKR": {
           "type": "number",
-          "description": "Final grand total in Sri Lankan Rupees"
+          "description": "Final total payable in Sri Lankan Rupees"
         },
         "currency": {
           "type": "string",
-          "description": "Currency used",
+          "description": "Display currency during checkout",
           "enum": ["LKR", "USD"]
-        },
-        "status": {
-          "type": "string",
-          "description": "Order status",
-          "enum": ["pending_confirmation", "paid", "confirmed", "completed", "cancelled"]
         },
         "paymentMethod": {
           "type": "string",
-          "description": "Payment method chosen",
-          "enum": ["card", "cash"]
+          "description": "Payment method chosen by customer",
+          "enum": ["card", "cash", "bank_transfer"]
         },
-        "specialNote": {
+        "status": {
           "type": "string",
-          "description": "Customer special instructions or dietary notes",
-          "maxLength": 500
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Creation timestamp ISO string"
+          "description": "Current order lifecycle status",
+          "enum": ["pending_confirmation", "paid", "confirmed", "completed", "cancelled"]
         },
         "userId": {
           "type": "string",
-          "description": "Optional customer Firebase Auth UID",
+          "description": "Firebase Auth UID if user was logged in when placing order",
           "maxLength": 128
+        },
+        "paidAt": {
+          "type": "string",
+          "description": "ISO timestamp when order payment was authorized or collected"
+        },
+        "cardLast4": {
+          "type": "string",
+          "description": "Masked last 4 digits of payment card if paid via card gateway",
+          "maxLength": 4
+        },
+        "cardBrand": {
+          "type": "string",
+          "description": "Payment card network brand (Visa, Mastercard, etc.)",
+          "maxLength": 20
         }
       },
       "required": [
@@ -112,112 +122,15 @@
         "contactNumber",
         "orderType",
         "branchId",
-        "items",
         "grandTotalLKR",
         "status"
-      ]
-    },
-    "Review": {
-      "title": "Review",
-      "description": "Customer parlour rating and flavour review",
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Review unique identifier",
-          "maxLength": 128
-        },
-        "authorName": {
-          "type": "string",
-          "description": "Reviewer display name",
-          "maxLength": 100
-        },
-        "rating": {
-          "type": "number",
-          "description": "Rating score from 1 to 5"
-        },
-        "flavourOrBranch": {
-          "type": "string",
-          "description": "Flavour or branch reviewed (e.g., Durian, Arugam Bay)",
-          "maxLength": 100
-        },
-        "comment": {
-          "type": "string",
-          "description": "Customer comments and feedback",
-          "maxLength": 500
-        },
-        "userId": {
-          "type": "string",
-          "description": "Firebase Auth UID of reviewer",
-          "maxLength": 128
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Creation timestamp"
-        }
-      },
-      "required": [
-        "authorName",
-        "rating",
-        "comment"
-      ]
-    },
-    "UserProfile": {
-      "title": "UserProfile",
-      "description": "User profile with preferences and contact info",
-      "type": "object",
-      "properties": {
-        "uid": {
-          "type": "string",
-          "description": "Firebase user UID",
-          "maxLength": 128
-        },
-        "displayName": {
-          "type": "string",
-          "description": "User display name",
-          "maxLength": 100
-        },
-        "email": {
-          "type": "string",
-          "description": "User email address",
-          "maxLength": 120
-        },
-        "phone": {
-          "type": "string",
-          "description": "Contact phone number",
-          "maxLength": 30
-        },
-        "preferredBranch": {
-          "type": "string",
-          "description": "Preferred parlour branch",
-          "enum": ["akurana", "colombo", "arugambay"]
-        },
-        "favoriteFlavours": {
-          "type": "array",
-          "description": "List of favorite flavour IDs"
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Account creation timestamp"
-        }
-      },
-      "required": [
-        "uid"
       ]
     }
   },
   "firestore": {
     "/orders/{orderId}": {
       "schema": "Order",
-      "description": "Collection of customer orders placed for pickup or delivery."
-    },
-    "/reviews/{reviewId}": {
-      "schema": "Review",
-      "description": "Customer reviews and parlour feedback."
-    },
-    "/users/{userId}": {
-      "schema": "UserProfile",
-      "description": "User account profiles."
+      "description": "Stores guest and customer ice cream orders, tracks live fulfillment status, and records payment confirmations"
     }
   }
 }

@@ -2,7 +2,6 @@ import { OrderRecord } from '../types';
 import {
   saveOrderToFirestore,
   updateOrderInFirestore,
-  getOrderFromFirestore,
   auth,
 } from '../firebase';
 

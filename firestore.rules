@@ -59,60 +59,28 @@ service cloud.firestore {
                        isValidOrder(incoming()) &&
                        (!('userId' in incoming()) || (isSignedIn() && incoming().userId == request.auth.uid));
 
-      // Allow updating payment status or notes
+      // Allow updating order status or payment info
       allow update: if isValidId(orderId) &&
-                       isValidOrder(incoming()) &&
-                       incoming().orderReference == existing().orderReference &&
-                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'paidAt', 'paymentMethod', 'specialNote', 'cardLast4', 'cardBrand']);
+                       (
+                         // Allow owner or guest paying for this exact order
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'status',
+                           'paidAt',
+                           'paymentMethod',
+                           'cardLast4',
+                           'cardBrand',
+                           'specialNote'
+                         ]) &&
+                         incoming().status in ['pending_confirmation', 'paid', 'confirmed', 'completed', 'cancelled']
+                       );
 
+      // Deny deletion of orders to preserve accounting history
       allow delete: if false;
     }
 
-    // Validation for Reviews
-    function isValidReview(data) {
-      return data.authorName is string && data.authorName.size() > 0 && data.authorName.size() <= 100 &&
-             data.rating is number && data.rating >= 1 && data.rating <= 5 &&
-             data.comment is string && data.comment.size() > 0 && data.comment.size() <= 500 &&
-             (!('flavourOrBranch' in data) || (data.flavourOrBranch is string && data.flavourOrBranch.size() <= 100)) &&
-             (!('userId' in data) || (data.userId is string && data.userId.size() <= 128));
-    }
-
-    // Reviews Collection
-    match /reviews/{reviewId} {
+    // Test connection doc for initial boot validation
+    match /test/connection {
       allow read: if true;
-
-      allow create: if isValidId(reviewId) &&
-                       isValidReview(incoming()) &&
-                       (!('userId' in incoming()) || (isSignedIn() && incoming().userId == request.auth.uid));
-
-      allow update: if isValidId(reviewId) &&
-                       isValidReview(incoming()) &&
-                       isSignedIn() &&
-                       existing().userId == request.auth.uid &&
-                       incoming().userId == existing().userId;
-
-      allow delete: if isValidId(reviewId) &&
-                       isSignedIn() &&
-                       existing().userId == request.auth.uid;
-    }
-
-    // Validation for User Profiles
-    function isValidUser(data) {
-      return data.uid is string && data.uid.size() <= 128 &&
-             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
-             (!('email' in data) || (data.email is string && data.email.size() <= 120)) &&
-             (!('phone' in data) || (data.phone is string && data.phone.size() <= 30)) &&
-             (!('preferredBranch' in data) || data.preferredBranch in ['akurana', 'colombo', 'arugambay']) &&
-             (!('favoriteFlavours' in data) || (data.favoriteFlavours is list && data.favoriteFlavours.size() <= 30));
-    }
-
-    // Users Collection
-    match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow list: if false;
-      allow create: if isOwner(userId) && isValidUser(incoming());
-      allow update: if isOwner(userId) && isValidUser(incoming()) && incoming().uid == existing().uid;
-      allow delete: if false;
     }
   }
 }

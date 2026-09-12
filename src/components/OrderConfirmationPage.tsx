@@ -65,7 +65,7 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
     }
     setIsLoading(false);
 
-    // Live sync from Cloud Firestore
+    // Live sync from Cloud Firestore (amore-icecream)
     if (orderReference) {
       getOrderFromFirestore(orderReference).then((remoteOrder) => {
         if (remoteOrder) {
