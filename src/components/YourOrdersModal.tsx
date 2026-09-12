@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { OrderRecord, Currency } from '../types';
-import { getUserOrdersList, cancelOrder, updateOrderDelivery } from '../utils/orderStorage';
+import {
+  getUserOrdersList,
+  cancelOrder,
+  updateOrderDelivery,
+  ORDERS_UPDATED_EVENT,
+  generateInconvenienceEmail,
+} from '../utils/orderStorage';
 import { formatPrice } from '../utils/currency';
 import { AMORE_BRANCHES } from '../data/iceCreamData';
 import {
@@ -20,6 +26,11 @@ import {
   MessageCircle,
   ChevronDown,
   ChevronUp,
+  FileText,
+  Mail,
+  Copy,
+  Check,
+  AlertTriangle,
 } from 'lucide-react';
 import { type User } from '../firebase';
 
@@ -41,8 +52,12 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
   onBrowseMenu,
 }) => {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const [activeTab, setActiveTab] = useState<'ongoing' | 'history'>('ongoing');
   const [now, setNow] = useState<number>(Date.now());
   const [expandedOrderRef, setExpandedOrderRef] = useState<string | null>(highlightOrderRef || null);
+
+  // Cancellation toast notification
+  const [cancelNotification, setCancelNotification] = useState<string | null>(null);
 
   // Editing state
   const [editingRef, setEditingRef] = useState<string | null>(null);
@@ -54,12 +69,26 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
   // Cancel confirmation state
   const [confirmCancelRef, setConfirmCancelRef] = useState<string | null>(null);
 
+  // Apology letter view state
+  const [viewingApologyOrder, setViewingApologyOrder] = useState<OrderRecord | null>(null);
+  const [copiedApology, setCopiedApology] = useState(false);
+
   // Load orders
   const refreshOrders = () => {
     const list = getUserOrdersList(currentUser?.uid);
     setOrders(list);
+
+    // If highlightOrderRef is supplied, auto select the matching tab & expand
     if (highlightOrderRef) {
-      setExpandedOrderRef(highlightOrderRef);
+      const target = list.find((o) => o.orderReference === highlightOrderRef);
+      if (target) {
+        if (target.status === 'cancelled' || target.status === 'delivered') {
+          setActiveTab('history');
+        } else {
+          setActiveTab('ongoing');
+        }
+        setExpandedOrderRef(highlightOrderRef);
+      }
     } else if (list.length > 0 && !expandedOrderRef) {
       setExpandedOrderRef(list[0].orderReference);
     }
@@ -71,7 +100,23 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
     }
   }, [isOpen, currentUser, highlightOrderRef]);
 
-  // Update live clock every second for countdowns
+  // Live real-time sync with Admin changes or multi-tab changes
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleSync = () => {
+      refreshOrders();
+    };
+
+    window.addEventListener(ORDERS_UPDATED_EVENT, handleSync);
+    window.addEventListener('storage', handleSync);
+    return () => {
+      window.removeEventListener(ORDERS_UPDATED_EVENT, handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
+  }, [isOpen, currentUser]);
+
+  // Update live clock every second for grace period countdowns
   useEffect(() => {
     if (!isOpen) return;
     const timer = setInterval(() => {
@@ -84,14 +129,23 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
-        onClose();
+        if (viewingApologyOrder) {
+          setViewingApologyOrder(null);
+        } else {
+          onClose();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, viewingApologyOrder]);
 
   if (!isOpen) return null;
+
+  // Split orders
+  const ongoingOrders = orders.filter((o) => o.status !== 'cancelled' && o.status !== 'delivered');
+  const historyOrders = orders.filter((o) => o.status === 'cancelled' || o.status === 'delivered');
+  const displayedOrders = activeTab === 'ongoing' ? ongoingOrders : historyOrders;
 
   // Calculate remaining seconds in 2-minute (120s) grace period
   const getRemainingSeconds = (createdAt: string): number => {
@@ -132,11 +186,20 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
     refreshOrders();
   };
 
-  // Cancel order
+  // Cancel order by customer -> Automatically clears from ongoing orders
   const handleConfirmCancel = (orderRef: string) => {
-    cancelOrder(orderRef);
+    cancelOrder(orderRef, 'customer', 'Cancelled by customer during grace period');
     setConfirmCancelRef(null);
+    setCancelNotification(
+      `Order ${orderRef} was cancelled successfully. It has been cleared from active orders. Any pre-authorized card payment has been released.`
+    );
     refreshOrders();
+  };
+
+  const handleCopyApologyText = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedApology(true);
+    setTimeout(() => setCopiedApology(false), 2500);
   };
 
   return (
@@ -162,9 +225,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                 Your Orders
               </h2>
               <p className="text-xs text-[#7A6458]">
-                {orders.length === 0
-                  ? 'No active orders'
-                  : `${orders.length} ${orders.length === 1 ? 'order' : 'orders'} recorded`}
+                {ongoingOrders.length} active • {historyOrders.length} past / completed
               </p>
             </div>
           </div>
@@ -178,20 +239,95 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
           </button>
         </div>
 
+        {/* Tab Navigation: Active Ongoing Orders vs Past & Cancelled */}
+        <div className="px-5 pt-3 pb-2 bg-[#FAF7F2] border-b border-[#E8DFC8]/70 flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setActiveTab('ongoing')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'ongoing'
+                ? 'bg-[#8C102A] text-white shadow-xs'
+                : 'bg-white text-[#5D4E46] border border-[#E8DFC8] hover:bg-gray-50'
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>Active Ongoing Orders</span>
+            {ongoingOrders.length > 0 && (
+              <span
+                className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                  activeTab === 'ongoing'
+                    ? 'bg-white text-[#8C102A]'
+                    : 'bg-[#8C102A] text-white'
+                }`}
+              >
+                {ongoingOrders.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('history')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'history'
+                ? 'bg-[#8C102A] text-white shadow-xs'
+                : 'bg-white text-[#5D4E46] border border-[#E8DFC8] hover:bg-gray-50'
+            }`}
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>History & Cancelled</span>
+            {historyOrders.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-gray-200 text-gray-700">
+                {historyOrders.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Cancellation Notice Banner */}
+        {cancelNotification && (
+          <div className="bg-red-50 border-b border-red-200 px-4 py-2.5 flex items-center justify-between text-xs text-red-900 animate-fadeIn">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-red-600 shrink-0" />
+              <span>{cancelNotification}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCancelNotification(null)}
+              className="text-red-700 hover:text-red-900 font-bold ml-2 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* Orders List Container */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-          {orders.length === 0 ? (
+          {displayedOrders.length === 0 ? (
             /* Empty State */
             <div className="text-center py-12 px-4">
               <div className="w-16 h-16 rounded-full bg-[#FAF5EE] border border-[#E8DFC8] flex items-center justify-center mx-auto mb-4 text-[#8C102A]">
                 <ShoppingBag className="w-8 h-8 text-[#8C102A]/80" />
               </div>
               <h3 className="font-serif-title text-lg font-bold text-[#241A18]">
-                No orders placed yet
+                {activeTab === 'ongoing' ? 'No active ongoing orders' : 'No past or cancelled orders'}
               </h3>
               <p className="text-xs text-[#7A6458] max-w-xs mx-auto mt-1 mb-6">
-                Fresh artisanal gelato scoops and cakes are ready to be churned across our three parlours.
+                {activeTab === 'ongoing'
+                  ? 'All cancelled or completed orders are automatically archived into your History tab.'
+                  : 'Your past fulfilled and cancelled orders will show here for your records.'}
               </p>
+
+              {activeTab === 'ongoing' && historyOrders.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('history')}
+                  className="px-4 py-2 mr-2 rounded-full bg-white border border-[#E0D5C3] text-xs font-bold text-[#5D4E46] hover:bg-gray-50 shadow-xs cursor-pointer"
+                >
+                  View Order History ({historyOrders.length})
+                </button>
+              )}
+
               {onBrowseMenu && (
                 <button
                   type="button"
@@ -206,10 +342,14 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
               )}
             </div>
           ) : (
-            orders.map((order) => {
+            displayedOrders.map((order) => {
               const remainingSeconds = getRemainingSeconds(order.createdAt);
-              const inGracePeriod = remainingSeconds > 0 && order.status !== 'cancelled';
+              const inGracePeriod = remainingSeconds > 0 && order.status !== 'cancelled' && order.status === 'pending_confirmation';
               const isCancelled = order.status === 'cancelled';
+              const isConfirmed = order.status === 'confirmed';
+              const isPreparing = order.status === 'preparing';
+              const isDelivered = order.status === 'delivered';
+              const isPendingConfirmation = order.status === 'pending_confirmation';
               const isEditing = editingRef === order.orderReference;
               const isExpanded = expandedOrderRef === order.orderReference;
               const branch = AMORE_BRANCHES.find((b) => b.id === order.branchId) || AMORE_BRANCHES[0];
@@ -221,7 +361,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                     highlightOrderRef === order.orderReference
                       ? 'border-[#8C102A] ring-2 ring-[#8C102A]/15 shadow-md'
                       : isCancelled
-                      ? 'border-gray-200 bg-gray-50/70 opacity-75'
+                      ? 'border-gray-200 bg-gray-50/70 opacity-80'
                       : 'border-[#E0D5C3] bg-white shadow-xs hover:border-[#8C102A]/50'
                   }`}
                 >
@@ -237,21 +377,45 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                             {order.orderReference}
                           </span>
 
-                          {/* Status Badge */}
+                          {/* Dynamic Status Badges */}
                           {isCancelled ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-200 text-gray-700">
-                              <Ban className="w-2.5 h-2.5" />
-                              Cancelled
+                            order.cancelledBy === 'admin' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800 border border-red-200">
+                                <AlertTriangle className="w-2.5 h-2.5 text-red-600" />
+                                Cancelled by Parlour
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-200 text-gray-700">
+                                <Ban className="w-2.5 h-2.5" />
+                                Cancelled by Customer
+                              </span>
+                            )
+                          ) : isPendingConfirmation ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                              <Clock className="w-2.5 h-2.5 text-amber-700 animate-spin" />
+                              Order Placed (Awaiting Confirmation)
                             </span>
-                          ) : inGracePeriod ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300/80 animate-pulse">
-                              <Clock className="w-2.5 h-2.5 text-amber-700" />
-                              Grace Period ({formatCountdown(remainingSeconds)})
+                          ) : isConfirmed ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-300">
+                              <CheckCircle2 className="w-2.5 h-2.5 text-blue-600" />
+                              Confirmed & Payment Captured
+                            </span>
+                          ) : isPreparing ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-300">
+                              <Sparkles className="w-2.5 h-2.5 text-purple-600" />
+                              In Kitchen (Preparing)
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300/80">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
                               <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
-                              Kitchen Churning
+                              Delivered / Completed
+                            </span>
+                          )}
+
+                          {inGracePeriod && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-900 border border-orange-300 animate-pulse">
+                              <Clock className="w-2.5 h-2.5 text-orange-700" />
+                              Grace Period ({formatCountdown(remainingSeconds)})
                             </span>
                           )}
                         </div>
@@ -293,10 +457,10 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                           </div>
                           <div>
                             <p className="text-xs font-bold text-amber-950">
-                              {formatCountdown(remainingSeconds)} remaining to make changes
+                              {formatCountdown(remainingSeconds)} remaining to edit address or cancel
                             </p>
                             <p className="text-[11px] text-amber-800">
-                              You can freely update your delivery address or cancel without penalty.
+                              Cancelling now immediately releases your order and any card authorization.
                             </p>
                           </div>
                         </div>
@@ -341,35 +505,82 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                     </div>
                   )}
 
-                  {/* Post Grace Period Notice (Kitchen has locked order) */}
-                  {!inGracePeriod && !isCancelled && (
-                    <div className="bg-emerald-50/80 border-b border-emerald-100 p-2.5 px-4 flex items-center justify-between text-xs text-emerald-900">
+                  {/* Pending Confirmation Parlour Message */}
+                  {!inGracePeriod && isPendingConfirmation && (
+                    <div className="bg-amber-50/90 border-b border-amber-200 p-2.5 px-4 flex items-center justify-between text-xs text-amber-950">
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span className="text-[11px]">
+                          <strong>Awaiting Parlour Confirmation:</strong> Our manager at {order.branchName} is verifying kitchen inventory. Payment will only process after confirmation.
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Confirmed / Preparing Message */}
+                  {(isConfirmed || isPreparing) && (
+                    <div className="bg-emerald-50/90 border-b border-emerald-200 p-2.5 px-4 flex items-center justify-between text-xs text-emerald-950">
                       <div className="flex items-center gap-2">
                         <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                         <span className="text-[11px]">
-                          <strong>Order locked in:</strong> Our parlour chefs at {order.branchName} are churning your batch.
+                          <strong>{isPreparing ? 'Kitchen Preparing:' : 'Order Confirmed:'}</strong> Payment captured. Our artisans at {order.branchName} are packing your fresh scoops!
                         </span>
                       </div>
                       <a
                         href={`https://wa.me/${branch.whatsapp.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                          `Hello Amore ${branch.name}, I am checking on my order ${order.orderReference}.`
+                          `Hello Amore ${branch.name}, checking on order ${order.orderReference}.`
                         )}`}
                         target="_blank"
                         rel="noreferrer"
                         className="text-[11px] font-bold text-[#8C102A] hover:underline flex items-center gap-1 shrink-0 ml-2"
                       >
                         <MessageCircle className="w-3 h-3" />
-                        <span>Contact Kitchen</span>
+                        <span>WhatsApp Branch</span>
                       </a>
                     </div>
                   )}
 
-                  {/* Cancelled Alert Banner */}
-                  {isCancelled && (
-                    <div className="bg-red-50/90 border-b border-red-100 p-2.5 px-4 flex items-center gap-2 text-xs text-red-800">
-                      <Ban className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                  {/* Parlour Inconvenience Box (Admin Cancelled) */}
+                  {isCancelled && order.cancelledBy === 'admin' && (
+                    <div className="bg-red-50 border-b border-red-200 p-3 sm:px-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                        <div className="flex items-start gap-2.5">
+                          <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-xs font-bold text-red-950">
+                              Parlour Cancellation & Sincere Apology
+                            </p>
+                            <p className="text-[11px] text-red-800 mt-0.5">
+                              <strong>Reason:</strong>{' '}
+                              {order.cancellationReason || 'Parlour kitchen capacity constraint'}
+                            </p>
+                            <p className="text-[10px] text-red-700 mt-0.5">
+                              Payment status: Pre-authorization cancelled ($0 charged).
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setViewingApologyOrder(order);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-white border border-red-300 hover:bg-red-50 text-red-800 text-xs font-bold shadow-2xs transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer self-start sm:self-auto"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-[#8C102A]" />
+                          <span>View Apology Letter</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Customer Cancelled Notice */}
+                  {isCancelled && order.cancelledBy !== 'admin' && (
+                    <div className="bg-gray-100 border-b border-gray-200 p-2.5 px-4 flex items-center gap-2 text-xs text-gray-700">
+                      <Ban className="w-3.5 h-3.5 text-gray-500 shrink-0" />
                       <span>
-                        This order was cancelled on{' '}
+                        You cancelled this order on{' '}
                         {order.cancelledAt
                           ? new Date(order.cancelledAt).toLocaleTimeString([], {
                               hour: '2-digit',
@@ -483,7 +694,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                             Cancel Order {order.orderReference}?
                           </p>
                           <p className="text-[11px] text-red-800 mt-0.5">
-                            Are you sure? This will cancel your order before the kitchen starts churning.
+                            Are you sure? This will instantly cancel your order, clear it from active ongoing orders, and release any card authorization.
                           </p>
                           <div className="flex items-center gap-2 mt-3">
                             <button
@@ -580,23 +791,32 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
 
                         <div>
                           <span className="text-[10px] font-bold uppercase tracking-wider text-[#7A6458] block mb-0.5">
-                            Contact & Payment
+                            Contact & Payment Processing
                           </span>
                           <p className="font-medium text-[#241A18] flex items-center gap-1">
                             <Phone className="w-3 h-3 text-[#8C102A]" />
                             <span>{order.contactNumber}</span>
                           </p>
-                          <div className="flex items-center gap-1.5 mt-1 text-[11px] font-semibold text-slate-700">
+                          <div className="mt-1 text-[11px] font-medium text-slate-700">
                             {order.paymentMethod === 'card' ? (
-                              <>
-                                <CreditCard className="w-3.5 h-3.5 text-blue-600" />
-                                <span>Card {order.cardBrand ? `(${order.cardBrand})` : ''}</span>
-                              </>
+                              <div className="flex flex-col gap-0.5">
+                                <div className="flex items-center gap-1.5 text-blue-700 font-semibold">
+                                  <CreditCard className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>Card {order.cardBrand ? `(${order.cardBrand})` : ''}</span>
+                                </div>
+                                <span className="text-[10px] text-slate-500">
+                                  {isPendingConfirmation
+                                    ? 'Pre-authorized • Captured upon parlour confirmation'
+                                    : isCancelled
+                                    ? 'Pre-authorization released • $0 charged'
+                                    : 'Payment safely processed & captured'}
+                                </span>
+                              </div>
                             ) : (
-                              <>
+                              <div className="flex items-center gap-1.5 text-emerald-700 font-semibold">
                                 <Banknote className="w-3.5 h-3.5 text-emerald-600" />
                                 <span>Cash on Delivery (LKR)</span>
-                              </>
+                              </div>
                             )}
                           </div>
                         </div>
@@ -621,7 +841,101 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Parlour Inconvenience / Apology Letter Modal */}
+      {viewingApologyOrder && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-xs animate-fadeIn"
+          onClick={() => setViewingApologyOrder(null)}
+        >
+          <div
+            className="relative w-full max-w-lg bg-[#FAF7F2] rounded-3xl overflow-hidden shadow-2xl border border-[#D9CBB7] p-6 space-y-4 my-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[#E8DFC8] pb-3">
+              <div className="flex items-center gap-2">
+                <Mail className="w-5 h-5 text-[#8C102A]" />
+                <h3 className="font-serif-title font-bold text-base text-[#241A18]">
+                  Official Amore Apology Notice
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingApologyOrder(null)}
+                className="w-7 h-7 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center border border-gray-300 text-gray-700 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-[#E8DFC8] shadow-2xs font-mono text-xs text-slate-800 whitespace-pre-wrap max-h-[50vh] overflow-y-auto leading-relaxed">
+              {viewingApologyOrder.inconvenienceEmailContent ||
+                generateInconvenienceEmail(
+                  viewingApologyOrder,
+                  viewingApologyOrder.cancellationReason || 'Parlour kitchen capacity constraint'
+                ).body}
+            </div>
+
+            {/* Voucher Code Box */}
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 p-3 rounded-xl flex items-center justify-between gap-2">
+              <div>
+                <span className="text-[10px] font-bold uppercase text-amber-900 block">
+                  Complimentary 15% Courtesy Discount
+                </span>
+                <span className="font-mono font-black text-sm text-[#8C102A]">
+                  AMOREAPOLOGY15
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText('AMOREAPOLOGY15');
+                  alert('Voucher code AMOREAPOLOGY15 copied to clipboard!');
+                }}
+                className="px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-900 text-xs font-bold hover:bg-amber-100 cursor-pointer shadow-2xs"
+              >
+                Copy Code
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const content =
+                    viewingApologyOrder.inconvenienceEmailContent ||
+                    generateInconvenienceEmail(
+                      viewingApologyOrder,
+                      viewingApologyOrder.cancellationReason || 'Parlour kitchen capacity constraint'
+                    ).body;
+                  handleCopyApologyText(content);
+                }}
+                className="px-4 py-2 rounded-xl bg-white border border-[#D9CBB7] hover:bg-gray-50 text-xs font-bold text-[#3D2C24] flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              >
+                {copiedApology ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-slate-600" />
+                    <span>Copy Letter</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewingApologyOrder(null)}
+                className="px-5 py-2 rounded-xl bg-[#8C102A] hover:bg-[#A31634] text-white text-xs font-bold shadow-xs cursor-pointer"
+              >
+                Close Notice
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
-

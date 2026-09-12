@@ -24,8 +24,7 @@ import { auth, onAuthStateChanged, type User } from './firebase';
 import { Currency, BranchId, ScoopItem, MenuItem, SelectedOrderItem, ServingFormat } from './types';
 import { ALL_20_FLAVOURS } from './data/iceCreamData';
 import { ShoppingBag } from 'lucide-react';
-import { formatPrice } from './utils/currency';
-import { getUserOrdersList } from './utils/orderStorage';
+import { getUserOrdersList, ORDERS_UPDATED_EVENT } from './utils/orderStorage';
 
 export default function App() {
   // Global State
@@ -55,9 +54,26 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Compute active / ongoing orders count
+  // Listen for order updates in real-time so ongoingOrdersCount updates dynamically everywhere
+  const [ordersSyncTrigger, setOrdersSyncTrigger] = useState(0);
+
+  useEffect(() => {
+    const handleOrdersSync = () => {
+      setOrdersSyncTrigger((prev) => prev + 1);
+    };
+    window.addEventListener(ORDERS_UPDATED_EVENT, handleOrdersSync);
+    window.addEventListener('storage', handleOrdersSync);
+    return () => {
+      window.removeEventListener(ORDERS_UPDATED_EVENT, handleOrdersSync);
+      window.removeEventListener('storage', handleOrdersSync);
+    };
+  }, []);
+
+  // Compute active ongoing orders (orders placed, confirmed, or in kitchen - excluding cancelled & delivered)
   const userOrders = getUserOrdersList(currentUser?.uid);
-  const ongoingOrdersCount = userOrders.filter((o) => o.status !== 'cancelled').length;
+  const ongoingOrdersCount = userOrders.filter(
+    (o) => o.status !== 'cancelled' && o.status !== 'delivered'
+  ).length;
 
   // Admin Session State
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => isAdminAuthenticated());

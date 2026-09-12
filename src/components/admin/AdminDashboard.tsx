@@ -7,6 +7,12 @@ import {
   updateOrderStatus,
   createAdminOrder,
   updateOrder,
+  adminConfirmOrder,
+  adminSetPreparing,
+  adminSetDelivered,
+  adminCancelOrderWithReason,
+  generateInconvenienceEmail,
+  ORDERS_UPDATED_EVENT,
 } from '../../utils/orderStorage';
 import {
   getAllGelatoFlavours,
@@ -65,6 +71,10 @@ import {
   X,
   Save,
   Check,
+  Ban,
+  Mail,
+  Copy,
+  FileText,
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -96,6 +106,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [selectedOrderForEdit, setSelectedOrderForEdit] = useState<OrderRecord | null>(null);
   const [isCreateOrderModalOpen, setIsCreateOrderModalOpen] = useState(false);
 
+  // Confirm Order Modal State
+  const [confirmingOrder, setConfirmingOrder] = useState<OrderRecord | null>(null);
+
+  // Admin Cancel Order Modal State
+  const [cancellingOrder, setCancellingOrder] = useState<OrderRecord | null>(null);
+  const [cancelReasonPreset, setCancelReasonPreset] = useState<string>(
+    'Out of Stock: Selected artisanal flavours or biscuit cups are sold out'
+  );
+  const [customCancelReason, setCustomCancelReason] = useState<string>('');
+
+  // Viewing Inconvenience / Apology Email
+  const [viewingInconvenienceOrder, setViewingInconvenienceOrder] = useState<OrderRecord | null>(null);
+  const [copiedAdminEmail, setCopiedAdminEmail] = useState(false);
+
   // Menu State
   const [scoops, setScoops] = useState<ScoopItem[]>([]);
   const [coffeeItems, setCoffeeItems] = useState<MenuItem[]>([]);
@@ -122,6 +146,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   useEffect(() => {
     refreshAllData();
 
+    // Listen for live orders changes (e.g., customer places order or customer cancels order)
+    const handleOrdersUpdated = () => {
+      setOrders(getAllOrdersAdmin());
+    };
+    window.addEventListener(ORDERS_UPDATED_EVENT, handleOrdersUpdated);
+    window.addEventListener('storage', handleOrdersUpdated);
+
     // Listen for external menu changes
     const handleMenuUpdated = () => {
       setScoops(getAllGelatoFlavours());
@@ -129,7 +160,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setCakeItems(getAllCakeItems());
     };
     window.addEventListener(MENU_UPDATED_EVENT, handleMenuUpdated);
-    return () => window.removeEventListener(MENU_UPDATED_EVENT, handleMenuUpdated);
+
+    return () => {
+      window.removeEventListener(ORDERS_UPDATED_EVENT, handleOrdersUpdated);
+      window.removeEventListener('storage', handleOrdersUpdated);
+      window.removeEventListener(MENU_UPDATED_EVENT, handleMenuUpdated);
+    };
   }, []);
 
   // -----------------------------------------------------------
@@ -200,8 +236,58 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   }, [orders, selectedBranchFilter, orderStatusFilter, orderSearchQuery]);
 
   // -----------------------------------------------------------
-  // ORDER ACTIONS (CRUD)
+  // ORDER ACTIONS (CRUD & LIFECYCLE)
   // -----------------------------------------------------------
+  const handleTriggerConfirmOrder = (order: OrderRecord) => {
+    setConfirmingOrder(order);
+  };
+
+  const handleExecuteConfirmOrder = (orderRef: string) => {
+    adminConfirmOrder(orderRef);
+    setConfirmingOrder(null);
+    refreshAllData();
+  };
+
+  const handleSendToKitchen = (orderRef: string) => {
+    adminSetPreparing(orderRef);
+    refreshAllData();
+  };
+
+  const handleSetDelivered = (orderRef: string) => {
+    adminSetDelivered(orderRef);
+    refreshAllData();
+  };
+
+  const handleTriggerCancelOrder = (order: OrderRecord) => {
+    setCancellingOrder(order);
+    setCancelReasonPreset(
+      'Out of Stock: Selected artisanal flavours or biscuit cups are sold out'
+    );
+    setCustomCancelReason('');
+  };
+
+  const handleExecuteCancelOrder = (order: OrderRecord) => {
+    const finalReason =
+      cancelReasonPreset === 'Other / Custom Reason'
+        ? customCancelReason.trim() || 'Operational constraint at the parlour'
+        : customCancelReason.trim()
+        ? `${cancelReasonPreset} (${customCancelReason.trim()})`
+        : cancelReasonPreset;
+
+    const email = generateInconvenienceEmail(order, finalReason);
+    adminCancelOrderWithReason(order.orderReference, finalReason, email.body);
+    setCancellingOrder(null);
+    refreshAllData();
+
+    // If customer has phone or email, open mailto link
+    try {
+      const mailto = `mailto:?subject=${encodeURIComponent(email.subject)}&body=${encodeURIComponent(email.body)}`;
+      window.open(mailto, '_blank');
+    } catch (e) {
+      console.warn('Could not launch mail client:', e);
+    }
+  };
+
   const handleStatusChange = (orderRef: string, nextStatus: OrderRecord['status']) => {
     updateOrderStatus(orderRef, nextStatus);
     setOrders(getAllOrdersAdmin());
@@ -523,14 +609,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <th className="px-4 py-3">Branch & Type</th>
                       <th className="px-4 py-3">Items Summary</th>
                       <th className="px-4 py-3">Total & Payment</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3 text-right">Actions</th>
+                      <th className="px-4 py-3">Stage & Status</th>
+                      <th className="px-4 py-3">Lifecycle Action</th>
+                      <th className="px-4 py-3 text-right">Manage</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#EFE8DC]">
                     {filteredOrders.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-4 py-12 text-center text-[#8A7970]">
+                        <td colSpan={8} className="px-4 py-12 text-center text-[#8A7970]">
                           <ShoppingBag className="w-8 h-8 text-[#D9CBB7] mx-auto mb-2" />
                           <p className="font-semibold">No orders match the selected filters.</p>
                           <p className="text-[11px] text-[#A69488] mt-1">
@@ -624,37 +711,165 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               <span className="font-bold text-sm text-[#241A18] block">
                                 {formatPrice(order.grandTotalLKR, currency)}
                               </span>
-                              <span className="inline-block mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white border border-[#D9CBB7] text-[#5D4E46]">
-                                {order.paymentMethod === 'card' ? '💳 Card' : '💵 Cash/COD'}
-                              </span>
+                              <div className="flex flex-col gap-0.5 mt-1">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white border border-[#D9CBB7] text-[#5D4E46]">
+                                  {order.paymentMethod === 'card' ? '💳 Card' : '💵 Cash/COD'}
+                                </span>
+                                {order.paymentMethod === 'card' && (
+                                  <span
+                                    className={`text-[9px] font-bold px-1.5 py-0.2 rounded inline-block ${
+                                      order.status === 'pending_confirmation'
+                                        ? 'text-amber-800 bg-amber-50 border border-amber-200'
+                                        : order.status === 'cancelled'
+                                        ? 'text-gray-500 bg-gray-100'
+                                        : 'text-emerald-800 bg-emerald-50 border border-emerald-200'
+                                    }`}
+                                  >
+                                    {order.status === 'pending_confirmation'
+                                      ? 'Auth (Pending Confirm)'
+                                      : order.status === 'cancelled'
+                                      ? 'Voided / $0'
+                                      : 'Captured & Paid'}
+                                  </span>
+                                )}
+                              </div>
                             </td>
 
-                            {/* Status Changer */}
+                            {/* Stage & Status Display */}
                             <td className="px-4 py-3 align-top">
-                              <select
-                                value={order.status}
-                                onChange={(e) =>
-                                  handleStatusChange(
-                                    order.orderReference,
-                                    e.target.value as OrderRecord['status']
-                                  )
-                                }
-                                className={`text-xs font-bold px-2.5 py-1 rounded-lg border focus:outline-hidden cursor-pointer ${
-                                  isCancelled
-                                    ? 'bg-red-50 text-red-700 border-red-200'
-                                    : isDelivered
-                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                    : isPreparing
-                                    ? 'bg-amber-50 text-amber-800 border-amber-300'
-                                    : 'bg-blue-50 text-blue-700 border-blue-200'
-                                }`}
-                              >
-                                <option value="pending_confirmation">Pending Confirmation</option>
-                                <option value="confirmed">Confirmed</option>
-                                <option value="preparing">In Kitchen (Preparing)</option>
-                                <option value="delivered">Delivered / Completed</option>
-                                <option value="cancelled">Cancelled</option>
-                              </select>
+                              {order.status === 'pending_confirmation' ? (
+                                <div className="space-y-0.5">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                    <Clock className="w-3 h-3 text-amber-700 animate-spin" />
+                                    Order Placed
+                                  </span>
+                                  <span className="text-[10px] text-amber-900/80 block font-medium">
+                                    Awaiting Confirmation
+                                  </span>
+                                </div>
+                              ) : order.status === 'confirmed' ? (
+                                <div className="space-y-0.5">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-blue-100 text-blue-900 border border-blue-300">
+                                    <CheckCircle2 className="w-3 h-3 text-blue-700" />
+                                    Confirmed
+                                  </span>
+                                  <span className="text-[10px] text-emerald-700 block font-bold">
+                                    Payment Captured
+                                  </span>
+                                </div>
+                              ) : order.status === 'preparing' ? (
+                                <div className="space-y-0.5">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-purple-100 text-purple-900 border border-purple-300">
+                                    <Sparkles className="w-3 h-3 text-purple-700" />
+                                    In Kitchen
+                                  </span>
+                                  <span className="text-[10px] text-[#7A6458] block font-medium">
+                                    Scooping & Churning
+                                  </span>
+                                </div>
+                              ) : order.status === 'delivered' ? (
+                                <div className="space-y-0.5">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-700" />
+                                    Delivered
+                                  </span>
+                                  <span className="text-[10px] text-emerald-800 block font-medium">
+                                    Completed
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="space-y-0.5">
+                                  {order.cancelledBy === 'admin' ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-red-100 text-red-900 border border-red-300">
+                                      <AlertTriangle className="w-3 h-3 text-red-700" />
+                                      Cancelled by Admin
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-gray-200 text-gray-800 border border-gray-300">
+                                      <Ban className="w-3 h-3 text-gray-600" />
+                                      Cancelled by Customer
+                                    </span>
+                                  )}
+                                  {order.cancelledBy === 'admin' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setViewingInconvenienceOrder(order)}
+                                      className="text-[10px] text-[#8C102A] hover:underline font-bold block text-left cursor-pointer"
+                                    >
+                                      View Apology Email
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Lifecycle Action Buttons */}
+                            <td className="px-4 py-3 align-top">
+                              {order.status === 'pending_confirmation' ? (
+                                <div className="flex flex-col gap-1 min-w-[130px]">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTriggerConfirmOrder(order)}
+                                    className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-2xs transition-colors cursor-pointer"
+                                    title="Open confirmation modal to approve order and process payment"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                    <span>Confirm Order</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTriggerCancelOrder(order)}
+                                    className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-[10px] font-bold transition-colors cursor-pointer"
+                                    title="Cancel order and send apology email with reason"
+                                  >
+                                    <Ban className="w-3 h-3" />
+                                    <span>Cancel Order</span>
+                                  </button>
+                                </div>
+                              ) : order.status === 'confirmed' ? (
+                                <div className="flex flex-col gap-1 min-w-[130px]">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSendToKitchen(order.orderReference)}
+                                    className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#8C102A] hover:bg-[#A31634] text-white text-[11px] font-bold shadow-2xs transition-colors cursor-pointer"
+                                    title="Transition order to Kitchen (Preparing)"
+                                  >
+                                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                                    <span>Send to Kitchen</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTriggerCancelOrder(order)}
+                                    className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-[10px] font-bold transition-colors cursor-pointer"
+                                    title="Cancel order and send apology email"
+                                  >
+                                    <Ban className="w-3 h-3" />
+                                    <span>Cancel Order</span>
+                                  </button>
+                                </div>
+                              ) : order.status === 'preparing' ? (
+                                <div className="flex flex-col gap-1 min-w-[130px]">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetDelivered(order.orderReference)}
+                                    className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-2xs transition-colors cursor-pointer"
+                                    title="Mark order as Delivered / Completed"
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>Mark Delivered</span>
+                                  </button>
+                                </div>
+                              ) : order.status === 'delivered' ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  Fulfilled
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-600">
+                                  <Ban className="w-3.5 h-3.5" />
+                                  Cancelled
+                                </span>
+                              )}
                             </td>
 
                             {/* Actions Buttons */}
@@ -1877,6 +2092,312 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: ADMIN CONFIRM ORDER & PROCESS PAYMENT POPUP */}
+      {/* ======================================================== */}
+      {confirmingOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 border border-[#E8DFC8] shadow-2xl relative space-y-4 animate-scaleIn">
+            <button
+              onClick={() => setConfirmingOrder(null)}
+              className="absolute top-4 right-4 p-2 rounded-full text-[#7A6458] hover:text-[#241A18] hover:bg-[#FAF7F2] cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center shadow-xs">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="font-serif-title font-bold text-xl text-[#241A18]">
+                  Confirm Order & Process Payment
+                </h2>
+                <p className="text-xs text-[#7A6458]">
+                  Order Ref: <span className="font-mono font-bold text-[#8C102A]">{confirmingOrder.orderReference}</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Order Details Summary */}
+            <div className="bg-[#FAF7F2] p-4 rounded-2xl border border-[#E8DFC8] space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-[#7A6458]">Customer Name:</span>
+                <span className="font-bold text-[#241A18]">{confirmingOrder.customerName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#7A6458]">Contact Phone:</span>
+                <span className="font-bold text-[#241A18]">{confirmingOrder.contactNumber}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#7A6458]">Branch:</span>
+                <span className="font-bold text-[#241A18]">{confirmingOrder.branchName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#7A6458]">Type:</span>
+                <span className="font-bold text-[#241A18] uppercase">
+                  {confirmingOrder.orderType === 'delivery' ? '🚚 Delivery' : '🛍️ Self Pickup'}
+                </span>
+              </div>
+              {confirmingOrder.deliveryAddress && (
+                <div className="flex justify-between">
+                  <span className="text-[#7A6458]">Address:</span>
+                  <span className="font-bold text-[#241A18] text-right truncate max-w-[240px]">
+                    {confirmingOrder.deliveryAddress}, {confirmingOrder.city}
+                  </span>
+                </div>
+              )}
+              <div className="pt-2 border-t border-[#E8DFC8]/80">
+                <div className="text-[11px] font-bold text-[#7A6458] mb-1">
+                  Ordered Products ({confirmingOrder.items.length}):
+                </div>
+                <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
+                  {confirmingOrder.items.map((it, idx) => (
+                    <div key={idx} className="flex justify-between text-[11px]">
+                      <span>
+                        {it.quantity}x {it.name} {it.format ? `(${it.format})` : ''}
+                      </span>
+                      <span className="font-bold">
+                        {formatPrice(it.priceLKR * it.quantity, currency)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="pt-2 border-t border-[#E8DFC8] flex justify-between text-sm font-bold text-[#241A18]">
+                <span>Total Amount to Capture:</span>
+                <span className="text-[#8C102A] text-base">
+                  {formatPrice(confirmingOrder.grandTotalLKR, currency)}
+                </span>
+              </div>
+            </div>
+
+            {/* Live Payment Capture Notice */}
+            <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-xs text-emerald-950 flex items-start gap-2.5">
+              <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Payment & Customer Live Notice</p>
+                <p className="text-[11px] text-emerald-800 mt-0.5">
+                  Confirming this order will capture customer payment ({confirmingOrder.paymentMethod === 'card' ? 'Pre-authorized card charged' : 'Cash on delivery marked'}) and notify the customer's portal in real-time.
+                </p>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="pt-2 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmingOrder(null)}
+                className="px-4 py-2.5 rounded-xl border border-[#D9CBB7] text-[#5D4E46] text-xs font-bold hover:bg-gray-50 cursor-pointer"
+              >
+                Cancel / Review Later
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExecuteConfirmOrder(confirmingOrder.orderReference)}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md cursor-pointer flex items-center gap-1.5"
+              >
+                <Check className="w-4 h-4" />
+                <span>Yes, Confirm Order & Capture Payment</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: ADMIN CANCEL ORDER WITH REASON & INCONVENIENCE EMAIL */}
+      {/* ======================================================== */}
+      {cancellingOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 border border-[#E8DFC8] shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto animate-scaleIn">
+            <button
+              onClick={() => setCancellingOrder(null)}
+              className="absolute top-4 right-4 p-2 rounded-full text-[#7A6458] hover:text-[#241A18] hover:bg-[#FAF7F2] cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-700 flex items-center justify-center shadow-xs">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="font-serif-title font-bold text-xl text-[#241A18]">
+                  Cancel Order & Send Inconvenience Notice
+                </h2>
+                <p className="text-xs text-[#7A6458]">
+                  Order Ref: <span className="font-mono font-bold text-[#8C102A]">{cancellingOrder.orderReference}</span> • {cancellingOrder.customerName}
+                </p>
+              </div>
+            </div>
+
+            {/* Reason Selection */}
+            <div className="space-y-2 text-xs">
+              <label className="block font-bold text-[#3D2C24]">
+                Select Reason for Cancellation (mentioned in apology email):
+              </label>
+              <select
+                value={cancelReasonPreset}
+                onChange={(e) => setCancelReasonPreset(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-[#D9CBB7] bg-white text-xs font-medium text-[#241A18] focus:outline-hidden focus:border-[#8C102A] cursor-pointer"
+              >
+                <option value="Out of Stock: Selected artisanal flavours or biscuit cups are sold out">
+                  Out of Stock: Flavour or biscuit cups sold out
+                </option>
+                <option value="Delivery Distance: Address is outside our safe fresh gelato delivery radius">
+                  Delivery Distance: Location outside fresh transit radius
+                </option>
+                <option value="Kitchen Peak Capacity: Parlour kitchen is currently experiencing extreme volume">
+                  Kitchen Peak Capacity: Reached maximum churn volume
+                </option>
+                <option value="Parlour Equipment Maintenance: Unscheduled churner maintenance underway">
+                  Equipment / Operational maintenance at branch
+                </option>
+                <option value="Customer Requested: Customer contacted parlour to cancel order">
+                  Customer requested cancellation by phone
+                </option>
+                <option value="Other / Custom Reason">Other / Custom Reason</option>
+              </select>
+
+              <div>
+                <label className="block text-[11px] font-bold text-[#5D4E46] mb-1">
+                  Additional Details / Custom Message to Customer:
+                </label>
+                <textarea
+                  rows={2}
+                  value={customCancelReason}
+                  onChange={(e) => setCustomCancelReason(e.target.value)}
+                  placeholder="Optional details: E.g., We attempted to call you; vanilla beans are replenishing at 5 PM."
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-[#D9CBB7] focus:outline-hidden focus:border-[#8C102A]"
+                />
+              </div>
+            </div>
+
+            {/* Email Preview */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs font-bold text-[#7A6458]">
+                <span className="flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 text-[#8C102A]" />
+                  <span>Generated Amore Apology & Inconvenience Notice:</span>
+                </span>
+                <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                  Includes 15% Voucher Code
+                </span>
+              </div>
+
+              <div className="bg-[#FAF7F2] p-3.5 rounded-xl border border-[#E8DFC8] font-mono text-[11px] text-[#3D2C24] whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed select-text">
+                {(() => {
+                  const computedReason =
+                    cancelReasonPreset === 'Other / Custom Reason'
+                      ? customCancelReason.trim() || 'Operational constraint at the parlour'
+                      : customCancelReason.trim()
+                      ? `${cancelReasonPreset} (${customCancelReason.trim()})`
+                      : cancelReasonPreset;
+                  return generateInconvenienceEmail(cancellingOrder, computedReason).body;
+                })()}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="pt-2 flex items-center justify-between border-t border-[#E8DFC8]">
+              <button
+                type="button"
+                onClick={() => setCancellingOrder(null)}
+                className="px-4 py-2 rounded-xl border border-[#D9CBB7] text-[#5D4E46] text-xs font-bold hover:bg-gray-50 cursor-pointer"
+              >
+                Keep Order
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleExecuteCancelOrder(cancellingOrder)}
+                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-md cursor-pointer flex items-center gap-1.5"
+              >
+                <Ban className="w-4 h-4" />
+                <span>Confirm Cancellation & Dispatch Email</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: VIEW SENT APOLOGY / INCONVENIENCE EMAIL */}
+      {/* ======================================================== */}
+      {viewingInconvenienceOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 border border-[#E8DFC8] shadow-2xl relative space-y-4 animate-scaleIn">
+            <button
+              onClick={() => setViewingInconvenienceOrder(null)}
+              className="absolute top-4 right-4 p-2 rounded-full text-[#7A6458] hover:text-[#241A18] hover:bg-[#FAF7F2] cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-red-100 text-red-700 flex items-center justify-center shadow-xs">
+                <Mail className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="font-serif-title font-bold text-lg text-[#241A18]">
+                  Inconvenience Email Notice
+                </h2>
+                <p className="text-xs text-[#7A6458]">
+                  Order {viewingInconvenienceOrder.orderReference} • {viewingInconvenienceOrder.customerName}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-[#FAF7F2] p-4 rounded-xl border border-[#E8DFC8] font-mono text-xs text-slate-800 whitespace-pre-wrap max-h-64 overflow-y-auto leading-relaxed">
+              {viewingInconvenienceOrder.inconvenienceEmailContent ||
+                generateInconvenienceEmail(
+                  viewingInconvenienceOrder,
+                  viewingInconvenienceOrder.cancellationReason || 'Operational constraint at the parlour'
+                ).body}
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const content =
+                    viewingInconvenienceOrder.inconvenienceEmailContent ||
+                    generateInconvenienceEmail(
+                      viewingInconvenienceOrder,
+                      viewingInconvenienceOrder.cancellationReason || 'Operational constraint at the parlour'
+                    ).body;
+                  navigator.clipboard.writeText(content);
+                  setCopiedAdminEmail(true);
+                  setTimeout(() => setCopiedAdminEmail(false), 2000);
+                }}
+                className="px-4 py-2 rounded-xl bg-white border border-[#D9CBB7] hover:bg-gray-50 text-xs font-bold text-[#3D2C24] flex items-center gap-1.5 cursor-pointer"
+              >
+                {copiedAdminEmail ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-slate-600" />
+                    <span>Copy Email Text</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewingInconvenienceOrder(null)}
+                className="px-5 py-2 rounded-xl bg-[#8C102A] hover:bg-[#A31634] text-white text-xs font-bold cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

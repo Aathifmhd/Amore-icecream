@@ -7,6 +7,13 @@ import {
 } from '../firebase';
 
 const STORAGE_KEY = 'amore_orders_v1';
+export const ORDERS_UPDATED_EVENT = 'amore_orders_updated';
+
+export function notifyOrdersUpdated(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(ORDERS_UPDATED_EVENT));
+  }
+}
 
 export function getAllOrders(): Record<string, OrderRecord> {
   try {
@@ -24,6 +31,7 @@ export function saveOrder(order: OrderRecord): void {
     const all = getAllOrders();
     all[order.orderReference] = order;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+    notifyOrdersUpdated();
   } catch (err) {
     console.error('Failed to save order to localStorage:', err);
   }
@@ -46,6 +54,7 @@ export function updateOrder(orderReference: string, updates: Partial<OrderRecord
       updated = { ...existing, ...updates };
       all[orderReference] = updated;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+      notifyOrdersUpdated();
     }
   } catch (err) {
     console.error('Failed to update order:', err);
@@ -92,10 +101,16 @@ export function getUserOrdersList(userId?: string | null): OrderRecord[] {
 /**
  * Cancels an order within its grace period or active state.
  */
-export function cancelOrder(orderReference: string): OrderRecord | null {
+export function cancelOrder(
+  orderReference: string,
+  cancelledBy: 'customer' | 'admin' = 'customer',
+  reason?: string
+): OrderRecord | null {
   return updateOrder(orderReference, {
     status: 'cancelled',
     cancelledAt: new Date().toISOString(),
+    cancelledBy,
+    cancellationReason: reason,
   });
 }
 
@@ -140,6 +155,7 @@ export function deleteOrder(orderReference: string): boolean {
     if (all[orderReference]) {
       delete all[orderReference];
       localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+      notifyOrdersUpdated();
       deleteOrderFromFirestore(orderReference).catch(() => {});
       return true;
     }
@@ -148,6 +164,97 @@ export function deleteOrder(orderReference: string): boolean {
     console.error('Failed to delete order:', err);
     return false;
   }
+}
+
+/**
+ * Admin: Confirms an order, sets confirmedAt, and officially processes/captures customer payment!
+ */
+export function adminConfirmOrder(orderReference: string): OrderRecord | null {
+  const now = new Date().toISOString();
+  return updateOrder(orderReference, {
+    status: 'confirmed',
+    confirmedAt: now,
+    paidAt: now,
+    updatedAt: now,
+  });
+}
+
+/**
+ * Admin: Sends order into kitchen preparation queue
+ */
+export function adminSetPreparing(orderReference: string): OrderRecord | null {
+  const now = new Date().toISOString();
+  return updateOrder(orderReference, {
+    status: 'preparing',
+    preparingAt: now,
+    updatedAt: now,
+  });
+}
+
+/**
+ * Admin: Marks order as completed / delivered
+ */
+export function adminSetDelivered(orderReference: string): OrderRecord | null {
+  const now = new Date().toISOString();
+  return updateOrder(orderReference, {
+    status: 'delivered',
+    deliveredAt: now,
+    updatedAt: now,
+  });
+}
+
+/**
+ * Admin: Cancels order with formal reason and generates apology / inconvenience email
+ */
+export function adminCancelOrderWithReason(
+  orderReference: string,
+  reason: string,
+  emailContent?: string
+): OrderRecord | null {
+  const now = new Date().toISOString();
+  return updateOrder(orderReference, {
+    status: 'cancelled',
+    cancelledAt: now,
+    cancelledBy: 'admin',
+    cancellationReason: reason,
+    inconvenienceEmailContent: emailContent,
+    updatedAt: now,
+  });
+}
+
+/**
+ * Builds the official Amore Inconvenience & Apology Email
+ */
+export function generateInconvenienceEmail(
+  order: OrderRecord,
+  reason: string
+): { subject: string; body: string } {
+  const subject = `Notice regarding your Amore Order ${order.orderReference} - Cancellation & Sincere Apology`;
+  const paymentNotice =
+    order.paymentMethod === 'card'
+      ? 'Your card payment authorization has been immediately voided and no charges were made.'
+      : 'As you selected Cash on Delivery, your order has been cancelled with no obligation or fee.';
+
+  const body = `Dear ${order.customerName},
+
+We sincerely apologize, but we are unable to process your order (${order.orderReference}) placed for Amore Speciality Ice Cream (${order.branchName}).
+
+Reason for cancellation:
+"${reason}"
+
+Payment Information:
+${paymentNotice}
+
+We deeply regret any inconvenience this may cause to your day or gathering. Every batch at Amore is churned fresh with authentic artisanal ingredients, and we hope to have the pleasure of serving you again soon.
+
+If you have any questions or need immediate assistance, please reply directly or contact our parlour manager.
+
+Warm regards,
+The Amore Parlour Team
+Amore Speciality Ice Cream, Coffee & Cakes
+${order.branchName} • Hotline: ${order.contactNumber || '+94 81 230 4567'}`;
+
+  return { subject, body };
 }
 
 /**

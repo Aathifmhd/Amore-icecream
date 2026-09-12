@@ -128,5 +128,11 @@ export interface OrderRecord {
   userId?: string;
   cancelledAt?: string;
   updatedAt?: string;
+  cancelledBy?: 'customer' | 'admin';
+  cancellationReason?: string;
+  inconvenienceEmailContent?: string;
+  confirmedAt?: string;
+  preparingAt?: string;
+  deliveredAt?: string;
 }
 
