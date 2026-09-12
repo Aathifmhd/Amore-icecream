@@ -2,10 +2,10 @@
   <!-- Deep crimson burgundy circle badge (exact hex #8C102A) -->
   <circle cx="150" cy="150" r="144" fill="#8C102A" />
 
-  <!-- White wordmark 'amore' -->
-  <g fill="white">
+  <!-- White wordmark 'amore' centered in circle badge -->
+  <g fill="white" transform="translate(-10.25, 0)">
     <!-- 'a' letter: clean bold single-story geometric sans -->
-    <path d="
+    <path fill-rule="evenodd" d="
       M 78.5 127
       V 173
       H 70.5
@@ -24,28 +24,26 @@
       C 63.8 165.2, 70.5 158.4, 70.5 150
       Z
     " />
-  </g>
 
-  <!-- 'm' letter: The iconic wavy cursive ribbon from Amore's logo -->
-  <path
-    d="
-      M 87 168.8
-      C 94 168.8, 102 168, 109 152
-      C 113 143, 116.5 131.2, 122 131.2
-      C 127.5 131.2, 133 139, 139.5 151
-      C 146 139, 151.5 131.2, 157 131.2
-      C 162.5 131.2, 167 142.5, 172.5 168.8
-    "
-    fill="none"
-    stroke="white"
-    stroke-width="8.4"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
+    <!-- 'm' letter: The iconic wavy cursive ribbon from Amore's logo -->
+    <path
+      d="
+        M 87 168.8
+        C 94 168.8, 102 168, 109 152
+        C 113 143, 116.5 131.2, 122 131.2
+        C 127.5 131.2, 133 139, 139.5 151
+        C 146 139, 151.5 131.2, 157 131.2
+        C 162.5 131.2, 167 142.5, 172.5 168.8
+      "
+      fill="none"
+      stroke="white"
+      stroke-width="8.4"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
 
-  <g fill="white">
-    <!-- 'o' letter: bold geometric oval (X: 180 to 215) -->
-    <path d="
+    <!-- 'o' letter: bold geometric oval -->
+    <path fill-rule="evenodd" d="
       M 215 150
       C 215 163.2, 205 173.8, 192.5 173.8
       C 180 173.8, 170 163.2, 170 150
@@ -60,7 +58,7 @@
       Z
     " />
 
-    <!-- 'r' letter: vertical stem + top arch (X: 221 to 247) -->
+    <!-- 'r' letter: vertical stem + top arch -->
     <path d="
       M 221 127
       H 229.2
@@ -75,8 +73,8 @@
       Z
     " />
 
-    <!-- 'e' letter: matching geometric sans with crossbar (X: 247 to 286) -->
-    <path d="
+    <!-- 'e' letter: matching geometric sans with crossbar -->
+    <path fill-rule="evenodd" d="
       M 281.5 155.5
       H 256.2
       C 257 162.5, 262.2 166.2, 268.5 166.2
