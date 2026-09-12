@@ -1,6 +1,12 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Currency, BranchId, ScoopItem, MenuItem, SelectedOrderItem, ServingFormat, MenuTab } from '../types';
 import { ALL_20_FLAVOURS, SPECIALTY_COFFEE_ITEMS, ARTISAN_CAKES_ITEMS, AMORE_BRANCHES } from '../data/iceCreamData';
+import {
+  getAllGelatoFlavours,
+  getAllCoffeeItems,
+  getAllCakeItems,
+  MENU_UPDATED_EVENT,
+} from '../utils/menuStorage';
 import { formatPrice } from '../utils/currency';
 import { CurrencyToggle } from './CurrencyToggle';
 import {
@@ -58,6 +64,21 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
   const [activeTab, setActiveTab] = useState<MenuTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [preferredFormat, setPreferredFormat] = useState<'both' | 'biscuit-cup' | 'waffle-cone'>('both');
+
+  // Dynamic Real-time Menu State from Storage
+  const [allScoops, setAllScoops] = useState<ScoopItem[]>(() => getAllGelatoFlavours());
+  const [allCoffee, setAllCoffee] = useState<MenuItem[]>(() => getAllCoffeeItems());
+  const [allCakes, setAllCakes] = useState<MenuItem[]>(() => getAllCakeItems());
+
+  useEffect(() => {
+    const handleMenuSync = () => {
+      setAllScoops(getAllGelatoFlavours());
+      setAllCoffee(getAllCoffeeItems());
+      setAllCakes(getAllCakeItems());
+    };
+    window.addEventListener(MENU_UPDATED_EVENT, handleMenuSync);
+    return () => window.removeEventListener(MENU_UPDATED_EVENT, handleMenuSync);
+  }, []);
 
   // Track selected serving format(s) for each scoop card for direct order
   const [selectedFormats, setSelectedFormats] = useState<Record<string, ServingFormat[]>>({});
@@ -119,7 +140,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
   const filteredScoops = useMemo(() => {
     if (activeTab === 'coffee' || activeTab === 'cakes') return [];
 
-    return ALL_20_FLAVOURS.filter((scoop) => {
+    return allScoops.filter((scoop) => {
       if (activeTab === 'tourist-specials' && !scoop.isArugamBaySpecial) return false;
 
       // Search query filter
@@ -133,13 +154,13 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
 
       return true;
     });
-  }, [activeTab, searchQuery]);
+  }, [activeTab, searchQuery, allScoops]);
 
   // Filter coffee
   const filteredCoffee = useMemo(() => {
     if (activeTab === 'scoops' || activeTab === 'cakes' || activeTab === 'tourist-specials') return [];
 
-    return SPECIALTY_COFFEE_ITEMS.filter((item) => {
+    return allCoffee.filter((item) => {
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesName = item.name.toLowerCase().includes(q);
@@ -148,13 +169,13 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
       }
       return true;
     });
-  }, [activeTab, searchQuery]);
+  }, [activeTab, searchQuery, allCoffee]);
 
   // Filter cakes
   const filteredCakes = useMemo(() => {
     if (activeTab === 'scoops' || activeTab === 'coffee' || activeTab === 'tourist-specials') return [];
 
-    return ARTISAN_CAKES_ITEMS.filter((item) => {
+    return allCakes.filter((item) => {
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesName = item.name.toLowerCase().includes(q);
@@ -163,7 +184,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
       }
       return true;
     });
-  }, [activeTab, searchQuery]);
+  }, [activeTab, searchQuery, allCakes]);
 
   const totalResults = filteredScoops.length + filteredCoffee.length + filteredCakes.length;
 

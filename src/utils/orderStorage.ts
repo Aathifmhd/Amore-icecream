@@ -2,6 +2,7 @@ import { OrderRecord } from '../types';
 import {
   saveOrderToFirestore,
   updateOrderInFirestore,
+  deleteOrderFromFirestore,
   auth,
 } from '../firebase';
 
@@ -114,6 +115,86 @@ export function updateOrderDelivery(
     ...details,
     updatedAt: new Date().toISOString(),
   });
+}
+
+/**
+ * Admin: Get all orders across all users sorted newest first
+ */
+export function getAllOrdersAdmin(): OrderRecord[] {
+  try {
+    const all = getAllOrders();
+    const list = Object.values(all);
+    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  } catch (err) {
+    console.error('Failed to get all orders for admin:', err);
+    return [];
+  }
+}
+
+/**
+ * Admin: Permanently delete an order from storage & firestore
+ */
+export function deleteOrder(orderReference: string): boolean {
+  try {
+    const all = getAllOrders();
+    if (all[orderReference]) {
+      delete all[orderReference];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+      deleteOrderFromFirestore(orderReference).catch(() => {});
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error('Failed to delete order:', err);
+    return false;
+  }
+}
+
+/**
+ * Admin: Update order status with timestamp
+ */
+export function updateOrderStatus(
+  orderReference: string,
+  status: OrderRecord['status']
+): OrderRecord | null {
+  return updateOrder(orderReference, {
+    status,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+/**
+ * Admin: Create a manual phone or walk-in order
+ */
+export function createAdminOrder(orderData: Partial<OrderRecord>): OrderRecord {
+  const refNum = Math.floor(1000 + Math.random() * 9000);
+  const orderRef = orderData.orderReference || `AMO-M${refNum}`;
+  const now = new Date().toISOString();
+
+  const fullOrder: OrderRecord = {
+    orderReference: orderRef,
+    createdAt: now,
+    customerName: orderData.customerName || 'Walk-in Customer',
+    contactNumber: orderData.contactNumber || '+94 77 123 4567',
+    orderType: orderData.orderType || 'pickup',
+    deliveryAddress: orderData.deliveryAddress || '',
+    city: orderData.city || '',
+    branchId: orderData.branchId || 'akurana',
+    branchName: orderData.branchName || 'Akurana Flagship',
+    branchCity: orderData.branchCity || 'Kandy Hills',
+    items: orderData.items || [],
+    subtotalLKR: orderData.subtotalLKR || 0,
+    deliveryFeeLKR: orderData.deliveryFeeLKR || 0,
+    grandTotalLKR: orderData.grandTotalLKR || 0,
+    currency: orderData.currency || 'LKR',
+    status: orderData.status || 'confirmed',
+    paymentMethod: orderData.paymentMethod || 'cash',
+    specialNote: orderData.specialNote || 'Manual Admin Order',
+    updatedAt: now,
+  };
+
+  saveOrder(fullOrder);
+  return fullOrder;
 }
 
 /**

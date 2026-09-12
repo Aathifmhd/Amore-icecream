@@ -23,6 +23,7 @@ import {
   where,
   getDocs,
   onSnapshot,
+  deleteDoc,
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 import { OrderRecord } from './types';
@@ -259,3 +260,37 @@ export async function getUserOrdersFromFirestore(userId: string): Promise<OrderR
     return [];
   }
 }
+
+/**
+ * Delete an order from Firestore
+ */
+export async function deleteOrderFromFirestore(orderReference: string): Promise<boolean> {
+  const path = `orders/${orderReference}`;
+  try {
+    await deleteDoc(doc(db, 'orders', orderReference));
+    return true;
+  } catch (error) {
+    console.warn('Could not delete order from Firestore:', error);
+    return false;
+  }
+}
+
+/**
+ * Admin: fetch all orders from Firestore
+ */
+export async function getAllOrdersFromFirestore(): Promise<OrderRecord[]> {
+  const path = 'orders';
+  try {
+    const q = query(collection(db, 'orders'));
+    const querySnapshot = await getDocs(q);
+    const orders: OrderRecord[] = [];
+    querySnapshot.forEach((d) => {
+      orders.push(d.data() as OrderRecord);
+    });
+    return orders;
+  } catch (error) {
+    console.warn('Could not fetch all orders from Firestore:', error);
+    return [];
+  }
+}
+

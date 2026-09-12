@@ -53,6 +53,7 @@ export interface ScoopItem {
   isPopular?: boolean;
   isArugamBaySpecial?: boolean;
   accentColor: string;
+  isAvailable?: boolean;
 }
 
 export type MenuTab = 'all' | 'scoops' | 'coffee' | 'cakes' | 'tourist-specials';
@@ -67,6 +68,7 @@ export interface MenuItem {
   image?: string;
   portionOrTemp?: string;
   tags?: string[];
+  isAvailable?: boolean;
 }
 
 export interface SelectedOrderItem {

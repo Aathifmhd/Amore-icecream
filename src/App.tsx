@@ -17,6 +17,9 @@ import { MenuOrderingPage } from './components/MenuOrderingPage';
 import { OrderConfirmationPage } from './components/OrderConfirmationPage';
 import { SignInModal } from './components/SignInModal';
 import { YourOrdersModal } from './components/YourOrdersModal';
+import { AdminLogin } from './components/admin/AdminLogin';
+import { AdminDashboard } from './components/admin/AdminDashboard';
+import { isAdminAuthenticated } from './utils/adminAuth';
 import { auth, onAuthStateChanged, type User } from './firebase';
 import { Currency, BranchId, ScoopItem, MenuItem, SelectedOrderItem, ServingFormat } from './types';
 import { ALL_20_FLAVOURS } from './data/iceCreamData';
@@ -56,10 +59,16 @@ export default function App() {
   const userOrders = getUserOrdersList(currentUser?.uid);
   const ongoingOrdersCount = userOrders.filter((o) => o.status !== 'cancelled').length;
 
-  // Mobile / Dedicated Page State (reads ?page=menu)
-  const [currentPage, setCurrentPage] = useState<'home' | 'menu'>(() => {
+  // Admin Session State
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => isAdminAuthenticated());
+
+  // Mobile / Dedicated Page State (reads ?page=menu or ?page=admin)
+  const [currentPage, setCurrentPage] = useState<'home' | 'menu' | 'admin'>(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get('page') === 'menu' ? 'menu' : 'home';
+    const p = params.get('page');
+    if (p === 'admin') return 'admin';
+    if (p === 'menu') return 'menu';
+    return 'home';
   });
 
   // Dedicated Order Confirmation Portal Router (reads ?confirmOrder=...)
@@ -72,7 +81,9 @@ export default function App() {
     const handleLocationChange = () => {
       const params = new URLSearchParams(window.location.search);
       setConfirmOrderRef(params.get('confirmOrder'));
-      setCurrentPage(params.get('page') === 'menu' ? 'menu' : 'home');
+      const p = params.get('page');
+      setCurrentPage(p === 'admin' ? 'admin' : p === 'menu' ? 'menu' : 'home');
+      setIsAdminLoggedIn(isAdminAuthenticated());
     };
 
     window.addEventListener('popstate', handleLocationChange);
@@ -84,6 +95,14 @@ export default function App() {
     url.searchParams.set('page', 'menu');
     window.history.pushState({}, '', url.toString());
     setCurrentPage('menu');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleNavigateToAdmin = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('page', 'admin');
+    window.history.pushState({}, '', url.toString());
+    setCurrentPage('admin');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -265,6 +284,29 @@ export default function App() {
     );
   }
 
+  // Dedicated Amore Operations & Admin Console (?page=admin)
+  if (currentPage === 'admin') {
+    if (!isAdminLoggedIn) {
+      return (
+        <AdminLogin
+          onLoginSuccess={() => setIsAdminLoggedIn(true)}
+          onBackToStore={handleNavigateToHome}
+        />
+      );
+    }
+    return (
+      <AdminDashboard
+        onSignOut={() => {
+          setIsAdminLoggedIn(false);
+          handleNavigateToHome();
+        }}
+        onBackToStore={handleNavigateToHome}
+        currency={currency}
+        onToggleCurrency={setCurrency}
+      />
+    );
+  }
+
   // Dedicated Full Menu & Ordering Page (?page=menu)
   if (currentPage === 'menu') {
     return (
@@ -359,6 +401,8 @@ export default function App() {
         onOpenSignInModal={() => setIsSignInModalOpen(true)}
         onOpenOrdersModal={() => setIsOrdersModalOpen(true)}
         ordersCount={ongoingOrdersCount}
+        isAdminLoggedIn={isAdminLoggedIn}
+        onNavigateToAdmin={handleNavigateToAdmin}
       />
 
       <main className="flex-1">
@@ -426,7 +470,7 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <Footer />
+      <Footer onNavigateToAdmin={handleNavigateToAdmin} />
 
       {/* Product Detail Modal */}
       {detailItem && (

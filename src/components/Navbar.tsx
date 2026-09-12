@@ -3,7 +3,7 @@ import { AmoreLogo } from './AmoreLogo';
 import { Currency, BranchId, SelectedOrderItem } from '../types';
 import { AMORE_BRANCHES } from '../data/iceCreamData';
 import { CurrencyToggle } from './CurrencyToggle';
-import { Menu, X, MapPin, Phone, ShoppingBag, LogIn, User as UserIcon, Clock } from 'lucide-react';
+import { Menu, X, MapPin, Phone, ShoppingBag, LogIn, User as UserIcon, Clock, ShieldCheck } from 'lucide-react';
 import { type User } from '../firebase';
 
 interface NavbarProps {
@@ -18,6 +18,8 @@ interface NavbarProps {
   onOpenSignInModal?: () => void;
   onOpenOrdersModal?: () => void;
   ordersCount?: number;
+  isAdminLoggedIn?: boolean;
+  onNavigateToAdmin?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -32,6 +34,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSignInModal,
   onOpenOrdersModal,
   ordersCount,
+  isAdminLoggedIn,
+  onNavigateToAdmin,
 }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -183,6 +187,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                     {ordersCount}
                   </span>
                 )}
+              </button>
+            )}
+
+            {/* Admin Console Quick Link */}
+            {isAdminLoggedIn && onNavigateToAdmin && (
+              <button
+                type="button"
+                onClick={onNavigateToAdmin}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#8C102A] bg-amber-100/70 hover:bg-amber-100 border border-amber-300/80 rounded-full transition-all duration-200 shadow-2xs cursor-pointer active:scale-95"
+                title="Open Operations Admin Console"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-[#8C102A]" />
+                <span>Admin</span>
               </button>
             )}
 

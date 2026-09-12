@@ -16,3 +16,7 @@ export function formatDualPrice(lkrAmount: number): { lkr: string; usd: string }
     usd: `$${(lkrAmount / USD_EXCHANGE_RATE).toFixed(2)}`,
   };
 }
+
+export function convertLKRtoUSD(lkrAmount: number): number {
+  return lkrAmount / USD_EXCHANGE_RATE;
+}

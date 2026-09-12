@@ -1,9 +1,13 @@
 import React from 'react';
 import { AmoreLogo } from './AmoreLogo';
 import { AMORE_BRANCHES } from '../data/iceCreamData';
-import { Instagram, Phone, MapPin, Heart, ArrowUp, MessageCircle, Coffee } from 'lucide-react';
+import { Instagram, Phone, MapPin, Heart, ArrowUp, MessageCircle, Coffee, Lock } from 'lucide-react';
 
-export const Footer: React.FC = () => {
+interface FooterProps {
+  onNavigateToAdmin?: () => void;
+}
+
+export const Footer: React.FC<FooterProps> = ({ onNavigateToAdmin }) => {
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -122,7 +126,7 @@ export const Footer: React.FC = () => {
 
         {/* Bottom Micro Row */}
         <div className="pt-6 flex flex-col sm:flex-row items-center justify-between text-xs text-[#8A7970] gap-4">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span>© {new Date().getFullYear()} Amore Speciality Ice Cream, Coffee & Cakes.</span>
             <span>•</span>
             <span className="flex items-center gap-1">
@@ -130,13 +134,35 @@ export const Footer: React.FC = () => {
             </span>
           </div>
 
-          <button
-            onClick={scrollToTop}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-[#8C102A] text-[#241A18] hover:text-white border border-[#DDD0BC] transition-colors cursor-pointer text-xs"
-          >
-            <span>Back to top</span>
-            <ArrowUp className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-3">
+            {onNavigateToAdmin ? (
+              <button
+                type="button"
+                onClick={onNavigateToAdmin}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#8A7970] hover:text-[#8C102A] transition-colors cursor-pointer"
+                title="Amore Staff Operations & Admin Portal"
+              >
+                <Lock className="w-3 h-3 text-[#8C102A]" />
+                <span>Admin Portal</span>
+              </button>
+            ) : (
+              <a
+                href="?page=admin"
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#8A7970] hover:text-[#8C102A] transition-colors cursor-pointer"
+              >
+                <Lock className="w-3 h-3 text-[#8C102A]" />
+                <span>Admin Portal</span>
+              </a>
+            )}
+
+            <button
+              onClick={scrollToTop}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-[#8C102A] text-[#241A18] hover:text-white border border-[#DDD0BC] transition-colors cursor-pointer text-xs"
+            >
+              <span>Back to top</span>
+              <ArrowUp className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </div>
     </footer>

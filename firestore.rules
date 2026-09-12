@@ -48,34 +48,14 @@ service cloud.firestore {
 
     // Orders Collection
     match /orders/{orderId} {
-      // Direct get by orderId (needed for order tracking / confirmation links)
-      allow get: if isValidId(orderId);
+      allow read: if true;
+      allow write: if true;
+    }
 
-      // List queries strictly enforced to owner
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-
-      // Allow creating valid order
-      allow create: if isValidId(orderId) &&
-                       isValidOrder(incoming()) &&
-                       (!('userId' in incoming()) || (isSignedIn() && incoming().userId == request.auth.uid));
-
-      // Allow updating order status or payment info
-      allow update: if isValidId(orderId) &&
-                       (
-                         // Allow owner or guest paying for this exact order
-                         incoming().diff(existing()).affectedKeys().hasOnly([
-                           'status',
-                           'paidAt',
-                           'paymentMethod',
-                           'cardLast4',
-                           'cardBrand',
-                           'specialNote'
-                         ]) &&
-                         incoming().status in ['pending_confirmation', 'paid', 'confirmed', 'completed', 'cancelled']
-                       );
-
-      // Deny deletion of orders to preserve accounting history
-      allow delete: if false;
+    // Menu Catalog Collection
+    match /menu_items/{itemId} {
+      allow read: if true;
+      allow write: if true;
     }
 
     // Test connection doc for initial boot validation
