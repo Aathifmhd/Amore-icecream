@@ -27,7 +27,9 @@ import {
   Receipt,
   Phone,
   Trash2,
+  LogIn,
 } from 'lucide-react';
+import { type User } from '../firebase';
 
 interface QuickOrderModalProps {
   isOpen: boolean;
@@ -40,6 +42,8 @@ interface QuickOrderModalProps {
   onClearOrder: () => void;
   onBrowseMenu?: () => void;
   onOpenConfirmationPage?: (orderRef: string) => void;
+  currentUser?: User | null;
+  onOpenSignInModal?: () => void;
 }
 
 type CheckoutStep = 'details' | 'link_generated' | 'payment_gateway' | 'success';
@@ -55,6 +59,8 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
   onClearOrder,
   onBrowseMenu,
   onOpenConfirmationPage,
+  currentUser,
+  onOpenSignInModal,
 }) => {
   // Multi-step Checkout State
   const [step, setStep] = useState<CheckoutStep>('details');
@@ -63,6 +69,18 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
   const [customerName, setCustomerName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
   const [orderType, setOrderType] = useState<'delivery' | 'pickup'>('delivery');
+
+  // Auto-fill customer details from currentUser if available
+  useEffect(() => {
+    if (currentUser) {
+      if (currentUser.displayName && !customerName) {
+        setCustomerName(currentUser.displayName);
+      }
+      if (currentUser.email && !emailAddress) {
+        setEmailAddress(currentUser.email);
+      }
+    }
+  }, [currentUser]);
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [city, setCity] = useState('');
   const [specialNote, setSpecialNote] = useState('');
@@ -702,10 +720,72 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
 
               {/* 1. Customer Details with Contact Number */}
               <div className="space-y-3 pt-2 border-t border-[#E8DFC8]">
-                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#3D2C24]">
-                  <Phone className="w-4 h-4 text-[#8C102A]" />
-                  <span>1. Contact & Customer Details</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#3D2C24]">
+                    <Phone className="w-4 h-4 text-[#8C102A]" />
+                    <span>1. Contact & Customer Details</span>
+                  </div>
+                  {!currentUser && (
+                    <span className="text-[10px] text-[#8C102A] bg-amber-50 font-bold px-2 py-0.5 rounded-full border border-amber-200">
+                      Guest Checkout
+                    </span>
+                  )}
                 </div>
+
+                {/* Sign-In Prompt Box for Guests / Signed-In Banner */}
+                {!currentUser ? (
+                  <div className="p-3 sm:p-3.5 bg-gradient-to-br from-[#FAF5EE] to-[#F5ECE0] rounded-2xl border border-[#E0D5C3] shadow-2xs">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-xl bg-[#8C102A] text-white flex items-center justify-center shrink-0 shadow-2xs">
+                          <LogIn className="w-4 h-4 text-amber-200" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-[#241A18] leading-tight">
+                            Have an Amore Account?
+                          </p>
+                          <p className="text-[11px] text-[#6E5D54] mt-0.5 leading-tight truncate">
+                            Sign in to auto-fill details & track your order.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={onOpenSignInModal}
+                        className="px-3.5 py-1.5 rounded-xl bg-[#8C102A] hover:bg-[#A31634] text-white text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer shrink-0"
+                      >
+                        Sign In
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-2.5 px-3 bg-emerald-50/90 rounded-xl border border-emerald-200/80 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {currentUser.photoURL ? (
+                        <img
+                          src={currentUser.photoURL}
+                          alt="Profile"
+                          referrerPolicy="no-referrer"
+                          className="w-6 h-6 rounded-full object-cover border border-[#8C102A] shrink-0"
+                        />
+                      ) : (
+                        <div className="w-6 h-6 rounded-full bg-[#8C102A] text-white flex items-center justify-center text-[10px] font-black shrink-0">
+                          {(currentUser.displayName || currentUser.email || 'A')[0].toUpperCase()}
+                        </div>
+                      )}
+                      <span className="text-emerald-950 font-medium truncate">
+                        Signed in as <strong>{currentUser.displayName || currentUser.email}</strong>
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={onOpenSignInModal}
+                      className="text-[11px] font-bold text-[#8C102A] hover:underline shrink-0 ml-2 cursor-pointer"
+                    >
+                      Switch
+                    </button>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <div>

@@ -299,6 +299,8 @@ export default function App() {
             onClearOrder={handleClearOrder}
             onBrowseMenu={() => setIsOrderModalOpen(false)}
             onOpenConfirmationPage={handleOpenConfirmationPage}
+            currentUser={currentUser}
+            onOpenSignInModal={() => setIsSignInModalOpen(true)}
           />
         )}
 
@@ -445,6 +447,8 @@ export default function App() {
           onClearOrder={handleClearOrder}
           onBrowseMenu={scrollToMenu}
           onOpenConfirmationPage={handleOpenConfirmationPage}
+          currentUser={currentUser}
+          onOpenSignInModal={() => setIsSignInModalOpen(true)}
         />
       )}
 
