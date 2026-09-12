@@ -25,6 +25,11 @@ import { Currency, BranchId, ScoopItem, MenuItem, SelectedOrderItem, ServingForm
 import { ALL_20_FLAVOURS } from './data/iceCreamData';
 import { ShoppingBag } from 'lucide-react';
 import { getUserOrdersList, ORDERS_UPDATED_EVENT } from './utils/orderStorage';
+import {
+  getAllGelatoFlavours,
+  syncMenuFromFirestore,
+  subscribeToRealtimeMenu,
+} from './utils/menuStorage';
 
 export default function App() {
   // Global State
@@ -51,6 +56,13 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
     });
+    return () => unsubscribe();
+  }, []);
+
+  // Initial real-time menu sync across cloud and tabs
+  useEffect(() => {
+    syncMenuFromFirestore();
+    const unsubscribe = subscribeToRealtimeMenu(() => {});
     return () => unsubscribe();
   }, []);
 
@@ -225,7 +237,8 @@ export default function App() {
 
   // Quick Order Durian Scoop
   const handleOrderDurian = () => {
-    const durian = ALL_20_FLAVOURS.find((f) => f.id === 'durian-best') || ALL_20_FLAVOURS[0];
+    const scoops = getAllGelatoFlavours();
+    const durian = scoops.find((f) => f.id === 'durian-best') || scoops[0];
     const newOrderItem: SelectedOrderItem = {
       itemId: durian.id,
       name: durian.name,
@@ -243,7 +256,8 @@ export default function App() {
     setSelectedBranch(branchId);
     if (orderItems.length === 0) {
       // If empty tray, pre-add the iconic Durian in Biscuit Cup
-      const durian = ALL_20_FLAVOURS.find((f) => f.id === 'durian-best') || ALL_20_FLAVOURS[0];
+      const scoops = getAllGelatoFlavours();
+      const durian = scoops.find((f) => f.id === 'durian-best') || scoops[0];
       setOrderItems([
         {
           itemId: durian.id,

@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { ASSET_IMAGES, ALL_20_FLAVOURS } from '../data/iceCreamData';
-import { Currency } from '../types';
+import { Currency, ScoopItem } from '../types';
 import { formatPrice } from '../utils/currency';
+import {
+  getAllGelatoFlavours,
+  MENU_UPDATED_EVENT,
+  subscribeToRealtimeMenu,
+} from '../utils/menuStorage';
 import { Sparkles, Star, CheckCircle, Flame, MapPin, Award, Cookie, ShoppingBag } from 'lucide-react';
 
 interface DurianSpecialSpotlightProps {
@@ -15,10 +20,37 @@ export const DurianSpecialSpotlight: React.FC<DurianSpecialSpotlightProps> = ({
   onOrderDurian,
   onExploreFullMenu,
 }) => {
-  const durianItem = ALL_20_FLAVOURS.find((f) => f.id === 'durian-best') || ALL_20_FLAVOURS[0];
+  const [durianItem, setDurianItem] = useState<ScoopItem>(() => {
+    const list = getAllGelatoFlavours();
+    return list.find((f) => f.id === 'durian-best') || list[0] || ALL_20_FLAVOURS[0];
+  });
+
   const [activeSlide, setActiveSlide] = useState(0);
   const [prevSlide, setPrevSlide] = useState<number | null>(null);
   const [isHovered, setIsHovered] = useState(false);
+
+  useEffect(() => {
+    const handleSync = () => {
+      const list = getAllGelatoFlavours();
+      const item = list.find((f) => f.id === 'durian-best') || list[0];
+      if (item) setDurianItem(item);
+    };
+
+    window.addEventListener(MENU_UPDATED_EVENT, handleSync);
+    const handleStorage = (e: StorageEvent) => {
+      if (!e.key || e.key.startsWith('amore_menu_')) handleSync();
+    };
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('focus', handleSync);
+    const unsubscribe = subscribeToRealtimeMenu(handleSync);
+
+    return () => {
+      window.removeEventListener(MENU_UPDATED_EVENT, handleSync);
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('focus', handleSync);
+      unsubscribe();
+    };
+  }, []);
 
   const DURIAN_SLIDES = [
     {
@@ -33,7 +65,7 @@ export const DurianSpecialSpotlight: React.FC<DurianSpecialSpotlightProps> = ({
     },
     {
       id: 'biscuit-cup',
-      image: ASSET_IMAGES.durianScoop,
+      image: durianItem.image || ASSET_IMAGES.durianScoop,
       title: 'Edible Biscuit Cup Durian',
       alt: 'Amore Iconic Durian Custard Gelato in Crunchy Edible Biscuit Cup with Fresh Durian Fruit',
       tag: 'Crunchy Biscuit Cup',
@@ -231,18 +263,27 @@ export const DurianSpecialSpotlight: React.FC<DurianSpecialSpotlightProps> = ({
               {/* Marketing & Order CTAs */}
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <button
+                  disabled={durianItem.isAvailable === false}
                   onClick={onOrderDurian}
-                  className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full bg-[#8C102A] text-white text-xs sm:text-sm font-bold hover:bg-[#A31634] transition-all shadow-md cursor-pointer active:scale-95"
+                  className={`inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-xs sm:text-sm font-bold transition-all shadow-md active:scale-95 ${
+                    durianItem.isAvailable === false
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-[#8C102A] text-white hover:bg-[#A31634] cursor-pointer'
+                  }`}
                 >
                   <ShoppingBag className="w-4 h-4 text-amber-200" />
-                  <span>Order Durian Scoop ({formatPrice(durianItem.biscuitCupPriceLKR, currency)})</span>
+                  <span>
+                    {durianItem.isAvailable === false
+                      ? 'Durian Scoop (Sold Out)'
+                      : `Order Durian Scoop (${formatPrice(durianItem.biscuitCupPriceLKR, currency)})`}
+                  </span>
                 </button>
 
                 <button
                   onClick={onExploreFullMenu}
                   className="inline-flex items-center gap-2 px-5 py-3.5 rounded-full bg-white text-[#241A18] border border-[#D8CCBA] text-xs sm:text-sm font-semibold hover:bg-[#F3EDE3] transition-colors cursor-pointer"
                 >
-                  <span>Explore All 20 Flavours</span>
+                  <span>Explore Full Menu</span>
                 </button>
               </div>
 

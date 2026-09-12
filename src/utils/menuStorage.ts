@@ -1,6 +1,6 @@
 import { ScoopItem, MenuItem } from '../types';
 import { ALL_20_FLAVOURS, SPECIALTY_COFFEE_ITEMS, ARTISAN_CAKES_ITEMS } from '../data/iceCreamData';
-import { db } from '../firebase';
+import { db, getAllMenuItemsFromFirestore, subscribeToMenuItems } from '../firebase';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 
 const SCOOPS_STORAGE_KEY = 'amore_menu_scoops_v1';
@@ -12,6 +12,9 @@ export const MENU_UPDATED_EVENT = 'amore_menu_updated';
 function notifyMenuUpdated() {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(MENU_UPDATED_EVENT));
+    try {
+      localStorage.setItem('amore_menu_sync_timestamp', Date.now().toString());
+    } catch {}
   }
 }
 
@@ -87,9 +90,9 @@ export function deleteScoopItem(id: string): boolean {
 
   saveAllGelatoFlavours(filtered);
 
-  // Sync to Firestore
+  // Sync to Firestore (mark isDeleted: true so all other devices remove it too)
   try {
-    deleteDoc(doc(db, 'menu_items', id)).catch(() => {});
+    setDoc(doc(db, 'menu_items', id), { id, isDeleted: true }, { merge: true }).catch(() => {});
   } catch {}
 
   return true;
@@ -165,7 +168,7 @@ export function deleteCoffeeItem(id: string): boolean {
   saveAllCoffeeItems(filtered);
 
   try {
-    deleteDoc(doc(db, 'menu_items', id)).catch(() => {});
+    setDoc(doc(db, 'menu_items', id), { id, isDeleted: true }, { merge: true }).catch(() => {});
   } catch {}
 
   return true;
@@ -241,7 +244,7 @@ export function deleteCakeItem(id: string): boolean {
   saveAllCakeItems(filtered);
 
   try {
-    deleteDoc(doc(db, 'menu_items', id)).catch(() => {});
+    setDoc(doc(db, 'menu_items', id), { id, isDeleted: true }, { merge: true }).catch(() => {});
   } catch {}
 
   return true;
@@ -290,4 +293,118 @@ export function resetMenuToDefaults(): void {
     console.error('Failed to reset menu to defaults:', err);
   }
 }
+
+// ----------------------------------------------------
+// CLOUD FIRESTORE SYNC FOR MENU
+// ----------------------------------------------------
+
+/**
+ * Merge Firestore menu items into local storage
+ */
+export function mergeFirestoreMenuItems(items: any[]): void {
+  if (!items || items.length === 0) return;
+
+  const currentScoops = [...getAllGelatoFlavours()];
+  const currentCoffee = [...getAllCoffeeItems()];
+  const currentCakes = [...getAllCakeItems()];
+
+  let hasScoopChanges = false;
+  let hasCoffeeChanges = false;
+  let hasCakeChanges = false;
+
+  items.forEach((item) => {
+    // If item was marked deleted in Firestore, remove from local cache
+    if (item.isDeleted) {
+      const sIdx = currentScoops.findIndex((s) => s.id === item.id);
+      if (sIdx > -1) {
+        currentScoops.splice(sIdx, 1);
+        hasScoopChanges = true;
+      }
+      const cIdx = currentCoffee.findIndex((c) => c.id === item.id);
+      if (cIdx > -1) {
+        currentCoffee.splice(cIdx, 1);
+        hasCoffeeChanges = true;
+      }
+      const kIdx = currentCakes.findIndex((c) => c.id === item.id);
+      if (kIdx > -1) {
+        currentCakes.splice(kIdx, 1);
+        hasCakeChanges = true;
+      }
+      return;
+    }
+
+    const type = item.itemType || (item.tastingNotes ? 'scoop' : item.category === 'coffee' ? 'coffee' : 'cake');
+    if (type === 'scoop') {
+      const idx = currentScoops.findIndex((s) => s.id === item.id);
+      if (idx > -1) {
+        currentScoops[idx] = { ...currentScoops[idx], ...item };
+      } else {
+        currentScoops.unshift(item);
+      }
+      hasScoopChanges = true;
+    } else if (type === 'coffee') {
+      const idx = currentCoffee.findIndex((c) => c.id === item.id);
+      if (idx > -1) {
+        currentCoffee[idx] = { ...currentCoffee[idx], ...item };
+      } else {
+        currentCoffee.unshift(item);
+      }
+      hasCoffeeChanges = true;
+    } else if (type === 'cake') {
+      const idx = currentCakes.findIndex((c) => c.id === item.id);
+      if (idx > -1) {
+        currentCakes[idx] = { ...currentCakes[idx], ...item };
+      } else {
+        currentCakes.unshift(item);
+      }
+      hasCakeChanges = true;
+    }
+  });
+
+  if (hasScoopChanges) {
+    localStorage.setItem(SCOOPS_STORAGE_KEY, JSON.stringify(currentScoops));
+  }
+  if (hasCoffeeChanges) {
+    localStorage.setItem(COFFEE_STORAGE_KEY, JSON.stringify(currentCoffee));
+  }
+  if (hasCakeChanges) {
+    localStorage.setItem(CAKES_STORAGE_KEY, JSON.stringify(currentCakes));
+  }
+
+  if (hasScoopChanges || hasCoffeeChanges || hasCakeChanges) {
+    notifyMenuUpdated();
+  }
+}
+
+/**
+ * Sync menu from Firestore asynchronously
+ */
+export async function syncMenuFromFirestore(): Promise<void> {
+  try {
+    const cloudItems = await getAllMenuItemsFromFirestore();
+    if (cloudItems && cloudItems.length > 0) {
+      mergeFirestoreMenuItems(cloudItems);
+    }
+  } catch (err) {
+    console.warn('Failed to sync menu from Firestore:', err);
+  }
+}
+
+/**
+ * Subscribe to real-time menu updates from Firestore
+ */
+export function subscribeToRealtimeMenu(callback?: () => void): () => void {
+  try {
+    return subscribeToMenuItems((items) => {
+      if (items && items.length > 0) {
+        mergeFirestoreMenuItems(items);
+        if (callback) callback();
+      }
+    });
+  } catch (err) {
+    console.warn('Failed to subscribe to realtime menu:', err);
+    return () => {};
+  }
+}
+
 

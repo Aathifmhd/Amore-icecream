@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ScoopItem, MenuItem, Currency, SelectedOrderItem } from '../types';
 import { formatPrice } from '../utils/currency';
-import { X, Check, ShoppingBag, ArrowLeft } from 'lucide-react';
+import { X, Check, ShoppingBag, ArrowLeft, AlertCircle } from 'lucide-react';
 
 interface ProductDetailModalProps {
   item: ScoopItem | MenuItem | null;
@@ -32,6 +32,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
   if (!item) return null;
 
+  const isSoldOut = item.isAvailable === false;
   const isScoop = 'tastingNotes' in item;
   const scoop = isScoop ? (item as ScoopItem) : null;
 
@@ -40,6 +41,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const totalPrice = currentSinglePrice * quantity;
 
   const handleAddToTray = (openTrayDirectly: boolean = false) => {
+    if (isSoldOut) return;
     const orderItem: SelectedOrderItem = {
       itemId: item.id,
       name: item.name,
@@ -77,16 +79,31 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             <img
               src={item.image}
               alt={item.name}
-              className="w-full h-full object-cover"
+              className={`w-full h-full object-cover ${isSoldOut ? 'grayscale-[30%] opacity-85' : ''}`}
               referrerPolicy="no-referrer"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/20 to-transparent" />
+
+            {/* Sold Out Overlay */}
+            {isSoldOut && (
+              <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center z-10">
+                <span className="px-3.5 py-1.5 rounded-full bg-red-600/95 text-white text-xs font-black uppercase tracking-wider shadow-lg border border-white/20 flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>Sold Out</span>
+                </span>
+              </div>
+            )}
+
             <div className="absolute bottom-3.5 left-4 right-4 text-white">
-              {scoop?.isIconic && (
+              {isSoldOut ? (
+                <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-600 text-white mb-1 shadow-xs">
+                  Sold Out
+                </span>
+              ) : scoop?.isIconic ? (
                 <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#8C102A] text-white mb-1 shadow-xs">
                   👑 Amore's Best Flavour
                 </span>
-              )}
+              ) : null}
               <h3 className="text-xl sm:text-2xl font-serif-title font-bold drop-shadow-sm leading-tight">
                 {item.name}
               </h3>
@@ -98,14 +115,26 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         <div className="p-5 sm:p-6 space-y-4">
           {!item.image && (
             <div className="border-b border-[#E8DFC8] pb-3">
-              {scoop?.isIconic && (
+              {isSoldOut ? (
+                <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-600 text-white mb-1.5 shadow-xs">
+                  Sold Out
+                </span>
+              ) : scoop?.isIconic ? (
                 <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#8C102A] text-white mb-1.5 shadow-xs">
                   👑 Amore's Best Flavour
                 </span>
-              )}
+              ) : null}
               <h3 className="text-xl sm:text-2xl font-serif-title font-bold text-[#241A18]">
                 {item.name}
               </h3>
+            </div>
+          )}
+
+          {/* Sold Out Notice */}
+          {isSoldOut && (
+            <div className="p-3 rounded-2xl bg-red-50 border border-red-200 flex items-center gap-2 text-xs text-red-700 font-bold">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+              <span>This artisanal product is temporarily sold out.</span>
             </div>
           )}
 
@@ -169,11 +198,12 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
           {/* Price & Quantity Stepper */}
           <div className="pt-3 border-t border-[#E8DFC8] flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 bg-[#FAF7F2] p-1.5 rounded-full border border-[#E0D5C3]">
+            <div className={`flex items-center gap-2 bg-[#FAF7F2] p-1.5 rounded-full border border-[#E0D5C3] ${isSoldOut ? 'opacity-40 pointer-events-none' : ''}`}>
               <button
                 type="button"
+                disabled={isSoldOut}
                 onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                className="w-7 h-7 rounded-full bg-white hover:bg-gray-100 text-[#241A18] font-bold text-xs flex items-center justify-center cursor-pointer shadow-2xs transition-colors"
+                className="w-7 h-7 rounded-full bg-white hover:bg-gray-100 text-[#241A18] font-bold text-xs flex items-center justify-center cursor-pointer shadow-2xs transition-colors disabled:cursor-not-allowed"
                 aria-label="Decrease quantity"
               >
                 -
@@ -183,8 +213,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               </span>
               <button
                 type="button"
+                disabled={isSoldOut}
                 onClick={() => setQuantity(quantity + 1)}
-                className="w-7 h-7 rounded-full bg-white hover:bg-gray-100 text-[#241A18] font-bold text-xs flex items-center justify-center cursor-pointer shadow-2xs transition-colors"
+                className="w-7 h-7 rounded-full bg-white hover:bg-gray-100 text-[#241A18] font-bold text-xs flex items-center justify-center cursor-pointer shadow-2xs transition-colors disabled:cursor-not-allowed"
                 aria-label="Increase quantity"
               >
                 +
@@ -212,34 +243,45 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               <span>Back</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                if (hasAddedToTray && onOpenTray) {
-                  onClose();
-                  onOpenTray();
-                } else {
-                  handleAddToTray(false);
-                }
-              }}
-              className={`flex-2 inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-full font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer ${
-                hasAddedToTray
-                  ? 'bg-emerald-700 hover:bg-emerald-800 text-white'
-                  : 'bg-[#8C102A] hover:bg-[#A31634] text-white'
-              }`}
-            >
-              {hasAddedToTray ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-emerald-200" />
-                  <span>In Tray (View Tray)</span>
-                </>
-              ) : (
-                <>
-                  <ShoppingBag className="w-3.5 h-3.5 text-amber-200" />
-                  <span>Add to Tray</span>
-                </>
-              )}
-            </button>
+            {isSoldOut ? (
+              <button
+                type="button"
+                disabled
+                className="flex-2 inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-full font-bold text-xs bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed shadow-xs"
+              >
+                <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+                <span>Sold Out</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  if (hasAddedToTray && onOpenTray) {
+                    onClose();
+                    onOpenTray();
+                  } else {
+                    handleAddToTray(false);
+                  }
+                }}
+                className={`flex-2 inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-full font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer ${
+                  hasAddedToTray
+                    ? 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                    : 'bg-[#8C102A] hover:bg-[#A31634] text-white'
+                }`}
+              >
+                {hasAddedToTray ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-200" />
+                    <span>In Tray (View Tray)</span>
+                  </>
+                ) : (
+                  <>
+                    <ShoppingBag className="w-3.5 h-3.5 text-amber-200" />
+                    <span>Add to Tray</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>

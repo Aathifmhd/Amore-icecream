@@ -1,9 +1,16 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { ScoopItem, MenuItem, Currency, MenuTab, ServingFormat, SelectedOrderItem } from '../types';
-import { ALL_20_FLAVOURS, SPECIALTY_COFFEE_ITEMS, ARTISAN_CAKES_ITEMS } from '../data/iceCreamData';
+import {
+  getAllGelatoFlavours,
+  getAllCoffeeItems,
+  getAllCakeItems,
+  MENU_UPDATED_EVENT,
+  syncMenuFromFirestore,
+  subscribeToRealtimeMenu,
+} from '../utils/menuStorage';
 import { formatPrice } from '../utils/currency';
 import { CurrencyToggle } from './CurrencyToggle';
-import { Search, Sparkles, Cookie, Coffee, Cake, Check, Heart, ArrowRight, X, Plus } from 'lucide-react';
+import { Search, Sparkles, Cookie, Coffee, Cake, Check, Heart, ArrowRight, X, Plus, AlertCircle } from 'lucide-react';
 
 interface FullMenuProps {
   currency: Currency;
@@ -31,19 +38,52 @@ export const FullMenu: React.FC<FullMenuProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string>('all');
 
+  // Dynamic Real-time Menu State from Storage
+  const [allScoops, setAllScoops] = useState<ScoopItem[]>(() => getAllGelatoFlavours());
+  const [allCoffee, setAllCoffee] = useState<MenuItem[]>(() => getAllCoffeeItems());
+  const [allCakes, setAllCakes] = useState<MenuItem[]>(() => getAllCakeItems());
+
+  useEffect(() => {
+    const handleMenuSync = () => {
+      setAllScoops(getAllGelatoFlavours());
+      setAllCoffee(getAllCoffeeItems());
+      setAllCakes(getAllCakeItems());
+    };
+
+    window.addEventListener(MENU_UPDATED_EVENT, handleMenuSync);
+
+    const handleStorage = (e: StorageEvent) => {
+      if (!e.key || e.key.startsWith('amore_menu_')) {
+        handleMenuSync();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('focus', handleMenuSync);
+
+    syncMenuFromFirestore().then(handleMenuSync);
+    const unsubscribeRealtime = subscribeToRealtimeMenu(handleMenuSync);
+
+    return () => {
+      window.removeEventListener(MENU_UPDATED_EVENT, handleMenuSync);
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('focus', handleMenuSync);
+      unsubscribeRealtime();
+    };
+  }, []);
+
   // Track selected serving format(s) for each scoop card for direct order
   const [selectedFormats, setSelectedFormats] = useState<Record<string, ServingFormat[]>>({});
 
   // Reset all selected format buttons whenever resetKey changes (e.g., when order is placed and Done is clicked)
-  React.useEffect(() => {
+  useEffect(() => {
     if (resetKey !== undefined) {
       setSelectedFormats({});
     }
   }, [resetKey]);
 
   // Auto-reset all selected format buttons whenever tray transitions from having items to empty
-  const prevOrderCountRef = React.useRef(orderItems.length);
-  React.useEffect(() => {
+  const prevOrderCountRef = useRef(orderItems.length);
+  useEffect(() => {
     if (prevOrderCountRef.current > 0 && orderItems.length === 0) {
       setSelectedFormats({});
     }
@@ -69,7 +109,7 @@ export const FullMenu: React.FC<FullMenuProps> = ({
 
   // Filter scoops based on search, category tab, and tag
   const filteredScoops = useMemo(() => {
-    return ALL_20_FLAVOURS.filter((scoop) => {
+    return allScoops.filter((scoop) => {
       // Tab filter
       if (activeTab === 'coffee' || activeTab === 'cakes') return false;
       if (activeTab === 'tourist-specials' && !scoop.isArugamBaySpecial) return false;
@@ -92,31 +132,31 @@ export const FullMenu: React.FC<FullMenuProps> = ({
 
       return true;
     });
-  }, [activeTab, selectedTag, searchQuery]);
+  }, [activeTab, selectedTag, searchQuery, allScoops]);
 
   // Filter coffee items
   const filteredCoffee = useMemo(() => {
     if (activeTab === 'scoops' || activeTab === 'cakes') return [];
-    return SPECIALTY_COFFEE_ITEMS.filter((item) => {
+    return allCoffee.filter((item) => {
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
         return item.name.toLowerCase().includes(query) || item.description.toLowerCase().includes(query);
       }
       return true;
     });
-  }, [activeTab, searchQuery]);
+  }, [activeTab, searchQuery, allCoffee]);
 
   // Filter cake items
   const filteredCakes = useMemo(() => {
     if (activeTab === 'scoops' || activeTab === 'coffee' || activeTab === 'tourist-specials') return [];
-    return ARTISAN_CAKES_ITEMS.filter((item) => {
+    return allCakes.filter((item) => {
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
         return item.name.toLowerCase().includes(query) || item.description.toLowerCase().includes(query);
       }
       return true;
     });
-  }, [activeTab, searchQuery]);
+  }, [activeTab, searchQuery, allCakes]);
 
   // Full menu is always shown without truncation
   const displayedScoops = filteredScoops;
@@ -167,7 +207,7 @@ export const FullMenu: React.FC<FullMenuProps> = ({
             }`}
           >
             <Cookie className="w-3.5 h-3.5" />
-            <span>Amore Scoops (20 Flavours)</span>
+            <span>Amore Scoops ({allScoops.length} Flavours)</span>
           </button>
 
           <button
@@ -285,6 +325,7 @@ export const FullMenu: React.FC<FullMenuProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
               {displayedScoops.map((scoop) => {
+                const isSoldOut = scoop.isAvailable === false;
                 const isDurian = scoop.id === 'durian-best';
                 const isInTray = trayItemIds.has(scoop.id);
                 return (
@@ -292,7 +333,9 @@ export const FullMenu: React.FC<FullMenuProps> = ({
                     key={scoop.id}
                     onClick={() => onSelectItem(scoop)}
                     className={`bg-white rounded-2xl overflow-hidden border transition-all duration-300 hover:shadow-xl hover:-translate-y-1 flex flex-col justify-between cursor-pointer group relative ${
-                      isDurian
+                      isSoldOut
+                        ? 'opacity-90 border-red-200'
+                        : isDurian
                         ? 'border-amber-400 ring-2 ring-amber-400/40'
                         : 'border-[#E8DFC8] hover:border-[#8C102A]'
                     }`}
@@ -302,14 +345,31 @@ export const FullMenu: React.FC<FullMenuProps> = ({
                       <img
                         src={scoop.image}
                         alt={scoop.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${
+                          isSoldOut ? 'grayscale-[30%] opacity-85' : ''
+                        }`}
                         referrerPolicy="no-referrer"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
+                      {/* Sold Out Dark Overlay */}
+                      {isSoldOut && (
+                        <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center z-20">
+                          <span className="px-3.5 py-1.5 rounded-full bg-red-600/95 text-white text-xs font-black uppercase tracking-wider shadow-lg border border-white/20 flex items-center gap-1.5">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            <span>Sold Out</span>
+                          </span>
+                        </div>
+                      )}
+
                       {/* Top Badges */}
                       <div className="absolute top-3 left-3 right-3 flex items-center justify-between z-10">
-                        {isDurian ? (
+                        {isSoldOut ? (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-red-600 text-white shadow-md flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            <span>Sold Out</span>
+                          </span>
+                        ) : isDurian ? (
                           <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-[#8C102A] text-white shadow-md">
                             👑 Amore Best Flavour
                           </span>
@@ -397,38 +457,44 @@ export const FullMenu: React.FC<FullMenuProps> = ({
                                   <div
                                     role="button"
                                     tabIndex={0}
-                                    onClick={(e) => handleToggleFormat(scoop.id, 'waffle-cone', e)}
+                                    onClick={(e) => {
+                                      if (isSoldOut) return;
+                                      handleToggleFormat(scoop.id, 'waffle-cone', e);
+                                    }}
                                     onKeyDown={(e) => {
+                                      if (isSoldOut) return;
                                       if (e.key === 'Enter' || e.key === ' ') {
                                         handleToggleFormat(scoop.id, 'waffle-cone', e as any);
                                       }
                                     }}
                                     aria-pressed={isConeSelected}
-                                    title={isConeSelected ? 'Waffle Cone selected for order (Click to toggle)' : 'Click to select Waffle Cone for order'}
-                                    className={`p-2 rounded-xl transition-all duration-200 cursor-pointer select-none text-left relative flex flex-col justify-between border ${
-                                      isConeSelected
-                                        ? 'bg-[#8C102A] text-white border-[#8C102A] shadow-xs ring-2 ring-[#8C102A]/40'
-                                        : 'bg-[#FAF7F2] hover:bg-[#F3EDE3] text-[#241A18] border-[#E0D5C3] hover:border-[#8C102A]/60'
+                                    title={isSoldOut ? 'Sold out' : isConeSelected ? 'Waffle Cone selected for order (Click to toggle)' : 'Click to select Waffle Cone for order'}
+                                    className={`p-2 rounded-xl transition-all duration-200 select-none text-left relative flex flex-col justify-between border ${
+                                      isSoldOut
+                                        ? 'bg-gray-50 border-gray-200 text-gray-400 opacity-60 cursor-not-allowed'
+                                        : isConeSelected
+                                        ? 'bg-[#8C102A] text-white border-[#8C102A] shadow-xs ring-2 ring-[#8C102A]/40 cursor-pointer'
+                                        : 'bg-[#FAF7F2] hover:bg-[#F3EDE3] text-[#241A18] border-[#E0D5C3] hover:border-[#8C102A]/60 cursor-pointer'
                                     }`}
                                   >
                                     <div className="flex items-center justify-between gap-1 mb-1">
-                                      <span className={`text-[10px] font-bold ${isConeSelected ? 'text-amber-200' : 'text-[#8A7970]'}`}>
+                                      <span className={`text-[10px] font-bold ${isSoldOut ? 'text-gray-400' : isConeSelected ? 'text-amber-200' : 'text-[#8A7970]'}`}>
                                         Waffle Cone
                                       </span>
                                       <div
                                         className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0 transition-colors ${
-                                          isConeSelected ? 'bg-white text-[#8C102A]' : 'border border-[#C4B5A2] bg-white/70'
+                                          isConeSelected && !isSoldOut ? 'bg-white text-[#8C102A]' : 'border border-[#C4B5A2] bg-white/70'
                                         }`}
                                       >
-                                        {isConeSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                                        {isConeSelected && !isSoldOut && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                                       </div>
                                     </div>
                                     <div className="flex items-baseline justify-between">
-                                      <span className={`font-bold text-xs ${isConeSelected ? 'text-white' : 'text-[#241A18]'}`}>
+                                      <span className={`font-bold text-xs ${isSoldOut ? 'text-gray-400' : isConeSelected ? 'text-white' : 'text-[#241A18]'}`}>
                                         {formatPrice(scoop.conePriceLKR, currency)}
                                       </span>
-                                      <span className={`text-[9px] font-semibold ${isConeSelected ? 'text-amber-100' : 'text-[#8A7970]'}`}>
-                                        {isConeSelected ? 'Selected' : '+ Select'}
+                                      <span className={`text-[9px] font-semibold ${isSoldOut ? 'text-gray-400' : isConeSelected ? 'text-amber-100' : 'text-[#8A7970]'}`}>
+                                        {isSoldOut ? 'Out of stock' : isConeSelected ? 'Selected' : '+ Select'}
                                       </span>
                                     </div>
                                   </div>
@@ -437,43 +503,49 @@ export const FullMenu: React.FC<FullMenuProps> = ({
                                   <div
                                     role="button"
                                     tabIndex={0}
-                                    onClick={(e) => handleToggleFormat(scoop.id, 'biscuit-cup', e)}
+                                    onClick={(e) => {
+                                      if (isSoldOut) return;
+                                      handleToggleFormat(scoop.id, 'biscuit-cup', e);
+                                    }}
                                     onKeyDown={(e) => {
+                                      if (isSoldOut) return;
                                       if (e.key === 'Enter' || e.key === ' ') {
                                         handleToggleFormat(scoop.id, 'biscuit-cup', e as any);
                                       }
                                     }}
                                     aria-pressed={isCupSelected}
-                                    title={isCupSelected ? 'Biscuit Cup selected for order (Click to toggle)' : 'Click to select Biscuit Cup for order'}
-                                    className={`p-2 rounded-xl transition-all duration-200 cursor-pointer select-none text-left relative flex flex-col justify-between border ${
-                                      isCupSelected
-                                        ? 'bg-amber-700 text-white border-amber-800 shadow-xs ring-2 ring-amber-600/50'
-                                        : 'bg-amber-50/80 hover:bg-amber-100 text-[#8C102A] border-amber-200 hover:border-amber-400'
+                                    title={isSoldOut ? 'Sold out' : isCupSelected ? 'Biscuit Cup selected for order (Click to toggle)' : 'Click to select Biscuit Cup for order'}
+                                    className={`p-2 rounded-xl transition-all duration-200 select-none text-left relative flex flex-col justify-between border ${
+                                      isSoldOut
+                                        ? 'bg-gray-50 border-gray-200 text-gray-400 opacity-60 cursor-not-allowed'
+                                        : isCupSelected
+                                        ? 'bg-amber-700 text-white border-amber-800 shadow-xs ring-2 ring-amber-600/50 cursor-pointer'
+                                        : 'bg-amber-50/80 hover:bg-amber-100 text-[#8C102A] border-amber-200 hover:border-amber-400 cursor-pointer'
                                     }`}
                                   >
                                     <div className="flex items-center justify-between gap-1 mb-1">
                                       <span
                                         className={`text-[10px] font-bold flex items-center gap-0.5 ${
-                                          isCupSelected ? 'text-amber-200' : 'text-amber-800'
+                                          isSoldOut ? 'text-gray-400' : isCupSelected ? 'text-amber-200' : 'text-amber-800'
                                         }`}
                                       >
-                                        <Cookie className={`w-2.5 h-2.5 ${isCupSelected ? 'text-amber-200' : 'text-amber-700'}`} />
+                                        <Cookie className={`w-2.5 h-2.5 ${isCupSelected && !isSoldOut ? 'text-amber-200' : 'text-amber-700'}`} />
                                         <span>Biscuit Cup</span>
                                       </span>
                                       <div
                                         className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0 transition-colors ${
-                                          isCupSelected ? 'bg-white text-amber-800' : 'border border-amber-300 bg-white/70'
+                                          isCupSelected && !isSoldOut ? 'bg-white text-amber-800' : 'border border-amber-300 bg-white/70'
                                         }`}
                                       >
-                                        {isCupSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                                        {isCupSelected && !isSoldOut && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                                       </div>
                                     </div>
                                     <div className="flex items-baseline justify-between">
-                                      <span className={`font-bold text-xs ${isCupSelected ? 'text-white' : 'text-[#8C102A]'}`}>
+                                      <span className={`font-bold text-xs ${isSoldOut ? 'text-gray-400' : isCupSelected ? 'text-white' : 'text-[#8C102A]'}`}>
                                         {formatPrice(scoop.biscuitCupPriceLKR, currency)}
                                       </span>
-                                      <span className={`text-[9px] font-semibold ${isCupSelected ? 'text-amber-100' : 'text-amber-800'}`}>
-                                        {isCupSelected ? 'Selected' : '+ Select'}
+                                      <span className={`text-[9px] font-semibold ${isSoldOut ? 'text-gray-400' : isCupSelected ? 'text-amber-100' : 'text-amber-800'}`}>
+                                        {isSoldOut ? 'Out of stock' : isCupSelected ? 'Selected' : '+ Select'}
                                       </span>
                                     </div>
                                   </div>
@@ -513,7 +585,16 @@ export const FullMenu: React.FC<FullMenuProps> = ({
                                 >
                                   Details
                                 </button>
-                                {isOrdered ? (
+                                {isSoldOut ? (
+                                  <button
+                                    type="button"
+                                    disabled
+                                    className="flex-1 py-2 px-2 rounded-xl text-xs font-bold bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed flex items-center justify-center gap-1.5"
+                                  >
+                                    <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+                                    <span>Sold Out</span>
+                                  </button>
+                                ) : isOrdered ? (
                                   <div className="flex-1 flex items-center gap-1.5">
                                     <button
                                       type="button"
@@ -620,12 +701,15 @@ export const FullMenu: React.FC<FullMenuProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {displayedCoffee.map((coffee) => {
+                const isSoldOut = coffee.isAvailable === false;
                 const isInTray = trayItemIds.has(coffee.id);
                 return (
                   <div
                     key={coffee.id}
                     onClick={() => onSelectItem(coffee)}
-                    className="bg-white rounded-2xl overflow-hidden border border-[#E8DFC8] hover:border-[#8C102A] hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col justify-between group relative"
+                    className={`bg-white rounded-2xl overflow-hidden border transition-all duration-300 hover:shadow-xl hover:-translate-y-1 cursor-pointer flex flex-col justify-between group relative ${
+                      isSoldOut ? 'opacity-90 border-red-200' : 'border-[#E8DFC8] hover:border-[#8C102A]'
+                    }`}
                   >
                     {/* Top Image */}
                     <div className="relative h-44 bg-[#FAF7F2] overflow-hidden">
@@ -633,7 +717,9 @@ export const FullMenu: React.FC<FullMenuProps> = ({
                         <img
                           src={coffee.image}
                           alt={coffee.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${
+                            isSoldOut ? 'grayscale-[30%] opacity-85' : ''
+                          }`}
                           referrerPolicy="no-referrer"
                           loading="lazy"
                         />
@@ -644,12 +730,29 @@ export const FullMenu: React.FC<FullMenuProps> = ({
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/15 to-transparent" />
 
+                      {/* Sold Out Dark Overlay */}
+                      {isSoldOut && (
+                        <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center z-20">
+                          <span className="px-3.5 py-1.5 rounded-full bg-red-600/95 text-white text-xs font-black uppercase tracking-wider shadow-lg border border-white/20 flex items-center gap-1.5">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            <span>Sold Out</span>
+                          </span>
+                        </div>
+                      )}
+
                       {/* Top Badges */}
                       <div className="absolute top-3 left-3 right-3 flex items-center justify-between z-10">
-                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-white/90 text-[#8C102A] backdrop-blur-xs shadow-xs">
-                          {coffee.portionOrTemp}
-                        </span>
-                        {coffee.popular && (
+                        {isSoldOut ? (
+                          <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-red-600 text-white shadow-md flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            <span>Sold Out</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-white/90 text-[#8C102A] backdrop-blur-xs shadow-xs">
+                            {coffee.portionOrTemp}
+                          </span>
+                        )}
+                        {coffee.popular && !isSoldOut && (
                           <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-500 text-white shadow-xs">
                             Popular
                           </span>
@@ -701,7 +804,16 @@ export const FullMenu: React.FC<FullMenuProps> = ({
                           >
                             Details
                           </button>
-                          {isInTray ? (
+                          {isSoldOut ? (
+                            <button
+                              type="button"
+                              disabled
+                              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed flex items-center justify-center gap-1.5"
+                            >
+                              <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+                              <span>Sold Out</span>
+                            </button>
+                          ) : isInTray ? (
                             <div className="flex items-center gap-1.5">
                               <button
                                 type="button"
@@ -744,9 +856,9 @@ export const FullMenu: React.FC<FullMenuProps> = ({
                                 e.stopPropagation();
                                 onDirectOrder(coffee);
                               }}
-                              className="px-4 py-1.5 rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-all flex items-center justify-center gap-1.5 bg-[#8C102A] hover:bg-[#A31634] text-white active:scale-95"
+                              className="px-3 py-1.5 rounded-xl bg-[#8C102A] hover:bg-[#A31634] text-white text-xs font-bold shadow-xs transition-all cursor-pointer active:scale-95"
                             >
-                              <span>Add to Tray</span>
+                              Add to Tray
                             </button>
                           )}
                         </div>
@@ -776,12 +888,15 @@ export const FullMenu: React.FC<FullMenuProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {displayedCakes.map((cake) => {
+                const isSoldOut = cake.isAvailable === false;
                 const isInTray = trayItemIds.has(cake.id);
                 return (
                   <div
                     key={cake.id}
                     onClick={() => onSelectItem(cake)}
-                    className="bg-white rounded-2xl overflow-hidden border border-[#E8DFC8] hover:border-[#8C102A] hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col justify-between group relative"
+                    className={`bg-white rounded-2xl overflow-hidden border transition-all duration-300 hover:shadow-xl hover:-translate-y-1 cursor-pointer flex flex-col justify-between group relative ${
+                      isSoldOut ? 'opacity-90 border-red-200' : 'border-[#E8DFC8] hover:border-[#8C102A]'
+                    }`}
                   >
                     {/* Top Image */}
                     <div className="relative h-44 bg-[#FAF7F2] overflow-hidden">
@@ -789,7 +904,9 @@ export const FullMenu: React.FC<FullMenuProps> = ({
                         <img
                           src={cake.image}
                           alt={cake.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${
+                            isSoldOut ? 'grayscale-[30%] opacity-85' : ''
+                          }`}
                           referrerPolicy="no-referrer"
                           loading="lazy"
                         />
@@ -800,12 +917,29 @@ export const FullMenu: React.FC<FullMenuProps> = ({
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/15 to-transparent" />
 
+                      {/* Sold Out Dark Overlay */}
+                      {isSoldOut && (
+                        <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center z-20">
+                          <span className="px-3.5 py-1.5 rounded-full bg-red-600/95 text-white text-xs font-black uppercase tracking-wider shadow-lg border border-white/20 flex items-center gap-1.5">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            <span>Sold Out</span>
+                          </span>
+                        </div>
+                      )}
+
                       {/* Top Badges */}
                       <div className="absolute top-3 left-3 right-3 flex items-center justify-between z-10">
-                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-white/90 text-[#8C102A] backdrop-blur-xs shadow-xs">
-                          {cake.portionOrTemp}
-                        </span>
-                        {cake.popular && (
+                        {isSoldOut ? (
+                          <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-red-600 text-white shadow-md flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            <span>Sold Out</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-white/90 text-[#8C102A] backdrop-blur-xs shadow-xs">
+                            {cake.portionOrTemp}
+                          </span>
+                        )}
+                        {cake.popular && !isSoldOut && (
                           <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-500 text-white shadow-xs">
                             Bakery Favorite
                           </span>
@@ -857,7 +991,16 @@ export const FullMenu: React.FC<FullMenuProps> = ({
                           >
                             Details
                           </button>
-                          {isInTray ? (
+                          {isSoldOut ? (
+                            <button
+                              type="button"
+                              disabled
+                              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed flex items-center justify-center gap-1.5"
+                            >
+                              <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+                              <span>Sold Out</span>
+                            </button>
+                          ) : isInTray ? (
                             <div className="flex items-center gap-1.5">
                               <button
                                 type="button"
@@ -900,9 +1043,9 @@ export const FullMenu: React.FC<FullMenuProps> = ({
                                 e.stopPropagation();
                                 onDirectOrder(cake);
                               }}
-                              className="px-4 py-1.5 rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-all flex items-center justify-center gap-1.5 bg-[#8C102A] hover:bg-[#A31634] text-white active:scale-95"
+                              className="px-3 py-1.5 rounded-xl bg-[#8C102A] hover:bg-[#A31634] text-white text-xs font-bold shadow-xs transition-all cursor-pointer active:scale-95"
                             >
-                              <span>Add to Tray</span>
+                              Add to Tray
                             </button>
                           )}
                         </div>

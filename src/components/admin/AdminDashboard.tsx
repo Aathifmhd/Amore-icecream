@@ -34,6 +34,8 @@ import {
   toggleItemStockStatus,
   resetMenuToDefaults,
   MENU_UPDATED_EVENT,
+  syncMenuFromFirestore,
+  subscribeToRealtimeMenu,
 } from '../../utils/menuStorage';
 import { AMORE_BRANCHES } from '../../data/iceCreamData';
 import {
@@ -200,12 +202,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setOrders(getAllOrdersAdmin());
     });
 
-    // 3. Listen for local orders changes (e.g. storage events or local actions)
+    // 3. Listen for local orders changes
     const handleOrdersUpdated = () => {
       setOrders(getAllOrdersAdmin());
     };
     window.addEventListener(ORDERS_UPDATED_EVENT, handleOrdersUpdated);
-    window.addEventListener('storage', handleOrdersUpdated);
 
     // 4. Listen for external menu changes
     const handleMenuUpdated = () => {
@@ -215,11 +216,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     };
     window.addEventListener(MENU_UPDATED_EVENT, handleMenuUpdated);
 
+    // 5. Cross-tab storage sync for both orders and menu items
+    const handleStorage = (e: StorageEvent) => {
+      handleOrdersUpdated();
+      if (!e.key || e.key.startsWith('amore_menu_')) {
+        handleMenuUpdated();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('focus', handleMenuUpdated);
+
+    // 6. Real-time Firestore Menu Sync
+    syncMenuFromFirestore().then(handleMenuUpdated);
+    const unsubscribeMenu = subscribeToRealtimeMenu(handleMenuUpdated);
+
     return () => {
       unsubscribeFirestore();
+      unsubscribeMenu();
       window.removeEventListener(ORDERS_UPDATED_EVENT, handleOrdersUpdated);
-      window.removeEventListener('storage', handleOrdersUpdated);
+      window.removeEventListener('storage', handleStorage);
       window.removeEventListener(MENU_UPDATED_EVENT, handleMenuUpdated);
+      window.removeEventListener('focus', handleMenuUpdated);
     };
   }, []);
 
@@ -2204,6 +2221,74 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
 
               <div>
+                <label className="block font-bold text-[#3D2C24] mb-1">Image URL</label>
+                <div className="flex gap-3 items-center">
+                  <div className="w-14 h-14 rounded-xl overflow-hidden bg-[#FAF7F2] border border-[#D9CBB7] shrink-0">
+                    <img
+                      src={editingMenuItem.item.image || 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80'}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80';
+                      }}
+                    />
+                  </div>
+                  <input
+                    type="url"
+                    value={editingMenuItem.item.image || ''}
+                    onChange={(e) =>
+                      setEditingMenuItem({
+                        ...editingMenuItem,
+                        item: { ...editingMenuItem.item, image: e.target.value },
+                      })
+                    }
+                    placeholder="https://images.unsplash.com/..."
+                    className="flex-1 px-3 py-2 rounded-xl border border-[#D9CBB7] focus:outline-hidden focus:border-[#8C102A]"
+                  />
+                </div>
+              </div>
+
+              {editingMenuItem.type === 'scoop' ? (
+                <div>
+                  <label className="block font-bold text-[#3D2C24] mb-1">Tagline / Short Subtitle</label>
+                  <input
+                    type="text"
+                    value={(editingMenuItem.item as ScoopItem).tagline || ''}
+                    onChange={(e) =>
+                      setEditingMenuItem({
+                        ...editingMenuItem,
+                        item: {
+                          ...(editingMenuItem.item as ScoopItem),
+                          tagline: e.target.value,
+                        },
+                      })
+                    }
+                    placeholder="e.g. King of Fruits • Signature Custard"
+                    className="w-full px-3 py-2 rounded-xl border border-[#D9CBB7] focus:outline-hidden focus:border-[#8C102A]"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="block font-bold text-[#3D2C24] mb-1">Portion / Serving Info</label>
+                  <input
+                    type="text"
+                    value={(editingMenuItem.item as MenuItem).portionOrTemp || ''}
+                    onChange={(e) =>
+                      setEditingMenuItem({
+                        ...editingMenuItem,
+                        item: {
+                          ...(editingMenuItem.item as MenuItem),
+                          portionOrTemp: e.target.value,
+                        },
+                      })
+                    }
+                    placeholder="e.g. Hot & Iced or Artisan Slice"
+                    className="w-full px-3 py-2 rounded-xl border border-[#D9CBB7] focus:outline-hidden focus:border-[#8C102A]"
+                  />
+                </div>
+              )}
+
+              <div>
                 <label className="block font-bold text-[#3D2C24] mb-1">Description</label>
                 <textarea
                   rows={2}
@@ -2274,6 +2359,90 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   />
                 </div>
               )}
+
+              <div className="grid grid-cols-2 gap-3 pt-1 border-t border-[#F0EBE0]">
+                <div>
+                  <label className="block font-bold text-[#3D2C24] mb-1">Stock Availability</label>
+                  <select
+                    value={editingMenuItem.item.isAvailable !== false ? 'in_stock' : 'sold_out'}
+                    onChange={(e) =>
+                      setEditingMenuItem({
+                        ...editingMenuItem,
+                        item: {
+                          ...editingMenuItem.item,
+                          isAvailable: e.target.value === 'in_stock',
+                        },
+                      })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-[#D9CBB7] bg-white focus:outline-hidden focus:border-[#8C102A] font-bold text-xs"
+                  >
+                    <option value="in_stock">🟢 In Stock</option>
+                    <option value="sold_out">🔴 Sold Out</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-[#3D2C24] mb-1">Badges</label>
+                  <div className="flex items-center gap-3 pt-2">
+                    {editingMenuItem.type === 'scoop' ? (
+                      <>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={!!(editingMenuItem.item as ScoopItem).isPopular}
+                            onChange={(e) =>
+                              setEditingMenuItem({
+                                ...editingMenuItem,
+                                item: {
+                                  ...(editingMenuItem.item as ScoopItem),
+                                  isPopular: e.target.checked,
+                                },
+                              })
+                            }
+                            className="rounded border-[#D9CBB7] text-[#8C102A] focus:ring-[#8C102A]"
+                          />
+                          <span className="text-[11px] font-medium">Popular</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={!!(editingMenuItem.item as ScoopItem).isIconic}
+                            onChange={(e) =>
+                              setEditingMenuItem({
+                                ...editingMenuItem,
+                                item: {
+                                  ...(editingMenuItem.item as ScoopItem),
+                                  isIconic: e.target.checked,
+                                },
+                              })
+                            }
+                            className="rounded border-[#D9CBB7] text-[#8C102A] focus:ring-[#8C102A]"
+                          />
+                          <span className="text-[11px] font-medium">#1 Iconic</span>
+                        </label>
+                      </>
+                    ) : (
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!(editingMenuItem.item as MenuItem).popular}
+                          onChange={(e) =>
+                            setEditingMenuItem({
+                              ...editingMenuItem,
+                              item: {
+                                ...(editingMenuItem.item as MenuItem),
+                                popular: e.target.checked,
+                              },
+                            })
+                          }
+                          className="rounded border-[#D9CBB7] text-[#8C102A] focus:ring-[#8C102A]"
+                        />
+                        <span className="text-[11px] font-medium">Bestseller</span>
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </div>
 
               <div className="pt-2 flex items-center justify-end gap-2">
                 <button

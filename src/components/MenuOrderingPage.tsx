@@ -6,6 +6,8 @@ import {
   getAllCoffeeItems,
   getAllCakeItems,
   MENU_UPDATED_EVENT,
+  syncMenuFromFirestore,
+  subscribeToRealtimeMenu,
 } from '../utils/menuStorage';
 import { formatPrice } from '../utils/currency';
 import { CurrencyToggle } from './CurrencyToggle';
@@ -25,6 +27,7 @@ import {
   LogIn,
   User as UserIcon,
   Clock,
+  AlertCircle,
 } from 'lucide-react';
 import { type User } from '../firebase';
 
@@ -76,8 +79,31 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
       setAllCoffee(getAllCoffeeItems());
       setAllCakes(getAllCakeItems());
     };
+
+    // 1. Same-window custom event
     window.addEventListener(MENU_UPDATED_EVENT, handleMenuSync);
-    return () => window.removeEventListener(MENU_UPDATED_EVENT, handleMenuSync);
+
+    // 2. Cross-tab/window storage event
+    const handleStorage = (e: StorageEvent) => {
+      if (!e.key || e.key.startsWith('amore_menu_')) {
+        handleMenuSync();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    // 3. Tab focus event
+    window.addEventListener('focus', handleMenuSync);
+
+    // 4. Initial async cloud pull & live subscription
+    syncMenuFromFirestore().then(handleMenuSync);
+    const unsubscribeRealtime = subscribeToRealtimeMenu(handleMenuSync);
+
+    return () => {
+      window.removeEventListener(MENU_UPDATED_EVENT, handleMenuSync);
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('focus', handleMenuSync);
+      unsubscribeRealtime();
+    };
   }, []);
 
   // Track selected serving format(s) for each scoop card for direct order
@@ -324,7 +350,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                 : 'bg-white text-[#5C4D44] border-[#E8DFC8] hover:bg-[#F3EDE3]'
             }`}
           >
-            All items ({ALL_20_FLAVOURS.length + SPECIALTY_COFFEE_ITEMS.length + ARTISAN_CAKES_ITEMS.length})
+            All items ({allScoops.length + allCoffee.length + allCakes.length})
           </button>
 
           {/* 2. Gelato Scoops */}
@@ -336,7 +362,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                 : 'bg-white text-[#5C4D44] border-[#E8DFC8] hover:bg-[#F3EDE3]'
             }`}
           >
-            <span>🍨 Gelato Scoops ({ALL_20_FLAVOURS.length})</span>
+            <span>🍨 Gelato Scoops ({allScoops.length})</span>
           </button>
 
           {/* 3. Special Coffee */}
@@ -349,7 +375,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
             }`}
           >
             <Coffee className="w-3.5 h-3.5" />
-            <span>Special Coffee ({SPECIALTY_COFFEE_ITEMS.length})</span>
+            <span>Special Coffee ({allCoffee.length})</span>
           </button>
 
           {/* 4. And Cakes */}
@@ -362,7 +388,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
             }`}
           >
             <Cake className="w-3.5 h-3.5" />
-            <span>And Cakes ({ARTISAN_CAKES_ITEMS.length})</span>
+            <span>And Cakes ({allCakes.length})</span>
           </button>
 
           {/* 5. Arugambay Special (Displayed ONLY when Arugam Bay branch is selected) */}
@@ -472,6 +498,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
               {filteredScoops.map((scoop) => {
+                const isSoldOut = scoop.isAvailable === false;
                 const effectiveFormat = activeTab === 'scoops' ? preferredFormat : 'both';
                 const itemsOfThisScoopInTray = orderItems.filter((it) => it.itemId === scoop.id);
                 const hasAnyInTray = itemsOfThisScoopInTray.length > 0;
@@ -505,6 +532,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                     e.stopPropagation();
                     e.preventDefault();
                   }
+                  if (isSoldOut) return;
                   // Adds strictly ONE item to the tray in the chosen single format
                   onDirectOrder(scoop, [chosenFormat]);
                   setSelectedFormats((prev) => ({ ...prev, [scoop.id]: [chosenFormat] }));
@@ -515,7 +543,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                     key={scoop.id}
                     onClick={() => onSelectItem(scoop)}
                     className={`group/card bg-white rounded-2xl border transition-all p-3.5 sm:p-4 shadow-2xs flex flex-col justify-between cursor-pointer hover:border-[#8C102A]/50 hover:shadow-md ${
-                      isOrdered ? 'border-emerald-600/50 ring-2 ring-emerald-500/20' : 'border-[#E8DFC8]'
+                      isSoldOut ? 'opacity-90 border-red-200' : isOrdered ? 'border-emerald-600/50 ring-2 ring-emerald-500/20' : 'border-[#E8DFC8]'
                     }`}
                     role="button"
                     tabIndex={0}
@@ -532,14 +560,31 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                         <img
                           src={scoop.image}
                           alt={scoop.name}
-                          className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300"
+                          className={`w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300 ${
+                            isSoldOut ? 'grayscale-[30%] opacity-85' : ''
+                          }`}
                           loading="lazy"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
+                        {/* Sold Out Dark Overlay */}
+                        {isSoldOut && (
+                          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center z-20">
+                            <span className="px-3.5 py-1.5 rounded-full bg-red-600/95 text-white text-xs font-black uppercase tracking-wider shadow-lg border border-white/20 flex items-center gap-1.5">
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              <span>Sold Out</span>
+                            </span>
+                          </div>
+                        )}
+
                         {/* Top Badges */}
                         <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-10">
-                          {scoop.isIconic ? (
+                          {isSoldOut ? (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-red-600 text-white shadow-md flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" />
+                              <span>Sold Out</span>
+                            </span>
+                          ) : scoop.isIconic ? (
                             <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-[#8C102A] text-white shadow-md">
                               👑 Amore Best Flavour
                             </span>
@@ -602,7 +647,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                         <div className="flex items-center justify-between text-[11px] font-bold text-[#6B574B]">
                           <span>Select Type:</span>
                           <span className="text-[10px] text-[#8C102A] font-semibold">
-                            {isBiscuitSelected ? 'Biscuit Cup' : 'Waffle Cone'}
+                            {isSoldOut ? 'Unavailable' : isBiscuitSelected ? 'Biscuit Cup' : 'Waffle Cone'}
                           </span>
                         </div>
 
@@ -610,16 +655,19 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                           {/* 1. Crisp Waffle Cone Type */}
                           <button
                             type="button"
+                            disabled={isSoldOut}
                             onClick={(e) => handleToggleFormat(scoop.id, 'waffle-cone', e)}
-                            className={`p-2 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                              isWaffleSelected
-                                ? 'bg-[#8C102A] text-white border-[#8C102A] shadow-xs ring-2 ring-[#8C102A]/25'
-                                : 'bg-[#FAF7F2] hover:bg-[#F3EDE3] text-[#241A18] border-[#E0D5C3]'
+                            className={`p-2 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                              isSoldOut
+                                ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                                : isWaffleSelected
+                                ? 'bg-[#8C102A] text-white border-[#8C102A] shadow-xs ring-2 ring-[#8C102A]/25 cursor-pointer'
+                                : 'bg-[#FAF7F2] hover:bg-[#F3EDE3] text-[#241A18] border-[#E0D5C3] cursor-pointer'
                             }`}
                           >
                             <div className="flex items-center justify-between text-[11px] font-bold mb-0.5">
                               <span>🍦 Waffle Cone</span>
-                              {isWaffleSelected && <Check className="w-3 h-3 text-amber-200" />}
+                              {isWaffleSelected && !isSoldOut && <Check className="w-3 h-3 text-amber-200" />}
                             </div>
                             <div className="text-[11px] font-black">
                               {formatPrice(scoop.conePriceLKR, currency)}
@@ -629,11 +677,14 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                           {/* 2. Edible Biscuit Cup Type */}
                           <button
                             type="button"
+                            disabled={isSoldOut}
                             onClick={(e) => handleToggleFormat(scoop.id, 'biscuit-cup', e)}
-                            className={`p-2 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                              isBiscuitSelected
-                                ? 'bg-amber-700 text-white border-amber-800 shadow-xs ring-2 ring-amber-600/35'
-                                : 'bg-amber-50/70 hover:bg-amber-100/80 text-[#8C102A] border-amber-200'
+                            className={`p-2 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                              isSoldOut
+                                ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                                : isBiscuitSelected
+                                ? 'bg-amber-700 text-white border-amber-800 shadow-xs ring-2 ring-amber-600/35 cursor-pointer'
+                                : 'bg-amber-50/70 hover:bg-amber-100/80 text-[#8C102A] border-amber-200 cursor-pointer'
                             }`}
                           >
                             <div className="flex items-center justify-between text-[11px] font-bold mb-0.5">
@@ -641,7 +692,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                                 <Cookie className="w-3 h-3 text-amber-500" />
                                 <span>Biscuit Cup</span>
                               </span>
-                              {isBiscuitSelected && <Check className="w-3 h-3 text-amber-200" />}
+                              {isBiscuitSelected && !isSoldOut && <Check className="w-3 h-3 text-amber-200" />}
                             </div>
                             <div className="text-[11px] font-black">
                               {formatPrice(scoop.biscuitCupPriceLKR, currency)}
@@ -667,8 +718,17 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                           Details
                         </button>
 
-                        {/* Order Button / Cancel Button */}
-                        {isOrdered ? (
+                        {/* Order Button / Cancel Button / Sold Out */}
+                        {isSoldOut ? (
+                          <button
+                            type="button"
+                            disabled
+                            className="flex-1 py-2 px-3 rounded-xl text-xs font-bold bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed flex items-center justify-center gap-1.5"
+                          >
+                            <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+                            <span>Sold Out</span>
+                          </button>
+                        ) : isOrdered ? (
                           <div className="flex-1 flex items-center gap-1.5">
                             <button
                               type="button"
@@ -730,6 +790,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
               {filteredCoffee.map((coffee) => {
+                const isSoldOut = coffee.isAvailable === false;
                 const inTray = trayItemMap[coffee.id];
                 const isOrdered = !!inTray;
 
@@ -738,7 +799,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                     key={coffee.id}
                     onClick={() => onSelectItem(coffee)}
                     className={`group/card bg-white rounded-2xl border transition-all p-3.5 sm:p-4 shadow-2xs flex flex-col justify-between cursor-pointer hover:border-[#8C102A]/50 hover:shadow-md ${
-                      isOrdered ? 'border-emerald-600/50 ring-2 ring-emerald-500/20' : 'border-[#E8DFC8]'
+                      isSoldOut ? 'opacity-90 border-red-200' : isOrdered ? 'border-emerald-600/50 ring-2 ring-emerald-500/20' : 'border-[#E8DFC8]'
                     }`}
                     role="button"
                     tabIndex={0}
@@ -755,14 +816,31 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                         <img
                           src={coffee.image}
                           alt={coffee.name}
-                          className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300"
+                          className={`w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300 ${
+                            isSoldOut ? 'grayscale-[30%] opacity-85' : ''
+                          }`}
                           loading="lazy"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
+                        {/* Sold Out Dark Overlay */}
+                        {isSoldOut && (
+                          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center z-20">
+                            <span className="px-3.5 py-1.5 rounded-full bg-red-600/95 text-white text-xs font-black uppercase tracking-wider shadow-lg border border-white/20 flex items-center gap-1.5">
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              <span>Sold Out</span>
+                            </span>
+                          </div>
+                        )}
+
                         {/* Top Badges */}
                         <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-10">
-                          {coffee.popular ? (
+                          {isSoldOut ? (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-red-600 text-white shadow-md flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" />
+                              <span>Sold Out</span>
+                            </span>
+                          ) : coffee.popular ? (
                             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-white shadow-xs">
                               Barista Special
                             </span>
@@ -840,8 +918,17 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                           Details
                         </button>
 
-                        {/* Order Button / Cancel Button */}
-                        {isOrdered ? (
+                        {/* Order Button / Cancel Button / Sold Out */}
+                        {isSoldOut ? (
+                          <button
+                            type="button"
+                            disabled
+                            className="flex-1 py-2 px-3 rounded-xl text-xs font-bold bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed flex items-center justify-center gap-1.5"
+                          >
+                            <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+                            <span>Sold Out</span>
+                          </button>
+                        ) : isOrdered ? (
                           <div className="flex-1 flex items-center gap-1.5">
                             <button
                               type="button"
@@ -912,6 +999,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
               {filteredCakes.map((cake) => {
+                const isSoldOut = cake.isAvailable === false;
                 const inTray = trayItemMap[cake.id];
                 const isOrdered = !!inTray;
 
@@ -920,7 +1008,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                     key={cake.id}
                     onClick={() => onSelectItem(cake)}
                     className={`group/card bg-white rounded-2xl border transition-all p-3.5 sm:p-4 shadow-2xs flex flex-col justify-between cursor-pointer hover:border-[#8C102A]/50 hover:shadow-md ${
-                      isOrdered ? 'border-emerald-600/50 ring-2 ring-emerald-500/20' : 'border-[#E8DFC8]'
+                      isSoldOut ? 'opacity-90 border-red-200' : isOrdered ? 'border-emerald-600/50 ring-2 ring-emerald-500/20' : 'border-[#E8DFC8]'
                     }`}
                     role="button"
                     tabIndex={0}
@@ -937,14 +1025,31 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                         <img
                           src={cake.image}
                           alt={cake.name}
-                          className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300"
+                          className={`w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300 ${
+                            isSoldOut ? 'grayscale-[30%] opacity-85' : ''
+                          }`}
                           loading="lazy"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
+                        {/* Sold Out Dark Overlay */}
+                        {isSoldOut && (
+                          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center z-20">
+                            <span className="px-3.5 py-1.5 rounded-full bg-red-600/95 text-white text-xs font-black uppercase tracking-wider shadow-lg border border-white/20 flex items-center gap-1.5">
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              <span>Sold Out</span>
+                            </span>
+                          </div>
+                        )}
+
                         {/* Top Badges */}
                         <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-10">
-                          {cake.popular ? (
+                          {isSoldOut ? (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-red-600 text-white shadow-md flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" />
+                              <span>Sold Out</span>
+                            </span>
+                          ) : cake.popular ? (
                             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#8C102A] text-white shadow-xs">
                               Bakery Bestseller
                             </span>
@@ -1022,8 +1127,17 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                           Details
                         </button>
 
-                        {/* Order Button / Cancel Button */}
-                        {isOrdered ? (
+                        {/* Order Button / Cancel Button / Sold Out */}
+                        {isSoldOut ? (
+                          <button
+                            type="button"
+                            disabled
+                            className="flex-1 py-2 px-3 rounded-xl text-xs font-bold bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed flex items-center justify-center gap-1.5"
+                          >
+                            <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+                            <span>Sold Out</span>
+                          </button>
+                        ) : isOrdered ? (
                           <div className="flex-1 flex items-center gap-1.5">
                             <button
                               type="button"

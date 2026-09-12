@@ -373,3 +373,48 @@ export function subscribeToUserOrders(
   }
 }
 
+/**
+ * Fetch all custom/updated menu items from Firestore
+ */
+export async function getAllMenuItemsFromFirestore(): Promise<any[]> {
+  try {
+    const q = query(collection(db, 'menu_items'));
+    const querySnapshot = await getDocs(q);
+    const items: any[] = [];
+    querySnapshot.forEach((d) => {
+      items.push({ ...d.data(), id: d.id });
+    });
+    return items;
+  } catch (err) {
+    console.warn('Could not fetch menu items from Firestore:', err);
+    return [];
+  }
+}
+
+/**
+ * Real-time subscription to all menu items in Firestore
+ */
+export function subscribeToMenuItems(callback: (items: any[]) => void): () => void {
+  try {
+    const q = query(collection(db, 'menu_items'));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const items: any[] = [];
+        snapshot.forEach((d) => {
+          items.push({ ...d.data(), id: d.id });
+        });
+        callback(items);
+      },
+      (err) => {
+        console.warn('Real-time menu subscription error:', err);
+      }
+    );
+    return unsubscribe;
+  } catch (err) {
+    console.warn('Failed to subscribe to menu items:', err);
+    return () => {};
+  }
+}
+
+
