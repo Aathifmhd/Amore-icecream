@@ -172,8 +172,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {/* Orders Button Desktop (with live active count indicator) */}
-            {onOpenOrdersModal && (
+            {/* Orders Button Desktop (with live active count indicator) - Only when signed in */}
+            {onOpenOrdersModal && currentUser && (
               <button
                 type="button"
                 onClick={onOpenOrdersModal}
@@ -208,8 +208,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               <CurrencyToggle currency={currency} onToggle={onToggleCurrency} />
             </div>
 
-            {/* Mobile Orders icon button */}
-            {onOpenOrdersModal && (
+            {/* Mobile Orders icon button - Only when signed in */}
+            {onOpenOrdersModal && currentUser && (
               <div className="sm:hidden flex items-center">
                 <button
                   type="button"
@@ -384,8 +384,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                 );
               })}
 
-              {/* Your Orders in Mobile Drawer */}
-              {onOpenOrdersModal && (
+              {/* Your Orders in Mobile Drawer - Only when signed in */}
+              {onOpenOrdersModal && currentUser && (
                 <button
                   type="button"
                   onClick={() => {

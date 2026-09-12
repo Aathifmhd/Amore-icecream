@@ -405,88 +405,117 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Clean Visual Progress Stepper */}
-                  <div className="px-5 py-3 bg-[#FAF7F2]/70 border-t border-b border-[#E8DFC8]/60">
-                    <div className="grid grid-cols-5 gap-1 relative">
-                      {/* Step 1: Placed */}
-                      <div className="flex flex-col items-center text-center">
-                        <div
-                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold mb-1 transition-colors ${
-                            stepNumber >= 1
-                              ? 'bg-[#8C102A] text-white'
-                              : 'bg-gray-200 text-gray-500'
-                          }`}
-                        >
-                          1
-                        </div>
-                        <span className={`text-[10px] ${stepNumber === 1 ? 'font-bold text-[#8C102A]' : 'text-slate-500'}`}>
-                          Placed
-                        </span>
-                      </div>
+                  {/* Visual Progress Stepper with Organic Breathing Status Circle */}
+                  <div className="px-4 sm:px-6 py-4 bg-[#FAF7F2]/90 border-t border-b border-[#E8DFC8]/70 relative overflow-hidden">
+                    {/* Connecting track running behind circles */}
+                    <div className="absolute top-[28px] sm:top-[30px] left-[10%] right-[10%] h-[2px] bg-[#E8DFC8] -z-0">
+                      <div
+                        className="h-full transition-all duration-700 ease-out rounded-full"
+                        style={{
+                          width: `${Math.min(100, Math.max(0, ((stepNumber - 1) / 4) * 100))}%`,
+                          backgroundColor:
+                            stepNumber >= 5 ? '#059669' : stepNumber >= 4 ? '#2563EB' : '#8C102A',
+                        }}
+                      />
+                    </div>
 
-                      {/* Step 2: Confirmed */}
-                      <div className="flex flex-col items-center text-center">
-                        <div
-                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold mb-1 transition-colors ${
-                            stepNumber >= 2
-                              ? 'bg-[#8C102A] text-white'
-                              : 'bg-gray-200 text-gray-500'
-                          }`}
-                        >
-                          2
-                        </div>
-                        <span className={`text-[10px] ${stepNumber === 2 ? 'font-bold text-[#8C102A]' : 'text-slate-500'}`}>
-                          Confirmed
-                        </span>
-                      </div>
+                    {/* 5 Progress Step Nodes */}
+                    <div className="grid grid-cols-5 gap-1 relative z-10">
+                      {[
+                        {
+                          num: 1,
+                          label: 'Placed',
+                          activeColor: '#8C102A',
+                          breatheClass: 'animate-breathe bg-[#8C102A] text-white ring-4 ring-[#8C102A]/25',
+                          activeTextClass: 'text-[#8C102A] font-extrabold',
+                          activeIcon: '1',
+                        },
+                        {
+                          num: 2,
+                          label: 'Confirmed',
+                          activeColor: '#8C102A',
+                          breatheClass: 'animate-breathe bg-[#8C102A] text-white ring-4 ring-[#8C102A]/25',
+                          activeTextClass: 'text-[#8C102A] font-extrabold',
+                          activeIcon: '2',
+                        },
+                        {
+                          num: 3,
+                          label: 'Kitchen',
+                          activeColor: '#8C102A',
+                          breatheClass: 'animate-breathe bg-[#8C102A] text-white ring-4 ring-[#8C102A]/25',
+                          activeTextClass: 'text-[#8C102A] font-extrabold',
+                          activeIcon: <Sparkles className="w-3.5 h-3.5 text-amber-200" />,
+                        },
+                        {
+                          num: 4,
+                          label: order.orderType === 'delivery' ? 'On the Way' : 'Ready',
+                          activeColor: '#2563EB',
+                          breatheClass: 'animate-breathe-blue bg-blue-600 text-white ring-4 ring-blue-600/25',
+                          activeTextClass: 'text-blue-700 font-extrabold',
+                          activeIcon: <Truck className="w-3.5 h-3.5" />,
+                        },
+                        {
+                          num: 5,
+                          label: 'Delivered',
+                          activeColor: '#059669',
+                          breatheClass: 'animate-breathe-green bg-emerald-600 text-white ring-4 ring-emerald-600/25',
+                          activeTextClass: 'text-emerald-700 font-extrabold',
+                          activeIcon: <Check className="w-3.5 h-3.5 stroke-[3]" />,
+                        },
+                      ].map((s) => {
+                        const isPast = stepNumber > s.num;
+                        const isCurrent = stepNumber === s.num;
 
-                      {/* Step 3: Kitchen */}
-                      <div className="flex flex-col items-center text-center">
-                        <div
-                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold mb-1 transition-colors ${
-                            stepNumber >= 3
-                              ? 'bg-[#8C102A] text-white'
-                              : 'bg-gray-200 text-gray-500'
-                          }`}
-                        >
-                          3
-                        </div>
-                        <span className={`text-[10px] ${stepNumber === 3 ? 'font-bold text-[#8C102A]' : 'text-slate-500'}`}>
-                          Kitchen
-                        </span>
-                      </div>
-
-                      {/* Step 4: On the Way */}
-                      <div className="flex flex-col items-center text-center">
-                        <div
-                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold mb-1 transition-colors ${
-                            stepNumber >= 4
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-gray-200 text-gray-500'
-                          }`}
-                        >
-                          4
-                        </div>
-                        <span className={`text-[10px] ${stepNumber === 4 ? 'font-bold text-blue-700' : 'text-slate-500'}`}>
-                          {order.orderType === 'delivery' ? 'On the Way' : 'Ready'}
-                        </span>
-                      </div>
-
-                      {/* Step 5: Delivered */}
-                      <div className="flex flex-col items-center text-center">
-                        <div
-                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold mb-1 transition-colors ${
-                            stepNumber >= 5
-                              ? 'bg-emerald-600 text-white'
-                              : 'bg-gray-200 text-gray-500'
-                          }`}
-                        >
-                          5
-                        </div>
-                        <span className={`text-[10px] ${stepNumber === 5 ? 'font-bold text-emerald-700' : 'text-slate-500'}`}>
-                          Delivered
-                        </span>
-                      </div>
+                        return (
+                          <div key={s.num} className="flex flex-col items-center text-center relative">
+                            <div className="relative mb-1.5">
+                              {/* Glowing breathing ambient halo ring on active step */}
+                              {isCurrent && (
+                                <span
+                                  className="absolute -inset-1.5 rounded-full opacity-40 animate-ping -z-10 pointer-events-none"
+                                  style={{ backgroundColor: s.activeColor }}
+                                />
+                              )}
+                              <div
+                                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-[11px] font-bold transition-all duration-300 select-none ${
+                                  isPast
+                                    ? 'bg-[#8C102A] text-white shadow-xs'
+                                    : isCurrent
+                                    ? `${s.breatheClass} shadow-md`
+                                    : 'bg-white text-[#9C8A80] border border-[#D9CBB7]'
+                                }`}
+                              >
+                                {isPast ? (
+                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                ) : isCurrent ? (
+                                  s.activeIcon
+                                ) : (
+                                  <span className="font-semibold">{s.num}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-center gap-1">
+                              {isCurrent && (
+                                <span
+                                  className="w-1.5 h-1.5 rounded-full animate-pulse"
+                                  style={{ backgroundColor: s.activeColor }}
+                                />
+                              )}
+                              <span
+                                className={`text-[10px] sm:text-[11px] transition-colors leading-tight ${
+                                  isCurrent
+                                    ? s.activeTextClass
+                                    : isPast
+                                    ? 'font-medium text-[#4A3C34]'
+                                    : 'text-[#9C8A80]'
+                                }`}
+                              >
+                                {s.label}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -691,14 +720,34 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                   )}
 
                   {(isConfirmed || isPreparing) && (
-                    <div className="p-3 sm:px-5 bg-emerald-50/70 border-b border-emerald-200/80 flex items-center justify-between gap-2 text-xs text-emerald-950">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span>
-                          {isPreparing
-                            ? 'Our artisans are churning and packing your fresh scoops!'
-                            : 'Order confirmed! Heading to kitchen preparation.'}
-                        </span>
+                    <div className="p-3.5 sm:px-5 bg-emerald-50/70 border-b border-emerald-200/80 flex items-center justify-between gap-2 text-xs text-emerald-950">
+                      <div className="flex items-center gap-3">
+                        <div className="relative shrink-0">
+                          <div
+                            className={`w-8 h-8 rounded-full flex items-center justify-center shadow-xs transition-all ${
+                              isPreparing
+                                ? 'bg-[#8C102A] text-white animate-breathe ring-2 ring-[#8C102A]/20'
+                                : 'bg-emerald-600 text-white'
+                            }`}
+                          >
+                            <Sparkles className="w-4 h-4 text-amber-200" />
+                          </div>
+                        </div>
+                        <div>
+                          <span className="font-bold text-[#241A18] block text-xs flex items-center gap-1.5">
+                            {isPreparing && (
+                              <span className="w-2 h-2 rounded-full bg-[#8C102A] animate-pulse inline-block" />
+                            )}
+                            {isPreparing
+                              ? 'Scooping & Churning Fresh Gelato'
+                              : 'Order Confirmed & Payment Captured'}
+                          </span>
+                          <span className="text-[11px] text-[#5D4E46] block mt-0.5">
+                            {isPreparing
+                              ? 'Our parlour artisans are crafting your custom flavours and biscuit cones right now.'
+                              : 'Your order has been approved by the parlour and sent to the preparation queue.'}
+                          </span>
+                        </div>
                       </div>
                       <a
                         href={`https://wa.me/${branch.whatsapp.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
@@ -715,13 +764,17 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                   )}
 
                   {isOnTheWay && (
-                    <div className="p-3.5 sm:px-5 bg-sky-50 border-b border-sky-200 flex items-center justify-between gap-2 text-xs text-sky-950 animate-fadeIn">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                          <Truck className="w-4 h-4" />
+                    <div className="p-3.5 sm:px-5 bg-sky-50/90 border-b border-sky-200/90 flex items-center justify-between gap-2 text-xs text-sky-950 animate-fadeIn">
+                      <div className="flex items-center gap-3">
+                        <div className="relative shrink-0">
+                          <span className="absolute -inset-1 rounded-full bg-blue-500/25 animate-pulse-glow -z-0" />
+                          <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-xs relative z-10 animate-breathe-blue ring-2 ring-blue-500/20">
+                            <Truck className="w-4 h-4" />
+                          </div>
                         </div>
                         <div>
-                          <span className="font-bold text-sky-950 block text-xs">
+                          <span className="font-bold text-sky-950 block text-xs flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse inline-block" />
                             {order.orderType === 'delivery'
                               ? 'Delivery partner on the way'
                               : 'Ready for pickup at parlour'}

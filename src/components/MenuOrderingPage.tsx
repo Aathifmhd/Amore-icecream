@@ -250,8 +250,8 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
               </button>
             )}
 
-            {/* Ongoing Orders Button */}
-            {onOpenOrdersModal && (
+            {/* Ongoing Orders Button - Only when signed in */}
+            {onOpenOrdersModal && currentUser && (
               <button
                 type="button"
                 onClick={onOpenOrdersModal}
