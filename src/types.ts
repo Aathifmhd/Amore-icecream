@@ -135,5 +135,8 @@ export interface OrderRecord {
   confirmedAt?: string;
   preparingAt?: string;
   deliveredAt?: string;
+  isGracePeriodPaused?: boolean;
+  gracePeriodRemainingSeconds?: number;
+  gracePeriodPausedAt?: string;
 }
 

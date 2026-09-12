@@ -8,6 +8,8 @@ import {
   generateInconvenienceEmail,
   syncUserOrdersFromFirestore,
   mergeOrdersIntoStorage,
+  pauseOrderGracePeriod,
+  resumeOrderGracePeriod,
 } from '../utils/orderStorage';
 import { subscribeToUserOrders } from '../firebase';
 import { formatPrice } from '../utils/currency';
@@ -57,6 +59,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
   onBrowseMenu,
 }) => {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const [activeTab, setActiveTab] = useState<'ongoing' | 'history'>('ongoing');
   const [now, setNow] = useState<number>(Date.now());
   const [expandedOrderRef, setExpandedOrderRef] = useState<string | null>(highlightOrderRef || null);
 
@@ -84,12 +87,18 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
     const list = getUserOrdersList(currentUser?.uid);
     setOrders(list);
 
+    // If highlightOrderRef is supplied, auto expand that order
     if (highlightOrderRef) {
-      setExpandedOrderRef(highlightOrderRef);
+      const target = list.find((o) => o.orderReference === highlightOrderRef);
+      if (target) {
+        setExpandedOrderRef(highlightOrderRef);
+      }
     } else if (list.length > 0 && !expandedOrderRef) {
       const activeList = list.filter((o) => o.status !== 'cancelled' && o.status !== 'delivered');
       if (activeList.length > 0) {
         setExpandedOrderRef(activeList[0].orderReference);
+      } else {
+        setExpandedOrderRef(list[0].orderReference);
       }
     }
   };
@@ -160,15 +169,20 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
 
   if (!isOpen) return null;
 
+  // Split orders
   // Strictly ongoing active orders only - Do not show past or cancelled order history
   const ongoingOrders = orders.filter((o) => o.status !== 'cancelled' && o.status !== 'delivered');
+  const historyOrders = orders.filter((o) => o.status === 'cancelled' || o.status === 'delivered');
+  const displayedOrders = activeTab === 'ongoing' ? ongoingOrders : historyOrders;
 
   // Calculate remaining seconds in 2-minute (120s) grace period
-  const getRemainingSeconds = (createdAt: string): number => {
-    const createdTime = new Date(createdAt).getTime();
+  const getRemainingSeconds = (order: OrderRecord): number => {
+    if (order.isGracePeriodPaused) {
+      return Math.max(0, order.gracePeriodRemainingSeconds ?? 0);
+    }
+    const createdTime = new Date(order.createdAt).getTime();
     const elapsedSeconds = Math.floor((now - createdTime) / 1000);
-    const remaining = 120 - elapsedSeconds;
-    return Math.max(0, remaining);
+    return Math.max(0, 120 - elapsedSeconds);
   };
 
   const formatCountdown = (seconds: number): string => {
@@ -177,29 +191,47 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Start editing
+  // Start editing and PAUSE countdown
   const handleStartEdit = (order: OrderRecord) => {
+    const currentRemaining = getRemainingSeconds(order);
+    pauseOrderGracePeriod(order.orderReference, currentRemaining);
     setEditingRef(order.orderReference);
     setEditAddress(order.deliveryAddress || '');
     setEditCity(order.city || '');
     setEditPhone(order.contactNumber || '');
     setEditNote(order.specialNote || '');
     setEditCoords(order.deliveryCoordinates);
+    refreshOrders();
   };
 
-  // Save edited delivery details
-  const handleSaveEdit = (orderRef: string) => {
+  // Save edited delivery details and RESUME countdown
+  const handleSaveEdit = (order: OrderRecord) => {
     if (!editAddress.trim()) {
       alert('Please enter your delivery street address.');
       return;
     }
-    updateOrderDelivery(orderRef, {
+    const remaining = order.isGracePeriodPaused
+      ? (order.gracePeriodRemainingSeconds ?? 0)
+      : getRemainingSeconds(order);
+
+    resumeOrderGracePeriod(order.orderReference, remaining, {
       deliveryAddress: editAddress.trim(),
       city: editCity.trim(),
       contactNumber: editPhone.trim(),
       specialNote: editNote.trim(),
       deliveryCoordinates: editCoords,
     });
+    setEditingRef(null);
+    refreshOrders();
+  };
+
+  // Discard editing and RESUME countdown
+  const handleCancelEdit = (order: OrderRecord) => {
+    const remaining = order.isGracePeriodPaused
+      ? (order.gracePeriodRemainingSeconds ?? 0)
+      : getRemainingSeconds(order);
+
+    resumeOrderGracePeriod(order.orderReference, remaining);
     setEditingRef(null);
     refreshOrders();
   };
@@ -304,8 +336,8 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
             </div>
           ) : (
             ongoingOrders.map((order) => {
-              const remainingSeconds = getRemainingSeconds(order.createdAt);
-              const inGracePeriod = remainingSeconds > 0 && order.status !== 'cancelled' && order.status === 'pending_confirmation';
+              const remainingSeconds = getRemainingSeconds(order);
+              const inGracePeriod = (remainingSeconds > 0 || !!order.isGracePeriodPaused) && order.status === 'pending_confirmation';
               const isCancelled = order.status === 'cancelled';
               const isConfirmed = order.status === 'confirmed';
               const isPreparing = order.status === 'preparing';
@@ -373,12 +405,17 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                             </span>
                           )}
 
-                          {inGracePeriod && (
+                          {order.isGracePeriodPaused ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                              <Clock className="w-2.5 h-2.5 text-amber-700" />
+                              Paused ({formatCountdown(remainingSeconds)})
+                            </span>
+                          ) : inGracePeriod ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-900 border border-orange-300 animate-pulse">
                               <Clock className="w-2.5 h-2.5 text-orange-700" />
                               Grace Period ({formatCountdown(remainingSeconds)})
                             </span>
-                          )}
+                          ) : null}
                         </div>
 
                         <span className="text-[11px] text-[#7A6458] mt-0.5">
@@ -413,15 +450,19 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                     <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200 p-3 sm:px-4">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-                            <Clock className="w-3.5 h-3.5" />
+                          <div className={`w-7 h-7 rounded-full ${order.isGracePeriodPaused ? 'bg-amber-600' : 'bg-amber-500'} text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs`}>
+                            <Clock className={`w-3.5 h-3.5 ${order.isGracePeriodPaused ? '' : 'animate-spin'}`} />
                           </div>
                           <div>
                             <p className="text-xs font-bold text-amber-950">
-                              {formatCountdown(remainingSeconds)} remaining to edit address or cancel
+                              {order.isGracePeriodPaused
+                                ? `⏸️ Countdown Paused (${formatCountdown(remainingSeconds)}) while editing`
+                                : `${formatCountdown(remainingSeconds)} remaining to edit address or cancel`}
                             </p>
                             <p className="text-[11px] text-amber-800">
-                              Cancelling now immediately releases your order and any card authorization.
+                              {order.isGracePeriodPaused
+                                ? 'Timer is paused while you update your details. It will resume after saving.'
+                                : 'Cancelling now immediately releases your order and any card authorization.'}
                             </p>
                           </div>
                         </div>
@@ -459,7 +500,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                       {/* Progress Bar */}
                       <div className="w-full h-1.5 bg-amber-200 rounded-full overflow-hidden mt-2.5">
                         <div
-                          className="h-full bg-amber-500 transition-all duration-1000 ease-linear rounded-full"
+                          className={`h-full ${order.isGracePeriodPaused ? 'bg-amber-600' : 'bg-amber-500'} transition-all duration-1000 ease-linear rounded-full`}
                           style={{ width: `${(remainingSeconds / 120) * 100}%` }}
                         />
                       </div>
@@ -563,8 +604,8 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                         </span>
                         <button
                           type="button"
-                          onClick={() => setEditingRef(null)}
-                          className="text-xs text-slate-500 hover:text-slate-800 font-bold"
+                          onClick={() => handleCancelEdit(order)}
+                          className="text-xs text-slate-500 hover:text-slate-800 font-bold cursor-pointer"
                         >
                           Cancel
                         </button>
@@ -657,14 +698,14 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                       <div className="flex justify-end gap-2 pt-1">
                         <button
                           type="button"
-                          onClick={() => setEditingRef(null)}
+                          onClick={() => handleCancelEdit(order)}
                           className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
                         >
                           Discard
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleSaveEdit(order.orderReference)}
+                          onClick={() => handleSaveEdit(order)}
                           className="px-4 py-1.5 rounded-lg bg-[#8C102A] hover:bg-[#A31634] text-white text-xs font-bold shadow-xs cursor-pointer"
                         >
                           Save Changes

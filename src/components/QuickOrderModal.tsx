@@ -719,6 +719,14 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-[#5C4D44]">
                       Street Address & City <span className="text-[#8C102A]">*</span>
                     </label>
+                    <button
+                      type="button"
+                      onClick={handleUseCurrentLocation}
+                      disabled={isLocating}
+                      className="text-[10px] font-bold text-[#8C102A] hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>{isLocating ? 'Locating...' : 'Auto-detect location'}</span>
+                    </button>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"

@@ -148,8 +148,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  const getRemainingGraceSeconds = (createdAt: string): number => {
-    const createdTime = new Date(createdAt).getTime();
+  const getRemainingGraceSeconds = (order: OrderRecord): number => {
+    if (order.isGracePeriodPaused) {
+      return Math.max(0, order.gracePeriodRemainingSeconds ?? 0);
+    }
+    const createdTime = new Date(order.createdAt).getTime();
     const elapsedSeconds = Math.floor((now - createdTime) / 1000);
     return Math.max(0, 120 - elapsedSeconds);
   };
@@ -672,8 +675,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         const isDelivered = order.status === 'delivered';
                         const isPreparing = order.status === 'preparing';
                         const isConfirmed = order.status === 'confirmed';
-                        const remainingSeconds = getRemainingGraceSeconds(order.createdAt);
-                        const inGracePeriod = remainingSeconds > 0 && order.status === 'pending_confirmation';
+                        const remainingSeconds = getRemainingGraceSeconds(order);
+                        const inGracePeriod = (remainingSeconds > 0 || !!order.isGracePeriodPaused) && order.status === 'pending_confirmation';
 
                         return (
                           <tr
@@ -794,7 +797,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             {/* Stage & Status Display */}
                             <td className="px-4 py-3 align-top">
                               {order.status === 'pending_confirmation' ? (
-                                inGracePeriod ? (
+                                order.isGracePeriodPaused ? (
+                                  <div className="space-y-1">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                      <Clock className="w-3 h-3 text-amber-700" />
+                                      Paused ({formatCountdown(remainingSeconds)})
+                                    </span>
+                                    <span className="text-[10px] text-amber-900/80 block font-medium">
+                                      Customer editing address
+                                    </span>
+                                  </div>
+                                ) : inGracePeriod ? (
                                   <div className="space-y-1">
                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-orange-100 text-orange-900 border border-orange-300 animate-pulse">
                                       <Clock className="w-3 h-3 text-orange-700" />
@@ -829,10 +842,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 <div className="space-y-0.5">
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-purple-100 text-purple-900 border border-purple-300">
                                     <Sparkles className="w-3 h-3 text-purple-700" />
-                                    In Process
+                                    In Kitchen (Process)
                                   </span>
                                   <span className="text-[10px] text-[#7A6458] block font-medium">
-                                    In Kitchen (Preparing)
+                                    Scooping & Churning
                                   </span>
                                 </div>
                               ) : order.status === 'delivered' ? (
@@ -874,7 +887,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             {/* Lifecycle Action Buttons */}
                             <td className="px-4 py-3 align-top">
                               {order.status === 'pending_confirmation' ? (
-                                inGracePeriod ? (
+                                order.isGracePeriodPaused ? (
+                                  /* COUNTDOWN PAUSED: Customer is editing address -> DO NOT SHOW CONFIRM OR CANCEL BUTTONS */
+                                  <div className="flex flex-col gap-1 min-w-[150px] p-2.5 rounded-xl bg-amber-50/90 border border-amber-300 text-left shadow-2xs">
+                                    <div className="flex items-center gap-1.5 text-amber-950 font-bold text-[11px]">
+                                      <Clock className="w-3.5 h-3.5 text-amber-700" />
+                                      <span>Timer Paused: {formatCountdown(remainingSeconds)}</span>
+                                    </div>
+                                    <p className="text-[10px] text-amber-800 leading-tight">
+                                      Customer is editing address. Actions unlock once saved and countdown completes.
+                                    </p>
+                                  </div>
+                                ) : inGracePeriod ? (
                                   /* COUNTDOWN ACTIVE: DO NOT SHOW CONFIRM OR CANCEL BUTTONS */
                                   <div className="flex flex-col gap-1 min-w-[150px] p-2.5 rounded-xl bg-amber-50/90 border border-amber-300 text-left shadow-2xs">
                                     <div className="flex items-center gap-1.5 text-amber-950 font-bold text-[11px]">

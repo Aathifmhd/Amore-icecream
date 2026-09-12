@@ -194,6 +194,49 @@ export function updateOrderDelivery(
 }
 
 /**
+ * Pauses the 2-minute countdown for an ongoing order when customer clicks "Edit Address"
+ */
+export function pauseOrderGracePeriod(
+  orderReference: string,
+  remainingSeconds: number
+): OrderRecord | null {
+  return updateOrder(orderReference, {
+    isGracePeriodPaused: true,
+    gracePeriodRemainingSeconds: Math.max(0, remainingSeconds),
+    gracePeriodPausedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+/**
+ * Resumes the countdown when customer clicks "Save Changes" (or discards/finishes editing)
+ */
+export function resumeOrderGracePeriod(
+  orderReference: string,
+  remainingSeconds: number,
+  deliveryDetails?: {
+    deliveryAddress?: string;
+    city?: string;
+    contactNumber?: string;
+    specialNote?: string;
+    deliveryCoordinates?: { lat: number; lng: number };
+  }
+): OrderRecord | null {
+  // To make the countdown resume naturally from remainingSeconds,
+  // we adjust createdAt so elapsed time = (120 - remainingSeconds) seconds.
+  const safeRemaining = Math.max(0, remainingSeconds);
+  const newCreatedAt = new Date(Date.now() - (120 - safeRemaining) * 1000).toISOString();
+  return updateOrder(orderReference, {
+    ...(deliveryDetails || {}),
+    createdAt: newCreatedAt,
+    isGracePeriodPaused: false,
+    gracePeriodRemainingSeconds: undefined,
+    gracePeriodPausedAt: undefined,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+/**
  * Merges a list of orders (e.g. from Cloud Firestore) into local storage
  */
 export function mergeOrdersIntoStorage(incomingOrders: OrderRecord[]): void {
@@ -380,7 +423,7 @@ Warm regards,
 The Amore Parlour Team
 zenatiqcodes@gmail.com
 Amore Speciality Ice Cream, Coffee & Cakes
-${order.branchName}`;
+${order.branchName} • Hotline: +94 81 230 4567`;
 
   return { subject, body };
 }
