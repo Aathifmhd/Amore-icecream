@@ -3,10 +3,13 @@ import {
   saveOrderToFirestore,
   updateOrderInFirestore,
   deleteOrderFromFirestore,
+  getAllOrdersFromFirestore,
+  getUserOrdersFromFirestore,
   auth,
 } from '../firebase';
 
 const STORAGE_KEY = 'amore_orders_v1';
+const SESSION_ORDERS_KEY = 'amore_session_orders_v1';
 export const ORDERS_UPDATED_EVENT = 'amore_orders_updated';
 
 export function notifyOrdersUpdated(): void {
@@ -15,11 +18,47 @@ export function notifyOrdersUpdated(): void {
   }
 }
 
+/**
+ * Retrieves the order references placed during the current browser session
+ */
+export function getSessionOrderRefs(): string[] {
+  try {
+    const raw = sessionStorage.getItem(SESSION_ORDERS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Records an order reference to the current browser session
+ */
+export function recordSessionOrderRef(ref: string): void {
+  try {
+    const refs = getSessionOrderRefs();
+    if (!refs.includes(ref)) {
+      refs.push(ref);
+      sessionStorage.setItem(SESSION_ORDERS_KEY, JSON.stringify(refs));
+    }
+  } catch (err) {
+    console.warn('Could not record session order ref:', err);
+  }
+}
+
 export function getAllOrders(): Record<string, OrderRecord> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return {};
-    return JSON.parse(raw);
+    const parsed: Record<string, OrderRecord> = JSON.parse(raw);
+
+    // Completely purge legacy test order AMO-3899 from local storage and firestore
+    if (parsed['AMO-3899']) {
+      delete parsed['AMO-3899'];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+      deleteOrderFromFirestore('AMO-3899').catch(() => {});
+    }
+
+    return parsed;
   } catch (err) {
     console.error('Failed to load orders from localStorage:', err);
     return {};
@@ -28,6 +67,9 @@ export function getAllOrders(): Record<string, OrderRecord> {
 
 export function saveOrder(order: OrderRecord): void {
   try {
+    // Record in current session so this user can always track their order
+    recordSessionOrderRef(order.orderReference);
+
     const all = getAllOrders();
     all[order.orderReference] = order;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
@@ -38,7 +80,7 @@ export function saveOrder(order: OrderRecord): void {
 
   // Asynchronously persist to Cloud Firestore
   try {
-    const currentUid = auth.currentUser?.uid;
+    const currentUid = auth.currentUser?.uid || order.userId;
     saveOrderToFirestore(order, currentUid);
   } catch (e) {
     console.warn('Firestore background save error:', e);
@@ -83,14 +125,32 @@ export function getOrder(orderReference: string): OrderRecord | null {
 }
 
 /**
- * Returns a list of all orders sorted newest to oldest.
- * Optionally filters by userId.
+ * Returns a list of orders for the current user.
+ * - Authenticated users see only their own orders (or orders created in this browser session).
+ * - Guest users see ONLY orders created in this browser session.
+ * - AMO-3899 or other users' orders are NEVER returned.
  */
 export function getUserOrdersList(userId?: string | null): OrderRecord[] {
   try {
     const all = getAllOrders();
     const list = Object.values(all);
-    const filtered = userId ? list.filter((o) => !o.userId || o.userId === userId) : list;
+    const sessionRefs = getSessionOrderRefs();
+
+    let filtered: OrderRecord[] = [];
+    if (userId && userId.trim()) {
+      // Authenticated user: must match user ID or be created in this browser session
+      filtered = list.filter(
+        (o) =>
+          o.orderReference !== 'AMO-3899' &&
+          (o.userId === userId || sessionRefs.includes(o.orderReference))
+      );
+    } else {
+      // Unauthenticated visitor: ONLY orders placed in this specific browser session
+      filtered = list.filter(
+        (o) => o.orderReference !== 'AMO-3899' && sessionRefs.includes(o.orderReference)
+      );
+    }
+
     return filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   } catch (err) {
     console.error('Failed to get user orders list:', err);
@@ -133,12 +193,74 @@ export function updateOrderDelivery(
 }
 
 /**
+ * Merges a list of orders (e.g. from Cloud Firestore) into local storage
+ */
+export function mergeOrdersIntoStorage(incomingOrders: OrderRecord[]): void {
+  try {
+    const all = getAllOrders();
+    let hasChanges = false;
+
+    for (const order of incomingOrders) {
+      if (!order || !order.orderReference || order.orderReference === 'AMO-3899') continue;
+      const existing = all[order.orderReference];
+      if (
+        !existing ||
+        new Date(order.updatedAt || order.createdAt).getTime() >=
+          new Date(existing.updatedAt || existing.createdAt).getTime()
+      ) {
+        all[order.orderReference] = order;
+        hasChanges = true;
+      }
+    }
+
+    if (hasChanges) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+      notifyOrdersUpdated();
+    }
+  } catch (err) {
+    console.warn('Failed to merge orders into storage:', err);
+  }
+}
+
+/**
+ * Admin: Asynchronously sync all orders from Cloud Firestore into local storage
+ */
+export async function syncOrdersFromFirestore(): Promise<OrderRecord[]> {
+  try {
+    const cloudOrders = await getAllOrdersFromFirestore();
+    if (cloudOrders && cloudOrders.length > 0) {
+      mergeOrdersIntoStorage(cloudOrders);
+    }
+    return getAllOrdersAdmin();
+  } catch (err) {
+    console.warn('Failed to sync orders from Firestore:', err);
+    return getAllOrdersAdmin();
+  }
+}
+
+/**
+ * Customer: Sync orders for a specific user from Cloud Firestore
+ */
+export async function syncUserOrdersFromFirestore(userId: string): Promise<OrderRecord[]> {
+  try {
+    const cloudOrders = await getUserOrdersFromFirestore(userId);
+    if (cloudOrders && cloudOrders.length > 0) {
+      mergeOrdersIntoStorage(cloudOrders);
+    }
+    return getUserOrdersList(userId);
+  } catch (err) {
+    console.warn('Failed to sync user orders from Firestore:', err);
+    return getUserOrdersList(userId);
+  }
+}
+
+/**
  * Admin: Get all orders across all users sorted newest first
  */
 export function getAllOrdersAdmin(): OrderRecord[] {
   try {
     const all = getAllOrders();
-    const list = Object.values(all);
+    const list = Object.values(all).filter((o) => o.orderReference !== 'AMO-3899');
     return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   } catch (err) {
     console.error('Failed to get all orders for admin:', err);

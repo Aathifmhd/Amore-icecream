@@ -322,12 +322,12 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
         deliveryFeeLKR,
         grandTotalLKR,
         currency,
-        status: paymentMethod === 'card' ? 'paid' : 'confirmed',
-        paymentMethod: paymentMethod === 'card' ? 'card' : 'cod',
-        paidAt: paymentMethod === 'card' ? new Date().toISOString() : undefined,
+        status: 'pending_confirmation',
+        paymentMethod: paymentMethod === 'card' ? 'card' : 'cash_on_delivery',
+        paidAt: undefined,
         cardLast4: paymentMethod === 'card' ? cleanCard.slice(-4) : undefined,
         cardBrand: paymentMethod === 'card' ? getCardBrand(cardNumber) : undefined,
-        userId: currentUser.uid,
+        userId: currentUser?.uid,
       };
 
       // Persist in local storage and Firestore

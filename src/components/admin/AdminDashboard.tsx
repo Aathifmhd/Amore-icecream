@@ -13,7 +13,10 @@ import {
   adminCancelOrderWithReason,
   generateInconvenienceEmail,
   ORDERS_UPDATED_EVENT,
+  syncOrdersFromFirestore,
+  mergeOrdersIntoStorage,
 } from '../../utils/orderStorage';
+import { subscribeToAllOrders } from '../../firebase';
 import {
   getAllGelatoFlavours,
   getAllCoffeeItems,
@@ -141,19 +144,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setScoops(getAllGelatoFlavours());
     setCoffeeItems(getAllCoffeeItems());
     setCakeItems(getAllCakeItems());
+
+    // Asynchronously sync from Cloud Firestore so orders from all devices appear
+    syncOrdersFromFirestore().then((synced) => {
+      if (synced && synced.length > 0) {
+        setOrders(synced);
+      }
+    });
   };
 
   useEffect(() => {
+    // 1. Initial render from local cache
     refreshAllData();
 
-    // Listen for live orders changes (e.g., customer places order or customer cancels order)
+    // 2. Real-time Cloud Firestore subscription for all orders across all devices
+    const unsubscribeFirestore = subscribeToAllOrders((cloudOrders) => {
+      mergeOrdersIntoStorage(cloudOrders);
+      setOrders(getAllOrdersAdmin());
+    });
+
+    // 3. Listen for local orders changes (e.g. storage events or local actions)
     const handleOrdersUpdated = () => {
       setOrders(getAllOrdersAdmin());
     };
     window.addEventListener(ORDERS_UPDATED_EVENT, handleOrdersUpdated);
     window.addEventListener('storage', handleOrdersUpdated);
 
-    // Listen for external menu changes
+    // 4. Listen for external menu changes
     const handleMenuUpdated = () => {
       setScoops(getAllGelatoFlavours());
       setCoffeeItems(getAllCoffeeItems());
@@ -162,6 +179,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     window.addEventListener(MENU_UPDATED_EVENT, handleMenuUpdated);
 
     return () => {
+      unsubscribeFirestore();
       window.removeEventListener(ORDERS_UPDATED_EVENT, handleOrdersUpdated);
       window.removeEventListener('storage', handleOrdersUpdated);
       window.removeEventListener(MENU_UPDATED_EVENT, handleMenuUpdated);

@@ -118,6 +118,7 @@ testConnection();
 export async function saveOrderToFirestore(order: OrderRecord, userId?: string): Promise<boolean> {
   const path = `orders/${order.orderReference}`;
   try {
+    const effectiveUid = userId || order.userId || auth.currentUser?.uid;
     const payload: Record<string, unknown> = {
       orderReference: order.orderReference,
       createdAt: order.createdAt || new Date().toISOString(),
@@ -144,7 +145,14 @@ export async function saveOrderToFirestore(order: OrderRecord, userId?: string):
     if (order.paidAt) payload.paidAt = order.paidAt;
     if (order.cardLast4) payload.cardLast4 = order.cardLast4;
     if (order.cardBrand) payload.cardBrand = order.cardBrand;
-    if (userId) payload.userId = userId;
+    if (effectiveUid) payload.userId = effectiveUid;
+    if (order.cancelledBy) payload.cancelledBy = order.cancelledBy;
+    if (order.cancellationReason) payload.cancellationReason = order.cancellationReason;
+    if (order.inconvenienceEmailContent) payload.inconvenienceEmailContent = order.inconvenienceEmailContent;
+    if (order.confirmedAt) payload.confirmedAt = order.confirmedAt;
+    if (order.preparingAt) payload.preparingAt = order.preparingAt;
+    if (order.deliveredAt) payload.deliveredAt = order.deliveredAt;
+    if (order.cancelledAt) payload.cancelledAt = order.cancelledAt;
 
     await setDoc(doc(db, 'orders', order.orderReference), payload);
     return true;
@@ -182,7 +190,7 @@ export async function getOrderFromFirestore(orderReference: string): Promise<Ord
 }
 
 /**
- * Update an order in Firestore (e.g. mark as paid, confirm status)
+ * Update an order in Firestore (e.g. mark as paid, confirm status, cancel)
  */
 export async function updateOrderInFirestore(
   orderReference: string,
@@ -197,6 +205,17 @@ export async function updateOrderInFirestore(
     if (updates.specialNote !== undefined) allowedUpdates.specialNote = updates.specialNote;
     if (updates.cardLast4 !== undefined) allowedUpdates.cardLast4 = updates.cardLast4;
     if (updates.cardBrand !== undefined) allowedUpdates.cardBrand = updates.cardBrand;
+    if (updates.cancelledBy !== undefined) allowedUpdates.cancelledBy = updates.cancelledBy;
+    if (updates.cancellationReason !== undefined) allowedUpdates.cancellationReason = updates.cancellationReason;
+    if (updates.inconvenienceEmailContent !== undefined) allowedUpdates.inconvenienceEmailContent = updates.inconvenienceEmailContent;
+    if (updates.confirmedAt !== undefined) allowedUpdates.confirmedAt = updates.confirmedAt;
+    if (updates.preparingAt !== undefined) allowedUpdates.preparingAt = updates.preparingAt;
+    if (updates.deliveredAt !== undefined) allowedUpdates.deliveredAt = updates.deliveredAt;
+    if (updates.cancelledAt !== undefined) allowedUpdates.cancelledAt = updates.cancelledAt;
+    if (updates.deliveryAddress !== undefined) allowedUpdates.deliveryAddress = updates.deliveryAddress;
+    if (updates.city !== undefined) allowedUpdates.city = updates.city;
+    if (updates.contactNumber !== undefined) allowedUpdates.contactNumber = updates.contactNumber;
+    if (updates.updatedAt !== undefined) allowedUpdates.updatedAt = updates.updatedAt;
 
     await updateDoc(doc(db, 'orders', orderReference), allowedUpdates);
     return true;
@@ -207,7 +226,6 @@ export async function updateOrderInFirestore(
     } catch {
       // Ignore
     }
-    return false;
   }
 }
 
@@ -291,6 +309,61 @@ export async function getAllOrdersFromFirestore(): Promise<OrderRecord[]> {
   } catch (error) {
     console.warn('Could not fetch all orders from Firestore:', error);
     return [];
+  }
+}
+
+/**
+ * Admin: Real-time subscription to all orders in Firestore
+ */
+export function subscribeToAllOrders(callback: (orders: OrderRecord[]) => void): () => void {
+  try {
+    const q = query(collection(db, 'orders'));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const orders: OrderRecord[] = [];
+        snapshot.forEach((doc) => {
+          orders.push(doc.data() as OrderRecord);
+        });
+        callback(orders);
+      },
+      (err) => {
+        console.warn('Real-time orders subscription error:', err);
+      }
+    );
+    return unsubscribe;
+  } catch (err) {
+    console.warn('Failed to subscribe to all orders:', err);
+    return () => {};
+  }
+}
+
+/**
+ * Customer: Real-time subscription to user orders in Firestore
+ */
+export function subscribeToUserOrders(
+  userId: string,
+  callback: (orders: OrderRecord[]) => void
+): () => void {
+  try {
+    const q = query(collection(db, 'orders'), where('userId', '==', userId));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const orders: OrderRecord[] = [];
+        snapshot.forEach((doc) => {
+          orders.push(doc.data() as OrderRecord);
+        });
+        callback(orders);
+      },
+      (err) => {
+        console.warn('Real-time user orders subscription error:', err);
+      }
+    );
+    return unsubscribe;
+  } catch (err) {
+    console.warn('Failed to subscribe to user orders:', err);
+    return () => {};
   }
 }
 

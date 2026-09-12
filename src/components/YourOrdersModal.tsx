@@ -6,7 +6,10 @@ import {
   updateOrderDelivery,
   ORDERS_UPDATED_EVENT,
   generateInconvenienceEmail,
+  syncUserOrdersFromFirestore,
+  mergeOrdersIntoStorage,
 } from '../utils/orderStorage';
+import { subscribeToUserOrders } from '../firebase';
 import { formatPrice } from '../utils/currency';
 import { AMORE_BRANCHES } from '../data/iceCreamData';
 import {
@@ -97,12 +100,29 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       refreshOrders();
+
+      // If user is logged in, sync with Cloud Firestore
+      if (currentUser?.uid) {
+        syncUserOrdersFromFirestore(currentUser.uid).then((synced) => {
+          if (synced) {
+            setOrders(getUserOrdersList(currentUser.uid));
+          }
+        });
+      }
     }
   }, [isOpen, currentUser, highlightOrderRef]);
 
   // Live real-time sync with Admin changes or multi-tab changes
   useEffect(() => {
     if (!isOpen) return;
+
+    let unsubscribeUserOrders: (() => void) | null = null;
+    if (currentUser?.uid) {
+      unsubscribeUserOrders = subscribeToUserOrders(currentUser.uid, (userOrders) => {
+        mergeOrdersIntoStorage(userOrders);
+        refreshOrders();
+      });
+    }
 
     const handleSync = () => {
       refreshOrders();
@@ -111,6 +131,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
     window.addEventListener(ORDERS_UPDATED_EVENT, handleSync);
     window.addEventListener('storage', handleSync);
     return () => {
+      if (unsubscribeUserOrders) unsubscribeUserOrders();
       window.removeEventListener(ORDERS_UPDATED_EVENT, handleSync);
       window.removeEventListener('storage', handleSync);
     };
