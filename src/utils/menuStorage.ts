@@ -290,3 +290,4 @@ export function resetMenuToDefaults(): void {
     console.error('Failed to reset menu to defaults:', err);
   }
 }
+

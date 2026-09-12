@@ -1,12 +1,12 @@
 /**
  * Admin Authentication & Session Management for Amore Ice Cream Operations
  * Configured credentials:
- * username: admin
+ * email / username: admin@email.com (also accepts 'admin')
  * password: 200011
  */
 
 const ADMIN_STORAGE_KEY = 'amore_admin_session_auth_v1';
-const ADMIN_USERNAME = 'admin';
+export const ADMIN_EMAIL = 'admin@email.com';
 const ADMIN_PASSWORD_HASH = '200011';
 
 export interface AdminSession {
@@ -16,11 +16,13 @@ export interface AdminSession {
 }
 
 /**
- * Validates admin credentials
+ * Validates admin credentials (supports both 'admin@email.com' and 'admin')
  */
-export function verifyAdminCredentials(username: string, password: string):boolean {
-  if (!username || !password) return false;
-  return username.trim().toLowerCase() === ADMIN_USERNAME && password.trim() === ADMIN_PASSWORD_HASH;
+export function verifyAdminCredentials(identifier: string, password: string): boolean {
+  if (!identifier || !password) return false;
+  const clean = identifier.trim().toLowerCase();
+  const isMatch = clean === 'admin@email.com' || clean === 'admin';
+  return isMatch && password.trim() === ADMIN_PASSWORD_HASH;
 }
 
 /**
@@ -31,7 +33,7 @@ export function isAdminAuthenticated(): boolean {
     const raw = sessionStorage.getItem(ADMIN_STORAGE_KEY) || localStorage.getItem(ADMIN_STORAGE_KEY);
     if (!raw) return false;
     const session: AdminSession = JSON.parse(raw);
-    if (session && session.username === ADMIN_USERNAME && session.expiresAt > Date.now()) {
+    if (session && (session.username === ADMIN_EMAIL || session.username === 'admin') && session.expiresAt > Date.now()) {
       return true;
     }
     // Expired
@@ -47,7 +49,7 @@ export function isAdminAuthenticated(): boolean {
  */
 export function setAdminSession(remember: boolean = true): void {
   const session: AdminSession = {
-    username: ADMIN_USERNAME,
+    username: ADMIN_EMAIL,
     authenticatedAt: new Date().toISOString(),
     expiresAt: Date.now() + 8 * 60 * 60 * 1000, // 8 hours
   };
@@ -69,3 +71,4 @@ export function clearAdminSession(): void {
     console.error('Failed to clear admin session:', err);
   }
 }
+

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AmoreLogo } from '../AmoreLogo';
-import { verifyAdminCredentials, setAdminSession } from '../../utils/adminAuth';
-import { Lock, User, Eye, EyeOff, ShieldCheck, ArrowLeft, AlertCircle } from 'lucide-react';
+import { verifyAdminCredentials, setAdminSession, ADMIN_EMAIL } from '../../utils/adminAuth';
+import { Lock, Mail, Eye, EyeOff, ShieldCheck, ArrowLeft, AlertCircle } from 'lucide-react';
 
 interface AdminLoginProps {
   onLoginSuccess: () => void;
@@ -9,7 +9,7 @@ interface AdminLoginProps {
 }
 
 export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackToStore }) => {
-  const [username, setUsername] = useState('admin');
+  const [identifier, setIdentifier] = useState(ADMIN_EMAIL);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
@@ -22,13 +22,13 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
     setIsLoading(true);
 
     setTimeout(() => {
-      if (verifyAdminCredentials(username, password)) {
+      if (verifyAdminCredentials(identifier, password)) {
         setAdminSession(rememberMe);
         setIsLoading(false);
         onLoginSuccess();
       } else {
         setIsLoading(false);
-        setErrorMsg('Invalid username or password. Please verify your credentials.');
+        setErrorMsg('Invalid credentials. Please use admin@email.com and your password.');
       }
     }, 400);
   };
@@ -79,22 +79,26 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Username Input */}
+            {/* Email / Username Input */}
             <div>
               <label className="block text-xs font-bold text-[#3D2C24] uppercase tracking-wider mb-1.5">
-                Admin Username
+                Admin Email / Username
               </label>
               <div className="relative">
-                <User className="w-4 h-4 text-[#8C102A] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Mail className="w-4 h-4 text-[#8C102A] absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   required
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="admin"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="admin@email.com"
+                  autoComplete="username email"
                   className="w-full pl-10 pr-4 py-3 rounded-xl border border-[#D9CBB7] bg-[#FAF7F2]/50 text-sm font-semibold text-[#241A18] focus:bg-white focus:outline-hidden focus:border-[#8C102A] focus:ring-2 focus:ring-[#8C102A]/20 transition-all"
                 />
               </div>
+              <span className="text-[10px] text-[#7A6458] mt-1 block">
+                Default: <strong>admin@email.com</strong>
+              </span>
             </div>
 
             {/* Password Input */}
@@ -166,3 +170,4 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
     </div>
   );
 };
+
