@@ -18,6 +18,7 @@ import {
   Plus,
   LogIn,
   User as UserIcon,
+  Clock,
 } from 'lucide-react';
 import { type User } from '../firebase';
 
@@ -34,6 +35,8 @@ interface MenuOrderingPageProps {
   onBackToHome: () => void;
   currentUser?: User | null;
   onOpenSignInModal?: () => void;
+  onOpenOrdersModal?: () => void;
+  ordersCount?: number;
 }
 
 export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
@@ -49,6 +52,8 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
   onBackToHome,
   currentUser,
   onOpenSignInModal,
+  onOpenOrdersModal,
+  ordersCount,
 }) => {
   const [activeTab, setActiveTab] = useState<MenuTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -221,6 +226,24 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
               >
                 <LogIn className="w-3.5 h-3.5 text-[#8C102A]" />
                 <span>Sign In</span>
+              </button>
+            )}
+
+            {/* Ongoing Orders Button */}
+            {onOpenOrdersModal && (
+              <button
+                type="button"
+                onClick={onOpenOrdersModal}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#D9CBB7] hover:border-[#8C102A] text-xs font-bold text-[#4D3E36] hover:text-[#8C102A] transition-colors cursor-pointer shadow-2xs relative"
+                title="View your ongoing orders & 2-min grace period"
+              >
+                <Clock className="w-3.5 h-3.5 text-[#8C102A]" />
+                <span>Orders</span>
+                {ordersCount !== undefined && ordersCount > 0 && (
+                  <span className="w-4 h-4 rounded-full bg-[#8C102A] text-white text-[9px] font-black flex items-center justify-center shadow-xs">
+                    {ordersCount}
+                  </span>
+                )}
               </button>
             )}
 

@@ -73,6 +73,50 @@ export function getOrder(orderReference: string): OrderRecord | null {
 }
 
 /**
+ * Returns a list of all orders sorted newest to oldest.
+ * Optionally filters by userId.
+ */
+export function getUserOrdersList(userId?: string | null): OrderRecord[] {
+  try {
+    const all = getAllOrders();
+    const list = Object.values(all);
+    const filtered = userId ? list.filter((o) => !o.userId || o.userId === userId) : list;
+    return filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  } catch (err) {
+    console.error('Failed to get user orders list:', err);
+    return [];
+  }
+}
+
+/**
+ * Cancels an order within its grace period or active state.
+ */
+export function cancelOrder(orderReference: string): OrderRecord | null {
+  return updateOrder(orderReference, {
+    status: 'cancelled',
+    cancelledAt: new Date().toISOString(),
+  });
+}
+
+/**
+ * Updates delivery details for an ongoing order during grace period.
+ */
+export function updateOrderDelivery(
+  orderReference: string,
+  details: {
+    deliveryAddress?: string;
+    city?: string;
+    contactNumber?: string;
+    specialNote?: string;
+  }
+): OrderRecord | null {
+  return updateOrder(orderReference, {
+    ...details,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+/**
  * Builds the URL link for order confirmation that can be sent via WhatsApp or Email.
  * Also includes safe base64 encoded minimal order info in `orderData` so the recipient
  * can open it even on another device or private browsing window without losing their cart!

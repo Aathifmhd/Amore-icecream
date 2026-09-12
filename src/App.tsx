@@ -16,11 +16,13 @@ import { QuickOrderModal } from './components/QuickOrderModal';
 import { MenuOrderingPage } from './components/MenuOrderingPage';
 import { OrderConfirmationPage } from './components/OrderConfirmationPage';
 import { SignInModal } from './components/SignInModal';
+import { YourOrdersModal } from './components/YourOrdersModal';
 import { auth, onAuthStateChanged, type User } from './firebase';
 import { Currency, BranchId, ScoopItem, MenuItem, SelectedOrderItem, ServingFormat } from './types';
 import { ALL_20_FLAVOURS } from './data/iceCreamData';
 import { ShoppingBag } from 'lucide-react';
 import { formatPrice } from './utils/currency';
+import { getUserOrdersList } from './utils/orderStorage';
 
 export default function App() {
   // Global State
@@ -35,6 +37,10 @@ export default function App() {
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [menuResetKey, setMenuResetKey] = useState(0);
 
+  // Ongoing Orders Modal State
+  const [isOrdersModalOpen, setIsOrdersModalOpen] = useState(false);
+  const [highlightOrderRef, setHighlightOrderRef] = useState<string | null>(null);
+
   // Authentication State & Sign-In Modal
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
@@ -45,6 +51,10 @@ export default function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  // Compute active / ongoing orders count
+  const userOrders = getUserOrdersList(currentUser?.uid);
+  const ongoingOrdersCount = userOrders.filter((o) => o.status !== 'cancelled').length;
 
   // Mobile / Dedicated Page State (reads ?page=menu)
   const [currentPage, setCurrentPage] = useState<'home' | 'menu'>(() => {
@@ -272,6 +282,8 @@ export default function App() {
           onBackToHome={handleNavigateToHome}
           currentUser={currentUser}
           onOpenSignInModal={() => setIsSignInModalOpen(true)}
+          onOpenOrdersModal={() => setIsOrdersModalOpen(true)}
+          ordersCount={ongoingOrdersCount}
         />
 
         {/* Product Detail Modal */}
@@ -298,9 +310,12 @@ export default function App() {
             initialBranch={selectedBranch}
             onClearOrder={handleClearOrder}
             onBrowseMenu={() => setIsOrderModalOpen(false)}
-            onOpenConfirmationPage={handleOpenConfirmationPage}
             currentUser={currentUser}
             onOpenSignInModal={() => setIsSignInModalOpen(true)}
+            onViewOrderInOrders={(orderRef) => {
+              setHighlightOrderRef(orderRef);
+              setIsOrdersModalOpen(true);
+            }}
           />
         )}
 
@@ -309,6 +324,21 @@ export default function App() {
           isOpen={isSignInModalOpen}
           onClose={() => setIsSignInModalOpen(false)}
           currentUser={currentUser}
+        />
+
+        {/* Your Orders & Live 2-Minute Grace Period Tracking Modal */}
+        <YourOrdersModal
+          isOpen={isOrdersModalOpen}
+          onClose={() => {
+            setIsOrdersModalOpen(false);
+            setHighlightOrderRef(null);
+          }}
+          currentUser={currentUser}
+          currency={currency}
+          highlightOrderRef={highlightOrderRef}
+          onBrowseMenu={() => {
+            setIsOrdersModalOpen(false);
+          }}
         />
       </div>
     );
@@ -327,6 +357,8 @@ export default function App() {
         onNavigateToMenu={handleNavigateToMenu}
         currentUser={currentUser}
         onOpenSignInModal={() => setIsSignInModalOpen(true)}
+        onOpenOrdersModal={() => setIsOrdersModalOpen(true)}
+        ordersCount={ongoingOrdersCount}
       />
 
       <main className="flex-1">
@@ -446,9 +478,12 @@ export default function App() {
           initialBranch={selectedBranch}
           onClearOrder={handleClearOrder}
           onBrowseMenu={scrollToMenu}
-          onOpenConfirmationPage={handleOpenConfirmationPage}
           currentUser={currentUser}
           onOpenSignInModal={() => setIsSignInModalOpen(true)}
+          onViewOrderInOrders={(orderRef) => {
+            setHighlightOrderRef(orderRef);
+            setIsOrdersModalOpen(true);
+          }}
         />
       )}
 
@@ -457,6 +492,19 @@ export default function App() {
         isOpen={isSignInModalOpen}
         onClose={() => setIsSignInModalOpen(false)}
         currentUser={currentUser}
+      />
+
+      {/* Your Orders & Live 2-Minute Grace Period Tracking Modal */}
+      <YourOrdersModal
+        isOpen={isOrdersModalOpen}
+        onClose={() => {
+          setIsOrdersModalOpen(false);
+          setHighlightOrderRef(null);
+        }}
+        currentUser={currentUser}
+        currency={currency}
+        highlightOrderRef={highlightOrderRef}
+        onBrowseMenu={scrollToMenu}
       />
     </div>
   );

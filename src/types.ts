@@ -118,10 +118,13 @@ export interface OrderRecord {
   deliveryFeeLKR: number;
   grandTotalLKR: number;
   currency: Currency;
-  status: 'pending_confirmation' | 'paid' | 'confirmed';
-  paymentMethod?: 'card' | 'cash';
+  status: 'pending_confirmation' | 'paid' | 'confirmed' | 'cancelled' | 'preparing' | 'delivered';
+  paymentMethod?: 'card' | 'cash' | 'cod';
   paidAt?: string;
   cardLast4?: string;
   cardBrand?: string;
+  userId?: string;
+  cancelledAt?: string;
+  updatedAt?: string;
 }
 

@@ -3,7 +3,7 @@ import { AmoreLogo } from './AmoreLogo';
 import { Currency, BranchId, SelectedOrderItem } from '../types';
 import { AMORE_BRANCHES } from '../data/iceCreamData';
 import { CurrencyToggle } from './CurrencyToggle';
-import { Menu, X, MapPin, Phone, ShoppingBag, LogIn, User as UserIcon } from 'lucide-react';
+import { Menu, X, MapPin, Phone, ShoppingBag, LogIn, User as UserIcon, Clock } from 'lucide-react';
 import { type User } from '../firebase';
 
 interface NavbarProps {
@@ -16,6 +16,8 @@ interface NavbarProps {
   onNavigateToMenu?: () => void;
   currentUser?: User | null;
   onOpenSignInModal?: () => void;
+  onOpenOrdersModal?: () => void;
+  ordersCount?: number;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -28,6 +30,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigateToMenu,
   currentUser,
   onOpenSignInModal,
+  onOpenOrdersModal,
+  ordersCount,
 }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -164,10 +168,48 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
+            {/* Orders Button Desktop (with live active count indicator) */}
+            {onOpenOrdersModal && (
+              <button
+                type="button"
+                onClick={onOpenOrdersModal}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-[#4D3E36] hover:text-[#8C102A] bg-white/80 hover:bg-white border border-[#D9CBB7] hover:border-[#8C102A] rounded-full transition-all duration-200 shadow-2xs cursor-pointer active:scale-95 relative"
+                title="View your ongoing orders & 2-min grace period"
+              >
+                <Clock className="w-3.5 h-3.5 text-[#8C102A]" />
+                <span>Orders</span>
+                {ordersCount !== undefined && ordersCount > 0 && (
+                  <span className="w-4 h-4 rounded-full bg-[#8C102A] text-white text-[10px] font-black flex items-center justify-center shadow-xs">
+                    {ordersCount}
+                  </span>
+                )}
+              </button>
+            )}
+
             {/* Currency toggle on mobile view (replacing tray button on screens < sm) */}
             <div className="sm:hidden flex items-center">
               <CurrencyToggle currency={currency} onToggle={onToggleCurrency} />
             </div>
+
+            {/* Mobile Orders icon button */}
+            {onOpenOrdersModal && (
+              <div className="sm:hidden flex items-center">
+                <button
+                  type="button"
+                  onClick={onOpenOrdersModal}
+                  className="p-2 rounded-full text-[#5D4E46] hover:text-[#8C102A] hover:bg-[#EAE0D0] transition-colors cursor-pointer relative"
+                  aria-label="Your Orders"
+                  title="Your Orders"
+                >
+                  <Clock className="w-5 h-5 text-[#8C102A]" />
+                  {ordersCount !== undefined && ordersCount > 0 && (
+                    <span className="absolute top-0 right-0 w-4 h-4 rounded-full bg-[#8C102A] text-white text-[9px] font-black flex items-center justify-center shadow-xs">
+                      {ordersCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+            )}
 
             {/* Mobile Sign In icon button on small screens */}
             <div className="sm:hidden flex items-center">
@@ -325,6 +367,30 @@ export const Navbar: React.FC<NavbarProps> = ({
                 );
               })}
 
+              {/* Your Orders in Mobile Drawer */}
+              {onOpenOrdersModal && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenOrdersModal();
+                  }}
+                  className="mt-2 w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-white border border-[#D9CBB7] hover:border-[#8C102A] text-[#3D2C24] font-bold text-sm shadow-xs active:scale-[0.98] transition-all cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-[#8C102A]" />
+                    <span>Your Orders</span>
+                  </div>
+                  {ordersCount !== undefined && ordersCount > 0 ? (
+                    <span className="px-2 py-0.5 rounded-full bg-[#8C102A] text-white text-xs font-black">
+                      {ordersCount} active
+                    </span>
+                  ) : (
+                    <span className="text-xs text-[#7A6458] font-medium">History</span>
+                  )}
+                </button>
+              )}
+
               {/* Your Tray in Mobile Drawer */}
               <button
                 type="button"
@@ -332,7 +398,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   setMobileMenuOpen(false);
                   onOpenOrderModal();
                 }}
-                className="mt-2 w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-[#8C102A] text-white font-bold text-sm shadow-sm active:scale-[0.98] transition-all cursor-pointer"
+                className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-[#8C102A] text-white font-bold text-sm shadow-sm active:scale-[0.98] transition-all cursor-pointer"
               >
                 <div className="flex items-center gap-2">
                   <ShoppingBag className="w-4 h-4 text-amber-200" />
