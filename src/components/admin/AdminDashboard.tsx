@@ -1000,7 +1000,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => handleSetDelivered(order.orderReference)}
-                                    className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold transition-colors cursor-pointer"
+                                    className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold transition-colors cursor-pointer"
                                     title="Mark order directly as Delivered"
                                   >
                                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
