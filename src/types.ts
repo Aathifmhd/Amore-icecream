@@ -121,7 +121,7 @@ export interface OrderRecord {
   deliveryFeeLKR: number;
   grandTotalLKR: number;
   currency: Currency;
-  status: 'pending_confirmation' | 'paid' | 'confirmed' | 'cancelled' | 'preparing' | 'delivered';
+  status: 'pending_confirmation' | 'paid' | 'confirmed' | 'cancelled' | 'preparing' | 'on_the_way' | 'delivered';
   paymentMethod?: 'card' | 'cash' | 'cod';
   paidAt?: string;
   cardLast4?: string;
@@ -134,6 +134,7 @@ export interface OrderRecord {
   inconvenienceEmailContent?: string;
   confirmedAt?: string;
   preparingAt?: string;
+  onTheWayAt?: string;
   deliveredAt?: string;
   isGracePeriodPaused?: boolean;
   gracePeriodRemainingSeconds?: number;

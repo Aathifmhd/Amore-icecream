@@ -9,6 +9,7 @@ import {
   updateOrder,
   adminConfirmOrder,
   adminSetPreparing,
+  adminSetOnTheWay,
   adminSetDelivered,
   adminCancelOrderWithReason,
   generateInconvenienceEmail,
@@ -78,6 +79,7 @@ import {
   Mail,
   Copy,
   FileText,
+  Truck,
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -218,6 +220,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const totalOrders = orders.length;
     const activeOrders = orders.filter((o) => o.status !== 'cancelled' && o.status !== 'delivered');
     const preparingOrders = orders.filter((o) => o.status === 'preparing');
+    const onTheWayOrders = orders.filter((o) => o.status === 'on_the_way');
     const deliveredOrders = orders.filter((o) => o.status === 'delivered');
     const cancelledOrders = orders.filter((o) => o.status === 'cancelled');
 
@@ -242,6 +245,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       totalOrders,
       activeOrdersCount: activeOrders.length,
       preparingCount: preparingOrders.length,
+      onTheWayCount: onTheWayOrders.length,
       deliveredCount: deliveredOrders.length,
       cancelledCount: cancelledOrders.length,
       totalRevenueLKR,
@@ -293,6 +297,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleSendToKitchen = (orderRef: string) => {
     adminSetPreparing(orderRef);
+    refreshAllData();
+  };
+
+  const handleHandoverToDelivery = (orderRef: string) => {
+    adminSetOnTheWay(orderRef);
     refreshAllData();
   };
 
@@ -547,10 +556,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <Clock className="w-4 h-4 text-amber-600" />
                 </div>
                 <div className="mt-2 text-xl sm:text-2xl font-black text-[#8C102A]">
-                  {metrics.preparingCount} orders
+                  {metrics.preparingCount} in kitchen
                 </div>
                 <div className="text-[11px] text-[#8A7970] mt-0.5">
-                  Being churned & prepared
+                  {metrics.onTheWayCount > 0 ? `${metrics.onTheWayCount} on the way with driver` : 'Being churned & prepared'}
                 </div>
               </div>
 
@@ -626,6 +635,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <option value="pending_confirmation">Pending Confirmation</option>
                   <option value="confirmed">Confirmed</option>
                   <option value="preparing">In Kitchen (Preparing)</option>
+                  <option value="on_the_way">On the Way (Delivery Partner)</option>
                   <option value="delivered">Delivered / Picked</option>
                   <option value="cancelled">Cancelled</option>
                 </select>
@@ -848,6 +858,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     Scooping & Churning
                                   </span>
                                 </div>
+                              ) : order.status === 'on_the_way' ? (
+                                <div className="space-y-0.5">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-sky-100 text-sky-900 border border-sky-300">
+                                    <Truck className="w-3 h-3 text-sky-700" />
+                                    On The Way
+                                  </span>
+                                  <span className="text-[10px] text-sky-800 block font-medium">
+                                    {order.orderType === 'delivery' ? 'With Delivery Partner' : 'Ready for Pickup'}
+                                  </span>
+                                </div>
                               ) : order.status === 'delivered' ? (
                                 <div className="space-y-0.5">
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
@@ -970,11 +990,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   <div className="text-[9px] font-bold uppercase tracking-wider text-[#7A6458]">Select Status:</div>
                                   <button
                                     type="button"
-                                    onClick={() => handleSetDelivered(order.orderReference)}
-                                    className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-2xs transition-colors cursor-pointer"
-                                    title="Mark order as Delivered / Completed"
+                                    onClick={() => handleHandoverToDelivery(order.orderReference)}
+                                    className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shadow-2xs transition-colors cursor-pointer"
+                                    title="Handover order to delivery partner"
                                   >
-                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <Truck className="w-3.5 h-3.5" />
+                                    <span>{order.orderType === 'delivery' ? 'Handover to Delivery Partner' : 'Handover / Ready for Pickup'}</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetDelivered(order.orderReference)}
+                                    className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold transition-colors cursor-pointer"
+                                    title="Mark order directly as Delivered"
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                                     <span>Mark Delivered</span>
                                   </button>
                                   <button
@@ -984,6 +1013,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     title="Revert back to Confirmed state"
                                   >
                                     <span>Back to Confirmed</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTriggerCancelOrder(order)}
+                                    className="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-lg text-red-700 hover:bg-red-50 text-[10px] font-medium transition-colors cursor-pointer"
+                                  >
+                                    <Ban className="w-3 h-3" />
+                                    <span>Cancel Order</span>
+                                  </button>
+                                </div>
+                              ) : order.status === 'on_the_way' ? (
+                                <div className="flex flex-col gap-1.5 min-w-[150px]">
+                                  <div className="text-[9px] font-bold uppercase tracking-wider text-[#7A6458]">Select Status:</div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetDelivered(order.orderReference)}
+                                    className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-2xs transition-colors cursor-pointer"
+                                    title="Mark order as Delivered / Completed"
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>Mark Delivered</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSendToKitchen(order.orderReference)}
+                                    className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 text-[10px] font-medium transition-colors cursor-pointer"
+                                    title="Revert back to Kitchen preparation"
+                                  >
+                                    <span>Back to Kitchen</span>
                                   </button>
                                   <button
                                     type="button"

@@ -34,6 +34,7 @@ import {
   Copy,
   Check,
   AlertTriangle,
+  Truck,
 } from 'lucide-react';
 import { LocationPickerModal } from './LocationPickerModal';
 
@@ -246,11 +247,14 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
       case 'pending_confirmation':
         return 1;
       case 'confirmed':
+      case 'paid':
         return 2;
       case 'preparing':
         return 3;
-      case 'delivered':
+      case 'on_the_way':
         return 4;
+      case 'delivered':
+        return 5;
       default:
         return 1;
     }
@@ -347,6 +351,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
               const inGracePeriod = (remainingSeconds > 0 || !!order.isGracePeriodPaused) && order.status === 'pending_confirmation';
               const isConfirmed = order.status === 'confirmed';
               const isPreparing = order.status === 'preparing';
+              const isOnTheWay = order.status === 'on_the_way';
               const isPendingConfirmation = order.status === 'pending_confirmation';
               const isEditing = editingRef === order.orderReference;
               const isExpanded = expandedOrderRef === order.orderReference;
@@ -402,8 +407,8 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
 
                   {/* Clean Visual Progress Stepper */}
                   <div className="px-5 py-3 bg-[#FAF7F2]/70 border-t border-b border-[#E8DFC8]/60">
-                    <div className="grid grid-cols-4 gap-1 relative">
-                      {/* Step 1: Received */}
+                    <div className="grid grid-cols-5 gap-1 relative">
+                      {/* Step 1: Placed */}
                       <div className="flex flex-col items-center text-center">
                         <div
                           className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold mb-1 transition-colors ${
@@ -447,22 +452,38 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                           3
                         </div>
                         <span className={`text-[10px] ${stepNumber === 3 ? 'font-bold text-[#8C102A]' : 'text-slate-500'}`}>
-                          In Kitchen
+                          Kitchen
                         </span>
                       </div>
 
-                      {/* Step 4: Delivered */}
+                      {/* Step 4: On the Way */}
                       <div className="flex flex-col items-center text-center">
                         <div
                           className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold mb-1 transition-colors ${
                             stepNumber >= 4
-                              ? 'bg-emerald-600 text-white'
+                              ? 'bg-blue-600 text-white'
                               : 'bg-gray-200 text-gray-500'
                           }`}
                         >
                           4
                         </div>
-                        <span className={`text-[10px] ${stepNumber === 4 ? 'font-bold text-emerald-700' : 'text-slate-500'}`}>
+                        <span className={`text-[10px] ${stepNumber === 4 ? 'font-bold text-blue-700' : 'text-slate-500'}`}>
+                          {order.orderType === 'delivery' ? 'On the Way' : 'Ready'}
+                        </span>
+                      </div>
+
+                      {/* Step 5: Delivered */}
+                      <div className="flex flex-col items-center text-center">
+                        <div
+                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold mb-1 transition-colors ${
+                            stepNumber >= 5
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-gray-200 text-gray-500'
+                          }`}
+                        >
+                          5
+                        </div>
+                        <span className={`text-[10px] ${stepNumber === 5 ? 'font-bold text-emerald-700' : 'text-slate-500'}`}>
                           Delivered
                         </span>
                       </div>
@@ -682,6 +703,39 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                       <a
                         href={`https://wa.me/${branch.whatsapp.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
                           `Hello Amore ${branch.name}, checking on order ${order.orderReference}.`
+                        )}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] font-bold text-[#8C102A] hover:underline flex items-center gap-1 shrink-0 ml-2"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" />
+                        <span>WhatsApp</span>
+                      </a>
+                    </div>
+                  )}
+
+                  {isOnTheWay && (
+                    <div className="p-3.5 sm:px-5 bg-sky-50 border-b border-sky-200 flex items-center justify-between gap-2 text-xs text-sky-950 animate-fadeIn">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                          <Truck className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="font-bold text-sky-950 block text-xs">
+                            {order.orderType === 'delivery'
+                              ? 'Delivery partner on the way'
+                              : 'Ready for pickup at parlour'}
+                          </span>
+                          <span className="text-[11px] text-sky-800 block mt-0.5">
+                            {order.orderType === 'delivery'
+                              ? 'Your scoops are packed in thermal containers and our delivery partner is en route.'
+                              : 'Your order is ready and waiting for you at our parlour counter.'}
+                          </span>
+                        </div>
+                      </div>
+                      <a
+                        href={`https://wa.me/${branch.whatsapp.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                          `Hello Amore ${branch.name}, checking on order ${order.orderReference} that is on the way.`
                         )}`}
                         target="_blank"
                         rel="noreferrer"

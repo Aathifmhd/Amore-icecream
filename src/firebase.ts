@@ -210,6 +210,7 @@ export async function updateOrderInFirestore(
     if (updates.inconvenienceEmailContent !== undefined) allowedUpdates.inconvenienceEmailContent = updates.inconvenienceEmailContent;
     if (updates.confirmedAt !== undefined) allowedUpdates.confirmedAt = updates.confirmedAt;
     if (updates.preparingAt !== undefined) allowedUpdates.preparingAt = updates.preparingAt;
+    if (updates.onTheWayAt !== undefined) allowedUpdates.onTheWayAt = updates.onTheWayAt;
     if (updates.deliveredAt !== undefined) allowedUpdates.deliveredAt = updates.deliveredAt;
     if (updates.cancelledAt !== undefined) allowedUpdates.cancelledAt = updates.cancelledAt;
     if (updates.deliveryAddress !== undefined) allowedUpdates.deliveryAddress = updates.deliveryAddress;

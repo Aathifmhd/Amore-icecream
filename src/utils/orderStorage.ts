@@ -358,6 +358,18 @@ export function adminSetPreparing(orderReference: string): OrderRecord | null {
 }
 
 /**
+ * Admin: Marks order as handed over to delivery partner / on the way
+ */
+export function adminSetOnTheWay(orderReference: string): OrderRecord | null {
+  const now = new Date().toISOString();
+  return updateOrder(orderReference, {
+    status: 'on_the_way',
+    onTheWayAt: now,
+    updatedAt: now,
+  });
+}
+
+/**
  * Admin: Marks order as completed / delivered
  */
 export function adminSetDelivered(orderReference: string): OrderRecord | null {
@@ -435,10 +447,22 @@ export function updateOrderStatus(
   orderReference: string,
   status: OrderRecord['status']
 ): OrderRecord | null {
-  return updateOrder(orderReference, {
+  const now = new Date().toISOString();
+  const updates: Partial<OrderRecord> = {
     status,
-    updatedAt: new Date().toISOString(),
-  });
+    updatedAt: now,
+  };
+  if (status === 'confirmed') {
+    updates.confirmedAt = now;
+    updates.paidAt = now;
+  } else if (status === 'preparing') {
+    updates.preparingAt = now;
+  } else if (status === 'on_the_way') {
+    updates.onTheWayAt = now;
+  } else if (status === 'delivered') {
+    updates.deliveredAt = now;
+  }
+  return updateOrder(orderReference, updates);
 }
 
 /**
