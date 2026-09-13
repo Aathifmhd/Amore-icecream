@@ -160,9 +160,9 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
     setTimeout(() => {
       setIsProcessing(false);
       const updated = updateOrder(order.orderReference, {
-        status: !isPickup && selectedPaymentMethod === 'card' ? 'paid' : 'confirmed',
+        status: 'pending_confirmation',
         paymentMethod: effectivePaymentMethod,
-        paidAt: !isPickup && selectedPaymentMethod === 'card' ? new Date().toISOString() : undefined,
+        paidAt: undefined,
         cardLast4: !isPickup && selectedPaymentMethod === 'card' ? cardNumber.replace(/\s/g, '').slice(-4) : undefined,
         cardBrand: !isPickup && selectedPaymentMethod === 'card' ? getCardBrand(cardNumber) : undefined,
       });
@@ -272,7 +272,11 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
               </div>
               <div>
                 <span className="text-[11px] font-extrabold uppercase tracking-widest text-emerald-800 block">
-                  {order.orderType === 'pickup' ? 'Order Confirmed at Parlour' : 'Order Confirmed & Payment Verified'}
+                  {order.orderType === 'pickup'
+                    ? 'Order Confirmed at Parlour'
+                    : order.paymentMethod === 'card'
+                    ? (order.status === 'confirmed' || !!order.paidAt ? 'Order Confirmed & Payment Captured' : 'Card Pre-Authorized — Awaiting Parlour Approval')
+                    : 'Order Confirmed (Cash on Delivery)'}
                 </span>
                 <h2 className="font-serif-title text-xl sm:text-2xl font-bold text-emerald-950">
                   Thank You, {order.customerName}!
@@ -280,6 +284,8 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
                 <p className="text-xs text-emerald-800 mt-0.5">
                   {order.orderType === 'pickup' ? (
                     <>Your pickup order is confirmed at the <strong>{order.branchName}</strong> counter. Pay upon collection.</>
+                  ) : order.paymentMethod === 'card' && order.status === 'pending_confirmation' ? (
+                    <>Your card pre-authorization for <strong>{formatPrice(order.grandTotalLKR, currency)}</strong> is placed. Payment will only be captured when our parlour verifies and confirms your order.</>
                   ) : (
                     <>Your order is confirmed at the <strong>{order.branchName}</strong> kitchen. Our team is handcrafting your scoops.</>
                   )}

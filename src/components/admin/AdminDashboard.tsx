@@ -281,7 +281,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     // 1> Card payment: added as soon as admin confirms the order and payment is captured
     // (includes active, delivered, and cancelled card orders that were confirmed/captured)
     const capturedCardOrders = orders.filter(
-      (o) => o.paymentMethod === 'card' && (o.status !== 'pending_confirmation' || !!o.paidAt || !!o.confirmedAt)
+      (o) =>
+        o.paymentMethod === 'card' &&
+        o.orderType !== 'pickup' &&
+        (o.status !== 'pending_confirmation' || !!o.paidAt || !!o.confirmedAt)
     );
     const totalCapturedCardGrossLKR = capturedCardOrders.reduce((sum, o) => sum + (o.grandTotalLKR || 0), 0);
 
@@ -631,15 +634,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               onClick={() => setActiveTab('returns')}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'returns'
-                  ? 'bg-[#8C102A] text-white shadow-xs'
+                  ? 'bg-[#8C102A] text-white shadow-xs ring-2 ring-[#8C102A]/20'
+                  : metrics.pendingRefundCount > 0
+                  ? 'bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 font-extrabold'
                   : 'text-[#5D4E46] hover:bg-[#EFE8DC] hover:text-[#241A18]'
               }`}
             >
               <RotateCcw className="w-4 h-4" />
               <span>Returned Bills</span>
               {metrics.pendingRefundCount > 0 ? (
-                <span className="px-1.5 py-0.2 rounded-full bg-red-600 text-white text-[10px] font-black animate-pulse">
-                  {metrics.pendingRefundCount}
+                <span className="px-1.5 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black animate-pulse">
+                  {metrics.pendingRefundCount} Action Needed
                 </span>
               ) : (
                 <span className="text-[10px] font-normal opacity-70">({metrics.cancelledCount})</span>
@@ -829,6 +834,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </button>
             </div>
 
+            {/* Quick-Access Alert Banner for Returned Bills */}
+            {metrics.pendingRefundCount > 0 && (
+              <div className="bg-amber-50 border border-amber-200 p-3.5 sm:p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-fadeIn">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <RotateCcw className="w-5 h-5 animate-spin" style={{ animationDuration: '4s' }} />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-amber-950 text-xs sm:text-sm flex items-center gap-2">
+                      <span>Returned Bills Action Required</span>
+                      <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black animate-pulse">
+                        {metrics.pendingRefundCount} Pending Refund
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-amber-800 mt-0.5">
+                      Cancelled card transactions ({formatPrice(metrics.pendingRefundsTotalLKR, currency)}) require completion and settlement to deduct from Kitchen Gross Sales.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('returns')}
+                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Open Returned Bills Page</span>
+                </button>
+              </div>
+            )}
+
             {/* Orders Table */}
             <div className="bg-white rounded-2xl border border-[#E8DFC8] shadow-xs overflow-hidden">
               <div className="overflow-x-auto">
@@ -929,7 +964,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 {order.branchName?.split(' ')[0] || 'Akurana'}
                               </span>
                               <span className="block text-[10px] uppercase tracking-wider text-[#7A6458] font-bold mt-1">
-                                {order.orderType === 'delivery' ? '🚚 Delivery' : '🛍️ Self Pickup'}
+                                {order.orderType === 'delivery' ? '🚚 Delivery' : '🏪 Parlour Pickup'}
                               </span>
                             </td>
 
@@ -1085,7 +1120,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     )}
                                   </span>
                                   <span className="text-[10px] text-emerald-700 block font-bold">
-                                    {order.orderType === 'pickup' ? '🏪 Pay at Counter' : 'Payment Captured'}
+                                    {order.orderType === 'pickup'
+                                      ? '🏪 Pay at Counter'
+                                      : order.paymentMethod === 'card'
+                                      ? 'Payment Captured'
+                                      : 'Cash on Delivery'}
                                   </span>
                                 </div>
                               ) : order.status === 'preparing' ? (
@@ -3209,7 +3248,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="flex justify-between">
                 <span className="text-[#7A6458]">Type:</span>
                 <span className="font-bold text-[#241A18] uppercase">
-                  {confirmingOrder.orderType === 'delivery' ? '🚚 Delivery' : '🛍️ Self Pickup'}
+                  {confirmingOrder.orderType === 'delivery' ? '🚚 Delivery' : '🏪 Parlour Pickup'}
                 </span>
               </div>
               {confirmingOrder.deliveryAddress && (
@@ -3252,22 +3291,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
               <div className="pt-2 border-t border-[#E8DFC8] flex justify-between text-sm font-bold text-[#241A18]">
-                <span>Total Amount to Capture:</span>
+                <span>
+                  {confirmingOrder.orderType === 'pickup' || confirmingOrder.paymentMethod === 'pay_at_parlour'
+                    ? 'Total Bill (Pay at Counter):'
+                    : confirmingOrder.paymentMethod === 'card'
+                    ? 'Total Amount to Capture:'
+                    : 'Total Bill (Cash on Delivery):'}
+                </span>
                 <span className="text-[#8C102A] text-base">
                   {formatPrice(confirmingOrder.grandTotalLKR, currency)}
                 </span>
               </div>
             </div>
 
-            {/* Live Payment Capture Notice */}
+            {/* Live Payment Capture / Confirmation Notice */}
             <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-xs text-emerald-950 flex items-start gap-2.5">
               <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
               <div>
-                <p className="font-bold">Payment & Customer Live Notice</p>
+                <p className="font-bold">
+                  {confirmingOrder.orderType === 'pickup'
+                    ? 'Parlour Pickup Notice'
+                    : confirmingOrder.paymentMethod === 'card'
+                    ? 'Payment Capture & Customer Live Notice'
+                    : 'Cash on Delivery & Customer Live Notice'}
+                </p>
                 <p className="text-[11px] text-emerald-800 mt-0.5">
                   {confirmingOrder.orderType === 'pickup' || confirmingOrder.paymentMethod === 'pay_at_parlour'
                     ? 'Confirming this order will approve parlour preparation (customer will settle bill at parlour counter upon collection) and notify the customer in real-time.'
-                    : `Confirming this order will capture customer payment (${confirmingOrder.paymentMethod === 'card' ? 'Pre-authorized card charged' : 'Cash on delivery marked'}) and notify the customer's portal in real-time.`}
+                    : `Confirming this order will approve the order (${confirmingOrder.paymentMethod === 'card' ? 'Pre-authorized card charged & captured' : 'Cash on delivery marked'}) and notify the customer's portal in real-time.`}
                 </p>
               </div>
             </div>
@@ -3290,7 +3341,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <span>
                   {confirmingOrder.orderType === 'pickup' || confirmingOrder.paymentMethod === 'pay_at_parlour'
                     ? 'Yes, Confirm Parlour Order'
-                    : 'Yes, Confirm Order & Capture Payment'}
+                    : confirmingOrder.paymentMethod === 'card'
+                    ? 'Yes, Confirm Order & Capture Payment'
+                    : 'Yes, Confirm Order (Cash on Delivery)'}
                 </span>
               </button>
             </div>
@@ -3327,6 +3380,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             {/* Payment Return Notice if Card was confirmed / captured */}
             {cancellingOrder.paymentMethod === 'card' &&
+              cancellingOrder.orderType !== 'pickup' &&
               (cancellingOrder.status !== 'pending_confirmation' || !!cancellingOrder.paidAt || !!cancellingOrder.confirmedAt) && (
                 <div className="p-3.5 bg-red-50/90 rounded-2xl border-2 border-red-300 space-y-1.5 animate-fadeIn text-xs">
                   <div className="flex items-center gap-2 text-red-950 font-bold">
@@ -3427,6 +3481,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <Ban className="w-4 h-4" />
                 <span>
                   {cancellingOrder.paymentMethod === 'card' &&
+                  cancellingOrder.orderType !== 'pickup' &&
                   (cancellingOrder.status !== 'pending_confirmation' || !!cancellingOrder.paidAt || !!cancellingOrder.confirmedAt)
                     ? 'Confirm Cancellation & Send to Returned Bills'
                     : 'Confirm Cancellation & Dispatch Email'}
@@ -3509,6 +3564,238 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: CREATE MANUAL RETURN BILL / CREDIT NOTE */}
+      {/* ======================================================== */}
+      {isCreateReturnModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 border border-[#E8DFC8] shadow-2xl relative space-y-4 animate-scaleIn max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setIsCreateReturnModalOpen(false)}
+              className="absolute top-4 right-4 p-2 rounded-full text-[#7A6458] hover:text-[#241A18] hover:bg-[#FAF7F2] cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-800 flex items-center justify-center shadow-xs">
+                <RotateCcw className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="font-serif-title font-bold text-xl text-[#241A18]">
+                  New Return Bill / Credit Note
+                </h2>
+                <p className="text-xs text-[#7A6458]">
+                  Record a returned order, counter refund, or return credit note.
+                </p>
+              </div>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSaveNewReturnBill();
+              }}
+              className="space-y-3.5 text-xs"
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-[#3D2C24] mb-1">Return / Order Ref</label>
+                  <input
+                    type="text"
+                    value={newReturnRef}
+                    onChange={(e) => setNewReturnRef(e.target.value)}
+                    placeholder="e.g. AMO-3447 or AMO-RET-01"
+                    className="w-full px-3 py-2 rounded-xl border border-[#D9CBB7] focus:outline-hidden focus:border-[#8C102A]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-[#3D2C24] mb-1">Parlour Branch</label>
+                  <select
+                    value={newReturnBranch}
+                    onChange={(e) => setNewReturnBranch(e.target.value as BranchId)}
+                    className="w-full px-3 py-2 rounded-xl border border-[#D9CBB7] bg-white font-bold text-[#241A18] focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="akurana">Akurana Flagship</option>
+                    <option value="colombo">Colombo 03</option>
+                    <option value="arugambay">Arugam Bay</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-[#3D2C24] mb-1">Customer Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newReturnCustomer}
+                    onChange={(e) => setNewReturnCustomer(e.target.value)}
+                    placeholder="e.g. John Doe"
+                    className="w-full px-3 py-2 rounded-xl border border-[#D9CBB7] focus:outline-hidden focus:border-[#8C102A]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-[#3D2C24] mb-1">Contact Phone</label>
+                  <input
+                    type="text"
+                    value={newReturnPhone}
+                    onChange={(e) => setNewReturnPhone(e.target.value)}
+                    placeholder="e.g. +94 77 123 4567"
+                    className="w-full px-3 py-2 rounded-xl border border-[#D9CBB7] focus:outline-hidden focus:border-[#8C102A]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-[#3D2C24] mb-1">Return Amount (LKR) *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    required
+                    value={newReturnAmount}
+                    onChange={(e) => setNewReturnAmount(e.target.value)}
+                    placeholder="e.g. 1100"
+                    className="w-full px-3 py-2 rounded-xl border border-[#D9CBB7] font-bold text-[#8C102A] focus:outline-hidden focus:border-[#8C102A]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-[#3D2C24] mb-1">Refund Method</label>
+                  <select
+                    value={newReturnPaymentMethod}
+                    onChange={(e) => setNewReturnPaymentMethod(e.target.value as 'card' | 'cash')}
+                    className="w-full px-3 py-2 rounded-xl border border-[#D9CBB7] bg-white text-[#241A18] font-bold focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="card">Card Reversal / Refund</option>
+                    <option value="cash">Counter Cash Refund</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#3D2C24] mb-1">Return Reason / Notes *</label>
+                <textarea
+                  rows={2}
+                  required
+                  value={newReturnReason}
+                  onChange={(e) => setNewReturnReason(e.target.value)}
+                  placeholder="e.g. Customer returned order at parlour counter; item out of stock."
+                  className="w-full px-3 py-2 rounded-xl border border-[#D9CBB7] focus:outline-hidden focus:border-[#8C102A]"
+                />
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-xs text-amber-950">
+                <p className="font-bold">⚠️ Accounting Notice:</p>
+                <p className="text-[11px] text-amber-900 mt-0.5">
+                  Saving this return bill adds it to the Returned Bills table. When you click <strong>Complete Return</strong>, this amount is automatically deducted from Kitchen Gross Sales.
+                </p>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3 border-t border-[#E8DFC8]">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateReturnModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-[#D9CBB7] text-[#5D4E46] text-xs font-bold hover:bg-gray-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-red-700 hover:bg-red-800 text-white text-xs font-bold shadow-md cursor-pointer flex items-center gap-1.5"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Save Return Bill</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: EDIT RETURN BILL DETAILS */}
+      {/* ======================================================== */}
+      {editingReturnBill && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 border border-[#E8DFC8] shadow-2xl relative space-y-4 animate-scaleIn">
+            <button
+              onClick={() => setEditingReturnBill(null)}
+              className="absolute top-4 right-4 p-2 rounded-full text-[#7A6458] hover:text-[#241A18] hover:bg-[#FAF7F2] cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-800 flex items-center justify-center shadow-xs">
+                <Edit className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="font-serif-title font-bold text-xl text-[#241A18]">
+                  Edit Return Bill
+                </h2>
+                <p className="text-xs text-[#7A6458]">
+                  Ref: <span className="font-mono font-bold text-[#8C102A]">{editingReturnBill.orderReference}</span> • {editingReturnBill.customerName}
+                </p>
+              </div>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleUpdateReturnBill();
+              }}
+              className="space-y-3.5 text-xs"
+            >
+              <div>
+                <label className="block font-bold text-[#3D2C24] mb-1">Return / Refund Amount (LKR) *</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  required
+                  value={editReturnAmount}
+                  onChange={(e) => setEditReturnAmount(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-[#D9CBB7] font-bold text-[#8C102A] focus:outline-hidden focus:border-[#8C102A]"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#3D2C24] mb-1">Cancellation / Return Reason *</label>
+                <textarea
+                  rows={3}
+                  required
+                  value={editReturnReason}
+                  onChange={(e) => setEditReturnReason(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-[#D9CBB7] focus:outline-hidden focus:border-[#8C102A]"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3 border-t border-[#E8DFC8]">
+                <button
+                  type="button"
+                  onClick={() => setEditingReturnBill(null)}
+                  className="px-4 py-2.5 rounded-xl border border-[#D9CBB7] text-[#5D4E46] text-xs font-bold hover:bg-gray-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow-md cursor-pointer flex items-center gap-1.5"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Update Return Bill</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

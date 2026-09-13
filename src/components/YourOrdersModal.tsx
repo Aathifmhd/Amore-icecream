@@ -5,12 +5,13 @@ import {
   cancelOrder,
   ORDERS_UPDATED_EVENT,
   generateInconvenienceEmail,
+  syncOrdersFromFirestore,
   syncUserOrdersFromFirestore,
   mergeOrdersIntoStorage,
   pauseOrderGracePeriod,
   resumeOrderGracePeriod,
 } from '../utils/orderStorage';
-import { subscribeToUserOrders, type User } from '../firebase';
+import { subscribeToAllOrders, subscribeToUserOrders, type User } from '../firebase';
 import { formatPrice } from '../utils/currency';
 import { AMORE_BRANCHES } from '../data/iceCreamData';
 import {
@@ -103,11 +104,15 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
     if (isOpen) {
       refreshOrders();
 
+      // Immediately fetch latest orders from Cloud Firestore so completed/delivered orders
+      // or status changes from Admin panel reflect instantly, whether guest or logged-in!
+      syncOrdersFromFirestore().then(() => {
+        refreshOrders();
+      });
+
       if (currentUser?.uid) {
-        syncUserOrdersFromFirestore(currentUser.uid).then((synced) => {
-          if (synced) {
-            setOrders(getUserOrdersList(currentUser.uid));
-          }
+        syncUserOrdersFromFirestore(currentUser.uid).then(() => {
+          refreshOrders();
         });
       }
     }
@@ -117,13 +122,12 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
 
-    let unsubscribeUserOrders: (() => void) | null = null;
-    if (currentUser?.uid) {
-      unsubscribeUserOrders = subscribeToUserOrders(currentUser.uid, (userOrders) => {
-        mergeOrdersIntoStorage(userOrders);
-        refreshOrders();
-      });
-    }
+    // Real-time listener: any status change made on Admin panel (e.g. marked delivered)
+    // immediately updates localStorage and triggers re-render for the customer.
+    const unsubscribeAllOrders = subscribeToAllOrders((allOrders) => {
+      mergeOrdersIntoStorage(allOrders);
+      refreshOrders();
+    });
 
     const handleSync = () => {
       refreshOrders();
@@ -132,7 +136,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
     window.addEventListener(ORDERS_UPDATED_EVENT, handleSync);
     window.addEventListener('storage', handleSync);
     return () => {
-      if (unsubscribeUserOrders) unsubscribeUserOrders();
+      unsubscribeAllOrders();
       window.removeEventListener(ORDERS_UPDATED_EVENT, handleSync);
       window.removeEventListener('storage', handleSync);
     };
@@ -752,7 +756,9 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                               ? 'Scooping & Churning Fresh Gelato'
                               : order.orderType === 'pickup'
                               ? 'Order Confirmed at Parlour'
-                              : 'Order Confirmed & Payment Captured'}
+                              : order.paymentMethod === 'card'
+                              ? 'Order Confirmed & Payment Captured'
+                              : 'Order Confirmed (Cash on Delivery)'}
                           </span>
                           <span className="text-[11px] text-[#5D4E46] block mt-0.5">
                             {isPreparing

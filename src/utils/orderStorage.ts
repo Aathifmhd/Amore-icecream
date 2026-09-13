@@ -249,10 +249,11 @@ export function mergeOrdersIntoStorage(incomingOrders: OrderRecord[]): void {
       const existing = all[order.orderReference];
       if (
         !existing ||
+        existing.status !== order.status ||
         new Date(order.updatedAt || order.createdAt).getTime() >=
           new Date(existing.updatedAt || existing.createdAt).getTime()
       ) {
-        all[order.orderReference] = order;
+        all[order.orderReference] = { ...existing, ...order };
         hasChanges = true;
       }
     }
@@ -343,11 +344,13 @@ export function deleteOrder(orderReference: string): boolean {
  * Admin: Confirms an order, sets confirmedAt, and officially processes/captures customer payment!
  */
 export function adminConfirmOrder(orderReference: string): OrderRecord | null {
+  const existing = getOrder(orderReference);
   const now = new Date().toISOString();
+  const isCardPayment = existing?.paymentMethod === 'card' && existing?.orderType !== 'pickup';
   return updateOrder(orderReference, {
     status: 'confirmed',
     confirmedAt: now,
-    paidAt: now,
+    paidAt: isCardPayment ? now : undefined,
     updatedAt: now,
   });
 }
@@ -383,6 +386,7 @@ export function adminSetDelivered(orderReference: string): OrderRecord | null {
   const now = new Date().toISOString();
   return updateOrder(orderReference, {
     status: 'delivered',
+    paidAt: now,
     deliveredAt: now,
     updatedAt: now,
   });
