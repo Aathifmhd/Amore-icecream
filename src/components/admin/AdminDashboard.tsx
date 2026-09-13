@@ -14,6 +14,8 @@ import {
   adminCancelOrderWithReason,
   generateInconvenienceEmail,
   completeOrderRefund,
+  createManualReturnBill,
+  updateReturnBill,
   ORDERS_UPDATED_EVENT,
   syncOrdersFromFirestore,
   mergeOrdersIntoStorage,
@@ -107,8 +109,43 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 }) => {
   // Navigation & Active Tabs
   const [activeTab, setActiveTab] = useState<AdminTab>('orders');
+  const [activeTab, setActiveTab] = useState<AdminTab>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab') || params.get('section');
+    if (tab === 'returns' || tab === 'returned-bills') return 'returns';
+    if (tab === 'menu') return 'menu';
+    if (tab === 'overview') return 'overview';
+    if (tab === 'branches') return 'branches';
+    return 'orders';
+  });
+
+  const handleTabChange = (tab: AdminTab) => {
+    setActiveTab(tab);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', tab);
+      window.history.replaceState({}, '', url.toString());
+    } catch {
+      // Ignore
+    }
+  };
+
   const [menuSubTab, setMenuSubTab] = useState<MenuCatalogSubTab>('scoops');
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>('all');
+
+  // Return Bills CRUD State
+  const [isCreateReturnModalOpen, setIsCreateReturnModalOpen] = useState(false);
+  const [newReturnRef, setNewReturnRef] = useState('');
+  const [newReturnCustomer, setNewReturnCustomer] = useState('');
+  const [newReturnPhone, setNewReturnPhone] = useState('');
+  const [newReturnBranch, setNewReturnBranch] = useState<BranchId>('akurana');
+  const [newReturnAmount, setNewReturnAmount] = useState('');
+  const [newReturnPaymentMethod, setNewReturnPaymentMethod] = useState<'card' | 'cash'>('card');
+  const [newReturnReason, setNewReturnReason] = useState('');
+
+  const [editingReturnBill, setEditingReturnBill] = useState<OrderRecord | null>(null);
+  const [editReturnAmount, setEditReturnAmount] = useState('');
+  const [editReturnReason, setEditReturnReason] = useState('');
 
   // Orders State
   const [orders, setOrders] = useState<OrderRecord[]>([]);
@@ -259,11 +296,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const cancelledOrders = orders.filter((o) => o.status === 'cancelled');
 
     // Returned bills & refunds (cancelled card orders that were confirmed/captured)
+    // Returned bills & refunds (any cancelled order with refundStatus, or cancelled captured card orders)
     const returnedBillsList = orders.filter((o) => {
+      if (o.status !== 'cancelled') return false;
+      if (o.refundStatus) return true;
       return (
         o.status === 'cancelled' &&
         o.paymentMethod === 'card' &&
         (!!o.refundStatus || !!o.paidAt || !!o.confirmedAt || o.cancelledBy === 'admin')
+        o.orderType !== 'pickup' &&
+        (!!o.paidAt || !!o.confirmedAt)
       );
     });
 
@@ -286,6 +328,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         o.orderType !== 'pickup' &&
         (o.status !== 'pending_confirmation' || !!o.paidAt || !!o.confirmedAt)
     );
+    // GROSS SALES REVENUE RULES:
+    // 1> Card payment: added ONLY after admin confirms the order and payment is captured!
+    // Unconfirmed card orders (status === 'pending_confirmation') are NEVER added to gross sales!
+    // If a card order is cancelled before confirmation, it was NEVER confirmed and is NEVER in gross sales.
+    const capturedCardOrders = orders.filter((o) => {
+      if (o.paymentMethod !== 'card' || o.orderType === 'pickup') return false;
+      if (o.status === 'pending_confirmation') return false;
+      if (o.status === 'cancelled') {
+        return !!o.confirmedAt;
+      }
+      return (
+        o.status === 'confirmed' ||
+        o.status === 'preparing' ||
+        o.status === 'on_the_way' ||
+        o.status === 'delivered'
+      );
+    });
     const totalCapturedCardGrossLKR = capturedCardOrders.reduce((sum, o) => sum + (o.grandTotalLKR || 0), 0);
 
     // 2> Parlour pickup or Cash on Delivery: added to gross sales ONLY after delivered
@@ -381,10 +440,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const filteredReturnedBills = useMemo(() => {
     return orders.filter((order) => {
       // Must be a cancelled card order that was confirmed/captured or has refundStatus
+      if (order.status !== 'cancelled') return false;
       const isReturnedBill =
         order.status === 'cancelled' &&
         order.paymentMethod === 'card' &&
         (!!order.refundStatus || !!order.paidAt || !!order.confirmedAt || order.cancelledBy === 'admin');
+        !!order.refundStatus ||
+        (order.paymentMethod === 'card' && order.orderType !== 'pickup' && (!!order.paidAt || !!order.confirmedAt));
 
       if (!isReturnedBill) return false;
 
@@ -423,6 +485,65 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )
     ) {
       completeOrderRefund(orderRef);
+      refreshAllData();
+    }
+  };
+
+  const handleOpenCreateReturnModal = () => {
+    setNewReturnRef(`RET-${Math.floor(1000 + Math.random() * 9000)}`);
+    setNewReturnCustomer('');
+    setNewReturnPhone('');
+    setNewReturnBranch('akurana');
+    setNewReturnAmount('');
+    setNewReturnPaymentMethod('card');
+    setNewReturnReason('');
+    setIsCreateReturnModalOpen(true);
+  };
+
+  const handleCreateManualReturnBill = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = parseFloat(newReturnAmount);
+    if (isNaN(amt) || amt <= 0) {
+      alert('Please enter a valid return amount in LKR.');
+      return;
+    }
+    createManualReturnBill({
+      orderReference: newReturnRef.trim(),
+      customerName: newReturnCustomer.trim(),
+      contactNumber: newReturnPhone.trim(),
+      branchId: newReturnBranch,
+      refundAmountLKR: amt,
+      paymentMethod: newReturnPaymentMethod,
+      cancellationReason: newReturnReason.trim(),
+    });
+    setIsCreateReturnModalOpen(false);
+    refreshAllData();
+  };
+
+  const handleStartEditReturnBill = (bill: OrderRecord) => {
+    setEditingReturnBill(bill);
+    setEditReturnAmount(String(bill.refundAmountLKR || bill.grandTotalLKR || 0));
+    setEditReturnReason(bill.cancellationReason || '');
+  };
+
+  const handleUpdateReturnBill = () => {
+    if (!editingReturnBill) return;
+    const amt = parseFloat(editReturnAmount);
+    if (isNaN(amt) || amt <= 0) {
+      alert('Please enter a valid return amount in LKR.');
+      return;
+    }
+    updateReturnBill(editingReturnBill.orderReference, {
+      refundAmountLKR: amt,
+      cancellationReason: editReturnReason.trim(),
+    });
+    setEditingReturnBill(null);
+    refreshAllData();
+  };
+
+  const handleDeleteReturnBill = (orderRef: string) => {
+    if (window.confirm(`Permanently delete return bill ${orderRef} from records? This action cannot be undone.`)) {
+      deleteOrder(orderRef);
       refreshAllData();
     }
   };
@@ -614,6 +735,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab('orders')}
+              onClick={() => handleTabChange('orders')}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'orders'
                   ? 'bg-[#8C102A] text-white shadow-xs'
@@ -632,6 +754,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab('returns')}
+              onClick={() => handleTabChange('returns')}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'returns'
                   ? 'bg-[#8C102A] text-white shadow-xs ring-2 ring-[#8C102A]/20'
@@ -654,6 +777,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab('menu')}
+              onClick={() => handleTabChange('menu')}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'menu'
                   ? 'bg-[#8C102A] text-white shadow-xs'
@@ -668,6 +792,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab('overview')}
+              onClick={() => handleTabChange('overview')}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'overview'
                   ? 'bg-[#8C102A] text-white shadow-xs'
@@ -681,6 +806,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab('branches')}
+              onClick={() => handleTabChange('branches')}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'branches'
                   ? 'bg-[#8C102A] text-white shadow-xs'
@@ -856,6 +982,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <button
                   type="button"
                   onClick={() => setActiveTab('returns')}
+                  onClick={() => handleTabChange('returns')}
                   className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
@@ -1411,6 +1538,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {/* ======================================================== */}
         {activeTab === 'returns' && (
           <div className="space-y-6">
+          <div className="space-y-6 animate-fadeIn">
+            {/* Dedicated Standalone Header Banner */}
+            <div className="bg-white p-5 sm:p-6 rounded-3xl border border-[#E8DFC8] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start sm:items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-700 flex items-center justify-center shrink-0 shadow-xs border border-red-200">
+                  <RotateCcw className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="font-serif-title text-xl sm:text-2xl font-bold text-[#241A18]">
+                      Returned Bills & Credit Management
+                    </h2>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-100 text-red-800 border border-red-200">
+                      Accounting & Reversals
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#7A6458] mt-1 max-w-2xl">
+                    Full CRUD management for cancelled card transactions and walk-in parlour credit notes. When a return payment is completed, the refunded amount is automatically deducted from Kitchen Gross Sales.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-start md:self-center shrink-0">
+                <button
+                  type="button"
+                  onClick={handleOpenCreateReturnModal}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#8C102A] hover:bg-[#A31634] text-white text-xs sm:text-sm font-bold shadow-md hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ New Return Bill</span>
+                </button>
+              </div>
+            </div>
+
             {/* KPI Stat Cards for Returns */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
               <div className="bg-white p-4 rounded-2xl border border-[#E8DFC8] shadow-xs">
@@ -1420,9 +1581,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
                 <div className="mt-2 text-xl sm:text-2xl font-black text-[#241A18]">
                   {orders.filter((o) => o.status === 'cancelled' && o.paymentMethod === 'card').length}
+                  {orders.filter((o) => o.status === 'cancelled' && (o.paymentMethod === 'card' || !!o.refundStatus)).length}
                 </div>
                 <div className="text-[11px] text-[#8A7970] mt-0.5">
                   Card transactions cancelled after authorization
+                  Transactions cancelled & routed to returns
                 </div>
               </div>
 
@@ -1531,6 +1694,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <option value="arugambay">Arugam Bay</option>
                 </select>
               </div>
+
+              {/* Create Button in Bar */}
+              <button
+                type="button"
+                onClick={handleOpenCreateReturnModal}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-700 hover:bg-red-800 text-white text-xs font-bold shadow-xs transition-all cursor-pointer active:scale-95 shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Return Bill</span>
+              </button>
             </div>
 
             {/* Returned Bills Table */}
@@ -1688,12 +1861,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             {/* Actions */}
                             <td className="px-4 py-3 align-top text-right">
                               <div className="flex flex-col items-end gap-1.5 min-w-[140px]">
+                              <div className="flex flex-col items-end gap-1.5 min-w-[150px]">
                                 {!isCompleted ? (
                                   <button
                                     type="button"
                                     onClick={() => handleCompleteReturn(order.orderReference)}
                                     className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer active:scale-95 w-full"
                                     title="Confirm that refund payment to customer's card is completed. Deducts amount from Kitchen Gross Sales."
+                                    title="Confirm that refund payment to customer is completed. Deducts amount from Kitchen Gross Sales."
                                   >
                                     <Check className="w-3.5 h-3.5" />
                                     <span>Complete Return</span>
@@ -1703,6 +1878,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     ✓ Settled & Deducted
                                   </span>
                                 )}
+
+                                <div className="grid grid-cols-2 gap-1 w-full">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStartEditReturnBill(order)}
+                                    className="inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold transition-all cursor-pointer"
+                                    title="Edit Return Bill details, amount, or notes"
+                                  >
+                                    <Edit className="w-3 h-3" />
+                                    <span>Edit</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteReturnBill(order.orderReference)}
+                                    className="inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold transition-all cursor-pointer"
+                                    title="Delete this Return Bill record"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                    <span>Delete</span>
+                                  </button>
+                                </div>
 
                                 <button
                                   type="button"
@@ -3600,6 +3797,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 e.preventDefault();
                 handleSaveNewReturnBill();
               }}
+              onSubmit={handleCreateManualReturnBill}
               className="space-y-3.5 text-xs"
             >
               <div className="grid grid-cols-2 gap-3">

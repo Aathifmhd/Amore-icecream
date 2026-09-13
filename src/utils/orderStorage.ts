@@ -409,6 +409,8 @@ export function adminCancelOrderWithReason(
     existing &&
     existing.paymentMethod === 'card' &&
     (!!existing.paidAt || !!existing.confirmedAt || existing.status !== 'pending_confirmation');
+    existing.orderType !== 'pickup' &&
+    (!!existing.paidAt || !!existing.confirmedAt);
 
   const updates: Partial<OrderRecord> = {
     status: 'cancelled',
@@ -435,6 +437,81 @@ export function completeOrderRefund(orderReference: string): OrderRecord | null 
   return updateOrder(orderReference, {
     refundStatus: 'completed',
     refundedAt: now,
+    updatedAt: now,
+  });
+}
+
+/**
+ * Admin: Manually creates a new Return Bill (e.g. for walk-in returns or manual credit notes)
+ */
+export function createManualReturnBill(data: {
+  orderReference?: string;
+  customerName: string;
+  contactNumber: string;
+  branchId: BranchId;
+  refundAmountLKR: number;
+  paymentMethod: 'card' | 'cash';
+  cancellationReason: string;
+}): OrderRecord {
+  const ref = data.orderReference?.trim() || `RET-${Math.floor(1000 + Math.random() * 9000)}`;
+  const now = new Date().toISOString();
+  const branch = AMORE_BRANCHES[data.branchId] || AMORE_BRANCHES['akurana'];
+
+  const newReturnBill: OrderRecord = {
+    orderReference: ref,
+    createdAt: now,
+    customerName: data.customerName.trim(),
+    contactNumber: data.contactNumber.trim(),
+    orderType: 'pickup',
+    branchId: data.branchId,
+    branchName: branch.name,
+    branchCity: branch.city,
+    items: [
+      {
+        itemId: 'returned-item-manual',
+        name: 'Manual Return / Refund Item',
+        category: 'returns',
+        priceLKR: data.refundAmountLKR,
+        quantity: 1,
+        notes: data.cancellationReason,
+      },
+    ],
+    subtotalLKR: data.refundAmountLKR,
+    deliveryFeeLKR: 0,
+    grandTotalLKR: data.refundAmountLKR,
+    currency: 'LKR',
+    status: 'cancelled',
+    cancelledAt: now,
+    cancelledBy: 'admin',
+    cancellationReason: data.cancellationReason.trim(),
+    paymentMethod: data.paymentMethod,
+    refundStatus: 'pending',
+    refundAmountLKR: data.refundAmountLKR,
+    confirmedAt: now,
+    updatedAt: now,
+  };
+
+  saveOrder(newReturnBill);
+  return newReturnBill;
+}
+
+/**
+ * Admin: Updates an existing Return Bill's amount or reason
+ */
+export function updateReturnBill(
+  orderReference: string,
+  updates: {
+    refundAmountLKR?: number;
+    cancellationReason?: string;
+    customerName?: string;
+    contactNumber?: string;
+  }
+): OrderRecord | null {
+  const now = new Date().toISOString();
+  return updateOrder(orderReference, {
+    ...updates,
+    grandTotalLKR: updates.refundAmountLKR !== undefined ? updates.refundAmountLKR : undefined,
+    subtotalLKR: updates.refundAmountLKR !== undefined ? updates.refundAmountLKR : undefined,
     updatedAt: now,
   });
 }
