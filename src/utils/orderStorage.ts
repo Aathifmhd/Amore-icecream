@@ -322,7 +322,19 @@ export function deleteOrder(orderReference: string): boolean {
     const all = getAllOrders();
     const existing = all[orderReference];
     if (existing) {
-      // CRUD Policy: Only unconfirmed (pending_confirmation) or cancelled orders can be deleted
+      // Accounting & Audit Policy: Returned bills & credit notes can NEVER be deleted!
+      const isReturnedBill =
+        !!existing.refundStatus ||
+        (existing.status === 'cancelled' &&
+          existing.paymentMethod === 'card' &&
+          existing.orderType !== 'pickup' &&
+          (!!existing.paidAt || !!existing.confirmedAt));
+      if (isReturnedBill) {
+        console.warn(`Accounting Policy: Return bill ${orderReference} is a financial credit note and cannot be deleted.`);
+        return false;
+      }
+
+      // CRUD Policy: Only unconfirmed (pending_confirmation) or non-refund cancelled orders can be deleted
       if (existing.status !== 'pending_confirmation' && existing.status !== 'cancelled') {
         console.warn(`CRUD Policy Restriction: Order ${orderReference} is ${existing.status} and cannot be deleted.`);
         return false;
@@ -518,18 +530,47 @@ export function updateReturnBill(
 
 /**
  * Builds the official Amore Inconvenience & Apology Email
+ * Formatted strictly in accordance with Amore's Card Return & Refund Policy (with explicit refund days)
  */
 export function generateInconvenienceEmail(
   order: OrderRecord,
   reason: string
 ): { subject: string; body: string } {
-  const subject = `Notice regarding your Amore Order ${order.orderReference} - Cancellation & Sincere Apology`;
-  const paymentNotice =
-    order.paymentMethod === 'card'
-      ? 'Your card payment authorization has been immediately voided and no charges were made.'
-      : order.orderType === 'pickup' || order.paymentMethod === 'pay_at_parlour'
-      ? 'As you selected Pay at the Parlour, your order has been cancelled with no obligation or fee.'
-      : 'As you selected Cash on Delivery, your order has been cancelled with no obligation or fee.';
+  const isReturnedBill =
+    order.refundStatus ||
+    (order.paymentMethod === 'card' &&
+      order.orderType !== 'pickup' &&
+      (!!order.paidAt || !!order.confirmedAt));
+
+  const refundAmt = order.refundAmountLKR || order.grandTotalLKR || 0;
+  const formattedAmt = `LKR ${refundAmt.toLocaleString()}`;
+  const cardDetails = order.cardLast4
+    ? `${order.cardBrand || 'Card'} •••• ${order.cardLast4}`
+    : 'your original payment card';
+
+  let subject = `Notice regarding your Amore Order ${order.orderReference} - Cancellation & Sincere Apology`;
+  let paymentNotice = '';
+
+  if (isReturnedBill) {
+    subject = `Refund Notice: Amore Order ${order.orderReference} - Returned Bill & Apology`;
+    paymentNotice = `RETURN & REFUND NOTICE (In accordance with Amore Card Return Policy):
+• 100% Refund Guarantee: Full refund of ${formattedAmt} has been officially approved.
+• Refund Method: Reversal credited directly back to ${cardDetails}.
+• Refund Processing Days: Funds will reflect in your account within 2 to 3 business days (depending on your card issuing bank).
+• Accounting Record: Returned Bill & Credit Note #${order.orderReference} has been logged in our system.`;
+  } else if (order.paymentMethod === 'card') {
+    paymentNotice = `PAYMENT AUTHORIZATION NOTICE:
+• Your card pre-authorization hold for ${formattedAmt} was voided immediately upon cancellation.
+• No payment was captured and no charges were made to your account.`;
+  } else if (order.orderType === 'pickup' || order.paymentMethod === 'pay_at_parlour') {
+    paymentNotice = `PAYMENT NOTICE:
+• As you selected Pay at the Parlour, your order was cancelled with zero fee and no payment obligation.`;
+  } else {
+    paymentNotice = `PAYMENT NOTICE:
+• As you selected Cash on Delivery, your order was cancelled with zero fee and no payment obligation.`;
+  }
+
+  const branchTitle = order.branchName || 'Akurana Flagship';
 
   const body = `From: zenatiqcodes@gmail.com
 To: ${order.emailAddress || order.customerName}
@@ -537,23 +578,23 @@ Subject: ${subject}
 
 Dear ${order.customerName},
 
-We sincerely apologize, but we are unable to process your order (${order.orderReference}) placed for Amore Speciality Ice Cream (${order.branchName}).
+We sincerely apologize, but we are unable to process and fulfill your order (${order.orderReference}) placed with Amore Speciality Ice Cream (${branchTitle}).
 
 Reason for cancellation:
 "${reason}"
 
-Payment Information:
 ${paymentNotice}
 
-We deeply regret any inconvenience this may cause to your day or gathering. Every batch at Amore is churned fresh with authentic artisanal ingredients, and we hope to have the pleasure of serving you again soon.
+Amore Return Policy Commitment:
+Under our 100% Refund Policy, any order cancelled after payment authorization is guaranteed a full, prompt reversal within 2 to 3 business days. Every batch at Amore is churned fresh with authentic artisanal ingredients, and we deeply regret any inconvenience or disruption this has caused to your day. We look forward to the honor of serving you an exceptional experience on your next visit.
 
-If you have any questions or need immediate assistance, please reply directly to this email at zenatiqcodes@gmail.com or contact our parlour manager.
+If you have any questions regarding your refund or need immediate assistance, please reply directly to this email at zenatiqcodes@gmail.com or contact our parlour counter.
 
 Warm regards,
 The Amore Parlour Team
 zenatiqcodes@gmail.com
 Amore Speciality Ice Cream, Coffee & Cakes
-${order.branchName} • Hotline: +94 81 230 4567`;
+${branchTitle} • Hotline: +94 81 230 4567`;
 
   return { subject, body };
 }

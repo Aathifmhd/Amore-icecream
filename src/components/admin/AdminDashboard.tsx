@@ -397,6 +397,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // -----------------------------------------------------------
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
+      // Returned bills are automatically & exclusively routed to the Returned Bills table - do NOT show in Orders & Kitchen!
+      const isReturnedBill =
+        order.status === 'cancelled' &&
+        (!!order.refundStatus ||
+          (order.paymentMethod === 'card' && order.orderType !== 'pickup' && (!!order.paidAt || !!order.confirmedAt)));
+      if (isReturnedBill) {
+        return false;
+      }
+
       // Branch filter
       if (selectedBranchFilter !== 'all' && order.branchId !== selectedBranchFilter) {
         return false;
@@ -529,10 +538,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleDeleteReturnBill = (orderRef: string) => {
-    if (window.confirm(`Permanently delete return bill ${orderRef} from records? This action cannot be undone.`)) {
-      deleteOrder(orderRef);
-      refreshAllData();
-    }
+    alert(`Return Bill ${orderRef} cannot be deleted. Returned bills and credit notes are protected financial accounting records.`);
   };
 
   // -----------------------------------------------------------
@@ -1857,27 +1863,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   </span>
                                 )}
 
-                                <div className="grid grid-cols-2 gap-1 w-full">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleStartEditReturnBill(order)}
-                                    className="inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold transition-all cursor-pointer"
-                                    title="Edit Return Bill details, amount, or notes"
-                                  >
-                                    <Edit className="w-3 h-3" />
-                                    <span>Edit</span>
-                                  </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditReturnBill(order)}
+                                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold transition-all cursor-pointer w-full"
+                                  title="Edit Return Bill details, amount, or notes"
+                                >
+                                  <Edit className="w-3.5 h-3.5" />
+                                  <span>Edit Return Details</span>
+                                </button>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteReturnBill(order.orderReference)}
-                                    className="inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold transition-all cursor-pointer"
-                                    title="Delete this Return Bill record"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                    <span>Delete</span>
-                                  </button>
-                                </div>
+                                <span className="text-[10px] text-slate-400 font-medium text-center w-full block">
+                                  🔒 Non-deletable Record
+                                </span>
 
                                 <button
                                   type="button"
