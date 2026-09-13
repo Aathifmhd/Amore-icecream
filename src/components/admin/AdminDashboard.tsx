@@ -277,11 +277,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     const pendingRefundCount = returnedBillsList.filter((o) => o.refundStatus !== 'completed').length;
 
-    // Gross delivered revenue
-    const totalDeliveredGrossLKR = deliveredOrders.reduce((sum, o) => sum + (o.grandTotalLKR || 0), 0);
+    // GROSS SALES REVENUE RULES (Solution 2):
+    // 1> Card payment: added as soon as admin confirms the order and payment is captured
+    // (includes active, delivered, and cancelled card orders that were confirmed/captured)
+    const capturedCardOrders = orders.filter(
+      (o) => o.paymentMethod === 'card' && (o.status !== 'pending_confirmation' || !!o.paidAt || !!o.confirmedAt)
+    );
+    const totalCapturedCardGrossLKR = capturedCardOrders.reduce((sum, o) => sum + (o.grandTotalLKR || 0), 0);
 
-    // Deduct completed refunds from gross sales
-    const totalRevenueLKR = Math.max(0, totalDeliveredGrossLKR - completedRefundsTotalLKR);
+    // 2> Parlour pickup or Cash on Delivery: added to gross sales ONLY after delivered
+    const deliveredCashOrPickupOrders = orders.filter(
+      (o) => (o.paymentMethod !== 'card' || o.orderType === 'pickup') && o.status === 'delivered'
+    );
+    const totalDeliveredCashOrPickupGrossLKR = deliveredCashOrPickupOrders.reduce((sum, o) => sum + (o.grandTotalLKR || 0), 0);
+
+    // Total gross sales before refunds
+    const totalGrossSalesBeforeRefunds = totalCapturedCardGrossLKR + totalDeliveredCashOrPickupGrossLKR;
+
+    // 3> In middle, when card payment was captured and order cancelled:
+    // When return payment is completed, deduct the refunded amount from gross sales
+    const totalRevenueLKR = Math.max(0, totalGrossSalesBeforeRefunds - completedRefundsTotalLKR);
 
     const branchRevenue: Record<string, number> = {
       akurana: 0,
@@ -289,7 +304,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       arugambay: 0,
     };
 
-    deliveredOrders.forEach((o) => {
+    capturedCardOrders.forEach((o) => {
+      const b = o.branchId || 'akurana';
+      branchRevenue[b] = (branchRevenue[b] || 0) + (o.grandTotalLKR || 0);
+    });
+
+    deliveredCashOrPickupOrders.forEach((o) => {
       const b = o.branchId || 'akurana';
       branchRevenue[b] = (branchRevenue[b] || 0) + (o.grandTotalLKR || 0);
     });
@@ -299,15 +319,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       branchRevenue[b] = Math.max(0, (branchRevenue[b] || 0) - (o.refundAmountLKR || o.grandTotalLKR || 0));
     });
 
+    // Count of orders contributing to gross sales
+    const eligibleGrossOrdersCount =
+      capturedCardOrders.filter((o) => o.refundStatus !== 'completed').length +
+      deliveredCashOrPickupOrders.length;
+
     return {
       totalAllOrders,
-      totalOrders: deliveredOrders.length, // Only delivery completed orders count as Total Orders
+      totalOrders: eligibleGrossOrdersCount,
       activeOrdersCount: activeOrders.length,
       preparingCount: preparingOrders.length,
       onTheWayCount: onTheWayOrders.length,
       deliveredCount: deliveredOrders.length,
       cancelledCount: cancelledOrders.length,
-      totalDeliveredGrossLKR,
+      totalCapturedCardGrossLKR,
+      totalDeliveredCashOrPickupGrossLKR,
+      totalGrossSalesBeforeRefunds,
       completedRefundsTotalLKR,
       pendingRefundsTotalLKR,
       pendingRefundCount,
@@ -692,10 +719,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div className="text-[11px] text-[#8A7970] mt-0.5">
                   {metrics.completedRefundsTotalLKR > 0 ? (
                     <span className="text-amber-800 font-medium">
-                      Delivered: {formatPrice(metrics.totalDeliveredGrossLKR, currency)} - Refunds: {formatPrice(metrics.completedRefundsTotalLKR, currency)}
+                      Captured: {formatPrice(metrics.totalGrossSalesBeforeRefunds, currency)} - Refunds: {formatPrice(metrics.completedRefundsTotalLKR, currency)}
                     </span>
                   ) : (
-                    'Delivered / Picked orders only'
+                    'Captured Card + Delivered Cash/Pickup'
                   )}
                 </div>
               </div>
@@ -1196,17 +1223,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => handleSetDelivered(order.orderReference)}
-                                    className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold transition-colors cursor-pointer"
-                                    title="Mark order directly as Delivered"
-                                  >
-                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                    <span>Mark Delivered</span>
-                                  </button>
-                                  <button
-                                    type="button"
                                     onClick={() => handleTriggerCancelOrder(order)}
-                                    className="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-lg text-red-700 hover:bg-red-50 text-[10px] font-medium transition-colors cursor-pointer"
+                                    className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-[10px] font-bold transition-colors cursor-pointer"
+                                    title="Cancel order and initiate return/refund"
                                   >
                                     <Ban className="w-3 h-3" />
                                     <span>Cancel Order</span>
@@ -1230,7 +1249,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     }
                                   >
                                     {order.orderType === 'pickup' ? (
-                                      <ShoppingBag className="w-3.5 h-3.5" />
+                                      <Store className="w-3.5 h-3.5" />
                                     ) : (
                                       <Truck className="w-3.5 h-3.5" />
                                     )}
@@ -1242,25 +1261,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => handleSetDelivered(order.orderReference)}
-                                    className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold transition-colors cursor-pointer"
-                                    title={order.orderType === 'pickup' ? 'Mark order directly as Picked Up' : 'Mark order directly as Delivered'}
-                                  >
-                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                    <span>{order.orderType === 'pickup' ? 'Mark Picked Up' : 'Mark Delivered'}</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleStatusChange(order.orderReference, 'confirmed')}
-                                    className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 text-[10px] font-medium transition-colors cursor-pointer"
-                                    title="Revert back to Confirmed state"
-                                  >
-                                    <span>Back to Confirmed</span>
-                                  </button>
-                                  <button
-                                    type="button"
                                     onClick={() => handleTriggerCancelOrder(order)}
-                                    className="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-lg text-red-700 hover:bg-red-50 text-[10px] font-medium transition-colors cursor-pointer"
+                                    className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-[10px] font-bold transition-colors cursor-pointer"
+                                    title="Cancel order and initiate return/refund"
                                   >
                                     <Ban className="w-3 h-3" />
                                     <span>Cancel Order</span>
@@ -1280,16 +1283,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => handleSendToKitchen(order.orderReference)}
-                                    className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 text-[10px] font-medium transition-colors cursor-pointer"
-                                    title="Revert back to Kitchen preparation"
-                                  >
-                                    <span>Back to Kitchen</span>
-                                  </button>
-                                  <button
-                                    type="button"
                                     onClick={() => handleTriggerCancelOrder(order)}
-                                    className="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-lg text-red-700 hover:bg-red-50 text-[10px] font-medium transition-colors cursor-pointer"
+                                    className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-[10px] font-bold transition-colors cursor-pointer"
+                                    title="Cancel order and initiate return/refund"
                                   >
                                     <Ban className="w-3 h-3" />
                                     <span>Cancel Order</span>
@@ -2019,7 +2015,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     {formatPrice(metrics.totalRevenueLKR, currency)}
                   </span>
                   <span className="text-[11px] text-[#7A6458] block mt-0.5">
-                    Delivered & Picked orders only • ≈ ${convertLKRtoUSD(metrics.totalRevenueLKR).toFixed(2)} USD
+                    Net Captured & Delivered Sales • ≈ ${convertLKRtoUSD(metrics.totalRevenueLKR).toFixed(2)} USD
                   </span>
                 </div>
               </div>
@@ -3329,6 +3325,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
 
+            {/* Payment Return Notice if Card was confirmed / captured */}
+            {cancellingOrder.paymentMethod === 'card' &&
+              (cancellingOrder.status !== 'pending_confirmation' || !!cancellingOrder.paidAt || !!cancellingOrder.confirmedAt) && (
+                <div className="p-3.5 bg-red-50/90 rounded-2xl border-2 border-red-300 space-y-1.5 animate-fadeIn text-xs">
+                  <div className="flex items-center gap-2 text-red-950 font-bold">
+                    <RotateCcw className="w-4 h-4 text-red-700 shrink-0" />
+                    <span>Card Payment Captured — Return Confirmation Required</span>
+                  </div>
+                  <p className="text-[11px] text-red-900 leading-relaxed">
+                    Customer paid <strong>{formatPrice(cancellingOrder.grandTotalLKR, currency)}</strong> via Credit/Debit Card ({cancellingOrder.cardBrand || 'Card'} •••• {cancellingOrder.cardLast4 || '****'}).
+                  </p>
+                  <p className="text-[11px] text-red-800 font-semibold leading-relaxed">
+                    ⚠️ Confirming cancellation will immediately route this order to the <strong>Returned Bills</strong> tab as a pending refund for payment return to the customer. When settled, it will be deducted from Kitchen Gross Sales.
+                  </p>
+                </div>
+              )}
+
             {/* Reason Selection */}
             <div className="space-y-2 text-xs">
               <label className="block font-bold text-[#3D2C24]">
@@ -3409,10 +3422,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <button
                 type="button"
                 onClick={() => handleExecuteCancelOrder(cancellingOrder)}
-                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-md cursor-pointer flex items-center gap-1.5"
+                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-md cursor-pointer flex items-center gap-1.5 active:scale-98 transition-all"
               >
                 <Ban className="w-4 h-4" />
-                <span>Confirm Cancellation & Dispatch Email</span>
+                <span>
+                  {cancellingOrder.paymentMethod === 'card' &&
+                  (cancellingOrder.status !== 'pending_confirmation' || !!cancellingOrder.paidAt || !!cancellingOrder.confirmedAt)
+                    ? 'Confirm Cancellation & Send to Returned Bills'
+                    : 'Confirm Cancellation & Dispatch Email'}
+                </span>
               </button>
             </div>
           </div>
