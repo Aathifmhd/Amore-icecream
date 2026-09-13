@@ -108,7 +108,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onToggleCurrency,
 }) => {
   // Navigation & Active Tabs
-  const [activeTab, setActiveTab] = useState<AdminTab>('orders');
   const [activeTab, setActiveTab] = useState<AdminTab>(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get('tab') || params.get('section');
@@ -295,15 +294,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const deliveredOrders = orders.filter((o) => o.status === 'delivered');
     const cancelledOrders = orders.filter((o) => o.status === 'cancelled');
 
-    // Returned bills & refunds (cancelled card orders that were confirmed/captured)
     // Returned bills & refunds (any cancelled order with refundStatus, or cancelled captured card orders)
     const returnedBillsList = orders.filter((o) => {
       if (o.status !== 'cancelled') return false;
       if (o.refundStatus) return true;
       return (
-        o.status === 'cancelled' &&
         o.paymentMethod === 'card' &&
-        (!!o.refundStatus || !!o.paidAt || !!o.confirmedAt || o.cancelledBy === 'admin')
         o.orderType !== 'pickup' &&
         (!!o.paidAt || !!o.confirmedAt)
       );
@@ -319,15 +315,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     const pendingRefundCount = returnedBillsList.filter((o) => o.refundStatus !== 'completed').length;
 
-    // GROSS SALES REVENUE RULES (Solution 2):
-    // 1> Card payment: added as soon as admin confirms the order and payment is captured
-    // (includes active, delivered, and cancelled card orders that were confirmed/captured)
-    const capturedCardOrders = orders.filter(
-      (o) =>
-        o.paymentMethod === 'card' &&
-        o.orderType !== 'pickup' &&
-        (o.status !== 'pending_confirmation' || !!o.paidAt || !!o.confirmedAt)
-    );
     // GROSS SALES REVENUE RULES:
     // 1> Card payment: added ONLY after admin confirms the order and payment is captured!
     // Unconfirmed card orders (status === 'pending_confirmation') are NEVER added to gross sales!
@@ -439,12 +426,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // -----------------------------------------------------------
   const filteredReturnedBills = useMemo(() => {
     return orders.filter((order) => {
-      // Must be a cancelled card order that was confirmed/captured or has refundStatus
       if (order.status !== 'cancelled') return false;
       const isReturnedBill =
-        order.status === 'cancelled' &&
-        order.paymentMethod === 'card' &&
-        (!!order.refundStatus || !!order.paidAt || !!order.confirmedAt || order.cancelledBy === 'admin');
         !!order.refundStatus ||
         (order.paymentMethod === 'card' && order.orderType !== 'pickup' && (!!order.paidAt || !!order.confirmedAt));
 
@@ -734,7 +717,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="flex items-center gap-1 sm:gap-2 py-2">
             <button
               type="button"
-              onClick={() => setActiveTab('orders')}
               onClick={() => handleTabChange('orders')}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'orders'
@@ -753,7 +735,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('returns')}
               onClick={() => handleTabChange('returns')}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'returns'
@@ -776,7 +757,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('menu')}
               onClick={() => handleTabChange('menu')}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'menu'
@@ -791,7 +771,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('overview')}
               onClick={() => handleTabChange('overview')}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'overview'
@@ -805,7 +784,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('branches')}
               onClick={() => handleTabChange('branches')}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'branches'
@@ -981,7 +959,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setActiveTab('returns')}
                   onClick={() => handleTabChange('returns')}
                   className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
                 >
@@ -1537,7 +1514,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {/* TAB: RETURNED BILLS & REFUNDS */}
         {/* ======================================================== */}
         {activeTab === 'returns' && (
-          <div className="space-y-6">
           <div className="space-y-6 animate-fadeIn">
             {/* Dedicated Standalone Header Banner */}
             <div className="bg-white p-5 sm:p-6 rounded-3xl border border-[#E8DFC8] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1580,11 +1556,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <RotateCcw className="w-4 h-4 text-[#8C102A]" />
                 </div>
                 <div className="mt-2 text-xl sm:text-2xl font-black text-[#241A18]">
-                  {orders.filter((o) => o.status === 'cancelled' && o.paymentMethod === 'card').length}
                   {orders.filter((o) => o.status === 'cancelled' && (o.paymentMethod === 'card' || !!o.refundStatus)).length}
                 </div>
                 <div className="text-[11px] text-[#8A7970] mt-0.5">
-                  Card transactions cancelled after authorization
                   Transactions cancelled & routed to returns
                 </div>
               </div>
@@ -1860,14 +1834,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                             {/* Actions */}
                             <td className="px-4 py-3 align-top text-right">
-                              <div className="flex flex-col items-end gap-1.5 min-w-[140px]">
                               <div className="flex flex-col items-end gap-1.5 min-w-[150px]">
                                 {!isCompleted ? (
                                   <button
                                     type="button"
                                     onClick={() => handleCompleteReturn(order.orderReference)}
                                     className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer active:scale-95 w-full"
-                                    title="Confirm that refund payment to customer's card is completed. Deducts amount from Kitchen Gross Sales."
                                     title="Confirm that refund payment to customer is completed. Deducts amount from Kitchen Gross Sales."
                                   >
                                     <Check className="w-3.5 h-3.5" />
@@ -3793,10 +3765,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
 
             <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSaveNewReturnBill();
-              }}
               onSubmit={handleCreateManualReturnBill}
               className="space-y-3.5 text-xs"
             >
