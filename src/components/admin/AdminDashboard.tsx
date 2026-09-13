@@ -79,6 +79,10 @@ import {
   Printer,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   X,
   Save,
   Check,
@@ -101,6 +105,144 @@ interface AdminDashboardProps {
 
 type AdminTab = 'overview' | 'orders' | 'returns' | 'menu' | 'branches';
 type MenuCatalogSubTab = 'scoops' | 'coffee' | 'cakes';
+
+interface PaginationControlsProps {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  itemName?: string;
+}
+
+const PaginationControls: React.FC<PaginationControlsProps> = ({
+  currentPage,
+  totalPages,
+  totalItems,
+  pageSize,
+  onPageChange,
+  itemName = 'records',
+}) => {
+  if (totalItems === 0) return null;
+
+  const startRecord = (currentPage - 1) * pageSize + 1;
+  const endRecord = Math.min(currentPage * pageSize, totalItems);
+
+  // Generate page numbers to show
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 3) {
+        pages.push('...');
+      }
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      for (let i = start; i <= end; i++) {
+        if (!pages.includes(i)) pages.push(i);
+      }
+      if (currentPage < totalPages - 2) {
+        pages.push('...');
+      }
+      if (!pages.includes(totalPages)) pages.push(totalPages);
+    }
+    return pages;
+  };
+
+  return (
+    <div className="p-4 bg-white border-t border-[#E8DFC8] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#5D4E46]">
+      <div className="flex items-center gap-2">
+        <span className="font-semibold text-[#241A18]">
+          Showing <span className="font-bold text-[#8C102A]">{startRecord}</span> to{' '}
+          <span className="font-bold text-[#8C102A]">{endRecord}</span> of{' '}
+          <span className="font-bold text-[#241A18]">{totalItems}</span> {itemName}
+        </span>
+        <span className="text-[11px] bg-[#FAF7F2] border border-[#E8DFC8] px-2 py-0.5 rounded-md font-mono text-[#7A6458]">
+          Page {currentPage} of {totalPages}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-1.5 flex-wrap justify-center">
+        {/* First Page */}
+        <button
+          type="button"
+          onClick={() => onPageChange(1)}
+          disabled={currentPage === 1}
+          className="p-1.5 rounded-lg border border-[#E8DFC8] bg-white hover:bg-[#FAF7F2] text-[#5D4E46] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          title="First Page"
+        >
+          <ChevronsLeft className="w-4 h-4" />
+        </button>
+
+        {/* Previous Page */}
+        <button
+          type="button"
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="px-2.5 py-1.5 rounded-lg border border-[#E8DFC8] bg-white hover:bg-[#FAF7F2] text-[#5D4E46] font-semibold flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          title="Previous Page"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          <span className="hidden sm:inline">Prev</span>
+        </button>
+
+        {/* Numbered Page Buttons */}
+        <div className="flex items-center gap-1">
+          {getPageNumbers().map((p, idx) => {
+            if (p === '...') {
+              return (
+                <span key={`ellipsis-${idx}`} className="px-1 text-[#7A6458] font-bold select-none">
+                  ...
+                </span>
+              );
+            }
+            const pageNum = Number(p);
+            const isActive = pageNum === currentPage;
+            return (
+              <button
+                key={`page-${pageNum}`}
+                type="button"
+                onClick={() => onPageChange(pageNum)}
+                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  isActive
+                    ? 'bg-[#8C102A] text-white shadow-xs'
+                    : 'bg-white border border-[#E8DFC8] text-[#5D4E46] hover:bg-[#FAF7F2] hover:border-[#D9CBB7]'
+                }`}
+              >
+                {pageNum}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Next Page */}
+        <button
+          type="button"
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="px-2.5 py-1.5 rounded-lg border border-[#E8DFC8] bg-white hover:bg-[#FAF7F2] text-[#5D4E46] font-semibold flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          title="Next Page"
+        >
+          <span className="hidden sm:inline">Next</span>
+          <ChevronRight className="w-4 h-4" />
+        </button>
+
+        {/* Last Page */}
+        <button
+          type="button"
+          onClick={() => onPageChange(totalPages)}
+          disabled={currentPage === totalPages}
+          className="p-1.5 rounded-lg border border-[#E8DFC8] bg-white hover:bg-[#FAF7F2] text-[#5D4E46] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          title="Last Page"
+        >
+          <ChevronsRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+};
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onSignOut,
@@ -165,6 +307,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       [orderRef]: !prev[orderRef],
     }));
   };
+
+  // Pagination State (15 rows per page for both tables)
+  const PAGE_SIZE = 15;
+  const [ordersPage, setOrdersPage] = useState<number>(1);
+  const [returnsPage, setReturnsPage] = useState<number>(1);
+
+  // Order Items Summary Detail Popup State
+  const [selectedOrderForItemsPopup, setSelectedOrderForItemsPopup] = useState<OrderRecord | null>(null);
+
+  // Auto-reset page numbers when search or filters change
+  useEffect(() => {
+    setOrdersPage(1);
+  }, [orderSearchQuery, selectedBranchFilter, orderStatusFilter]);
+
+  useEffect(() => {
+    setReturnsPage(1);
+  }, [returnSearchQuery, selectedBranchFilter, returnStatusFilter]);
 
   // Confirm Order Modal State
   const [confirmingOrder, setConfirmingOrder] = useState<OrderRecord | null>(null);
@@ -455,6 +614,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       return true;
     });
   }, [orders, selectedBranchFilter, returnStatusFilter, returnSearchQuery]);
+
+  // -----------------------------------------------------------
+  // PAGINATION DERIVATIONS (15 ROWS PER PAGE)
+  // -----------------------------------------------------------
+  const totalOrdersPages = Math.max(1, Math.ceil(filteredOrders.length / PAGE_SIZE));
+  const safeOrdersPage = Math.min(Math.max(1, ordersPage), totalOrdersPages);
+  const paginatedOrders = useMemo(() => {
+    const start = (safeOrdersPage - 1) * PAGE_SIZE;
+    return filteredOrders.slice(start, start + PAGE_SIZE);
+  }, [filteredOrders, safeOrdersPage]);
+
+  const totalReturnsPages = Math.max(1, Math.ceil(filteredReturnedBills.length / PAGE_SIZE));
+  const safeReturnsPage = Math.min(Math.max(1, returnsPage), totalReturnsPages);
+  const paginatedReturnedBills = useMemo(() => {
+    const start = (safeReturnsPage - 1) * PAGE_SIZE;
+    return filteredReturnedBills.slice(start, start + PAGE_SIZE);
+  }, [filteredReturnedBills, safeReturnsPage]);
 
   const handleCompleteReturn = (orderRef: string) => {
     if (
@@ -941,7 +1117,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <th className="px-4 py-3">Order Ref</th>
                       <th className="px-4 py-3">Customer & Contact</th>
                       <th className="px-4 py-3">Branch & Type</th>
-                      <th className="px-4 py-3 min-w-[260px]">Items Summary</th>
+                      <th className="px-4 py-3 min-w-[260px]" title="Click any row's Items Summary to inspect detailed breakdown">
+                        Items Summary <span className="text-[10px] text-[#8C102A] font-normal lowercase">(click to inspect 🔍)</span>
+                      </th>
                       <th className="px-4 py-3">Total & Payment</th>
                       <th className="px-4 py-3">Stage & Status</th>
                       <th className="px-4 py-3">Lifecycle Action</th>
@@ -960,7 +1138,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         </td>
                       </tr>
                     ) : (
-                      filteredOrders.map((order) => {
+                      paginatedOrders.map((order) => {
                         const isCancelled = order.status === 'cancelled';
                         const isDelivered = order.status === 'delivered';
                         const isPreparing = order.status === 'preparing';
@@ -1036,17 +1214,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               </span>
                             </td>
 
-                            {/* Items Summary */}
-                            <td className="px-4 py-3 align-top min-w-[260px] max-w-[340px]">
-                              {/* Header badge with total count */}
-                              <div className="flex items-center justify-between text-[11px] font-bold text-[#7A6458] mb-1.5 pb-1 border-b border-[#EFE8DC]">
-                                <span>
-                                  {order.items.reduce((sum, it) => sum + it.quantity, 0)}{' '}
-                                  {order.items.reduce((sum, it) => sum + it.quantity, 0) === 1 ? 'Item' : 'Items'} Total
+                            {/* Items Summary (Click to view full detail popup modal) */}
+                            <td
+                              onClick={() => setSelectedOrderForItemsPopup(order)}
+                              className="px-4 py-3 align-top min-w-[260px] max-w-[340px] cursor-pointer group hover:bg-[#FAF7F2]/90 transition-all"
+                              title="Click to inspect complete itemized breakdown, serving formats, and notes"
+                            >
+                              {/* Header badge with total count & inspect hint */}
+                              <div className="flex items-center justify-between text-[11px] font-bold text-[#7A6458] mb-1.5 pb-1 border-b border-[#E8DFC8]">
+                                <span className="flex items-center gap-1 group-hover:text-[#8C102A] transition-colors">
+                                  <span>
+                                    {order.items.reduce((sum, it) => sum + it.quantity, 0)}{' '}
+                                    {order.items.reduce((sum, it) => sum + it.quantity, 0) === 1 ? 'Item' : 'Items'} Total
+                                  </span>
+                                  <Eye className="w-3 h-3 text-[#8C102A] opacity-0 group-hover:opacity-100 transition-opacity" />
                                 </span>
-                                <span className="text-[10px] text-[#8C102A] font-semibold bg-[#8C102A]/8 px-1.5 py-0.5 rounded">
-                                  {order.items.length}{' '}
-                                  {order.items.length === 1 ? 'flavor' : 'flavors'}
+                                <span className="text-[10px] text-[#8C102A] font-semibold bg-[#8C102A]/10 group-hover:bg-[#8C102A] group-hover:text-white px-1.5 py-0.5 rounded transition-all shadow-2xs">
+                                  Inspect 🔍
                                 </span>
                               </div>
 
@@ -1055,7 +1239,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 {displayedItems.map((item, idx) => (
                                   <div
                                     key={idx}
-                                    className="flex items-center justify-between gap-1.5 bg-[#FAF7F2] py-1 px-2 rounded-lg border border-[#E8DFC8]/80 hover:border-[#D9CBB7] transition-all text-xs"
+                                    className="flex items-center justify-between gap-1.5 bg-[#FAF7F2] group-hover:bg-white group-hover:shadow-2xs py-1 px-2 rounded-lg border border-[#E8DFC8]/80 group-hover:border-[#8C102A]/30 transition-all text-xs"
                                   >
                                     <div className="flex items-center gap-1.5 min-w-0 flex-1">
                                       {/* Bold Quantity Badge */}
@@ -1088,7 +1272,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               {hasManyItems && (
                                 <button
                                   type="button"
-                                  onClick={() => toggleOrderItemsExpanded(order.orderReference)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleOrderItemsExpanded(order.orderReference);
+                                  }}
                                   className="w-full mt-1.5 py-1 px-2.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-[#8C102A] border border-amber-200 text-xs font-bold flex items-center justify-between transition-all cursor-pointer active:scale-98 shadow-2xs"
                                 >
                                   <span>
@@ -1470,6 +1657,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </tbody>
                 </table>
               </div>
+
+              {/* Orders Table Pagination (15 rows/page) */}
+              <PaginationControls
+                currentPage={safeOrdersPage}
+                totalPages={totalOrdersPages}
+                totalItems={filteredOrders.length}
+                pageSize={PAGE_SIZE}
+                onPageChange={setOrdersPage}
+                itemName="orders"
+              />
             </div>
           </div>
         )}
@@ -1653,7 +1850,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <th className="px-4 py-3">Return / Order Ref</th>
                       <th className="px-4 py-3">Customer & Contact</th>
                       <th className="px-4 py-3">Card / Branch</th>
-                      <th className="px-4 py-3">Returned Items</th>
+                      <th className="px-4 py-3" title="Click any row's returned items to inspect detailed breakdown">
+                        Returned Items <span className="text-[10px] text-[#8C102A] font-normal lowercase">(click to inspect 🔍)</span>
+                      </th>
                       <th className="px-4 py-3">Cancellation Reason</th>
                       <th className="px-4 py-3">Return Amount</th>
                       <th className="px-4 py-3">Refund Status</th>
@@ -1674,7 +1873,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         </td>
                       </tr>
                     ) : (
-                      filteredReturnedBills.map((order) => {
+                      paginatedReturnedBills.map((order) => {
                         const isCompleted = order.refundStatus === 'completed';
                         const returnAmount = order.refundAmountLKR || order.grandTotalLKR || 0;
 
@@ -1727,11 +1926,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               </div>
                             </td>
 
-                            {/* Returned Items */}
-                            <td className="px-4 py-3 align-top min-w-[200px] max-w-[260px]">
+                            {/* Returned Items - Click to view detail popup */}
+                            <td
+                              onClick={() => setSelectedOrderForItemsPopup(order)}
+                              className="px-4 py-3 align-top min-w-[200px] max-w-[260px] cursor-pointer group hover:bg-[#FAF7F2]/90 transition-all"
+                              title="Click to inspect complete itemized breakdown, serving formats, and notes"
+                            >
+                              <div className="flex items-center justify-between text-[10px] font-bold text-[#7A6458] mb-1 pb-0.5 border-b border-[#EFE8DC]">
+                                <span className="group-hover:text-[#8C102A] transition-colors flex items-center gap-1">
+                                  <span>{order.items.reduce((s, it) => s + it.quantity, 0)} Items</span>
+                                  <Eye className="w-3 h-3 text-[#8C102A] opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </span>
+                                <span className="text-[10px] text-[#8C102A] bg-[#8C102A]/10 group-hover:bg-[#8C102A] group-hover:text-white px-1.5 py-0.2 rounded transition-all shadow-2xs">
+                                  Inspect 🔍
+                                </span>
+                              </div>
                               <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
                                 {order.items.map((it, idx) => (
-                                  <div key={idx} className="flex items-center justify-between text-[11px] py-0.5">
+                                  <div key={idx} className="flex items-center justify-between text-[11px] py-0.5 group-hover:text-[#8C102A]">
                                     <span className="truncate pr-1 text-[#241A18]">
                                       <strong className="text-[#8C102A]">{it.quantity}×</strong> {it.name}
                                     </span>
@@ -1847,6 +2059,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </tbody>
                 </table>
               </div>
+
+              {/* Returned Bills Table Pagination (15 rows/page) */}
+              <PaginationControls
+                currentPage={safeReturnsPage}
+                totalPages={totalReturnsPages}
+                totalItems={filteredReturnedBills.length}
+                pageSize={PAGE_SIZE}
+                onPageChange={setReturnsPage}
+                itemName="returned bills"
+              />
             </div>
           </div>
         )}
@@ -2291,6 +2513,213 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         )}
       </main>
+
+      {/* ======================================================== */}
+      {/* MODAL: ORDER ITEMS SUMMARY & DETAILED BREAKDOWN POPUP */}
+      {/* ======================================================== */}
+      {selectedOrderForItemsPopup && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn"
+          onClick={() => setSelectedOrderForItemsPopup(null)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-7 border border-[#E8DFC8] shadow-2xl relative animate-scaleIn max-h-[90vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between pb-3.5 border-b border-[#E8DFC8]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-[#8C102A]/10 border border-[#8C102A]/20 flex items-center justify-center text-[#8C102A] shrink-0">
+                  <ShoppingBag className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono font-black text-sm sm:text-base text-[#8C102A]">
+                      {selectedOrderForItemsPopup.orderReference}
+                    </span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                        selectedOrderForItemsPopup.orderType === 'pickup'
+                          ? 'bg-purple-100 text-purple-900 border border-purple-200'
+                          : 'bg-amber-100 text-amber-900 border border-amber-200'
+                      }`}
+                    >
+                      {selectedOrderForItemsPopup.orderType === 'pickup' ? '🏪 Pickup' : '🚚 Delivery'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#7A6458] mt-0.5">
+                    Placed {new Date(selectedOrderForItemsPopup.createdAt).toLocaleDateString()} at{' '}
+                    {new Date(selectedOrderForItemsPopup.createdAt).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedOrderForItemsPopup(null)}
+                className="p-2 rounded-full text-[#7A6458] hover:text-[#241A18] hover:bg-[#FAF7F2] transition-colors cursor-pointer"
+                title="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Customer & Branch Quick Info Strip */}
+            <div className="py-2.5 px-3.5 my-3 bg-[#FAF7F2] rounded-2xl border border-[#E8DFC8] grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+              <div>
+                <span className="text-[9px] text-[#7A6458] block uppercase font-bold tracking-wider">Customer</span>
+                <span className="font-bold text-[#241A18] truncate block">{selectedOrderForItemsPopup.customerName}</span>
+                <a
+                  href={`tel:${selectedOrderForItemsPopup.contactNumber}`}
+                  className="text-[#5D4E46] text-[11px] hover:text-[#8C102A] hover:underline flex items-center gap-1 mt-0.5"
+                >
+                  <Phone className="w-3 h-3 text-[#7A6458]" />
+                  <span>{selectedOrderForItemsPopup.contactNumber}</span>
+                </a>
+              </div>
+              <div>
+                <span className="text-[9px] text-[#7A6458] block uppercase font-bold tracking-wider">Branch</span>
+                <span className="font-semibold text-[#241A18] flex items-center gap-1 mt-0.5">
+                  <MapPin className="w-3 h-3 text-[#8C102A]" />
+                  <span>{selectedOrderForItemsPopup.branchName?.split(' ')[0] || 'Akurana'}</span>
+                </span>
+                <span className="text-[10px] text-[#7A6458] block">
+                  Status: <strong className="capitalize text-[#8C102A]">{selectedOrderForItemsPopup.status.replace('_', ' ')}</strong>
+                </span>
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <span className="text-[9px] text-[#7A6458] block uppercase font-bold tracking-wider">Payment</span>
+                <span className="font-bold text-[#8C102A] text-xs block mt-0.5">
+                  {selectedOrderForItemsPopup.paymentMethod === 'card'
+                    ? '💳 Card Payment'
+                    : selectedOrderForItemsPopup.paymentMethod === 'pay_at_parlour'
+                    ? '🏪 Pay at Parlour'
+                    : '💵 Cash / COD'}
+                </span>
+              </div>
+            </div>
+
+            {/* Scrollable Items Breakdown */}
+            <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 my-1">
+              <div className="flex items-center justify-between text-[11px] font-bold text-[#7A6458] uppercase tracking-wider px-1">
+                <span>Ordered Items ({selectedOrderForItemsPopup.items.length})</span>
+                <span>Subtotal</span>
+              </div>
+
+              {selectedOrderForItemsPopup.items.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="p-3 bg-white rounded-2xl border border-[#E8DFC8] hover:border-[#D9CBB7] transition-all flex items-start justify-between gap-3 shadow-2xs"
+                >
+                  <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                    <span className="inline-flex items-center justify-center min-w-[26px] h-6 px-1.5 rounded-lg bg-[#8C102A] text-white font-black text-xs shadow-xs shrink-0 mt-0.5">
+                      {item.quantity}×
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-bold text-xs sm:text-[13px] text-[#241A18] leading-tight">
+                        {item.name}
+                      </h4>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                        {item.format && (
+                          <span className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-[#FAF7F2] text-[#5D4E46] border border-[#E8DFC8] capitalize">
+                            Serving: {item.format.replace(/-/g, ' ')}
+                          </span>
+                        )}
+                        {item.category && (
+                          <span className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-200 capitalize">
+                            {item.category}
+                          </span>
+                        )}
+                      </div>
+                      {item.notes && (
+                        <p className="text-[10px] text-[#7A6458] italic mt-1 bg-gray-50 p-1.5 rounded-lg border border-gray-200/60">
+                          Note: {item.notes}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <span className="font-bold text-xs sm:text-sm text-[#8C102A] block">
+                      {formatPrice(item.priceLKR * item.quantity, currency)}
+                    </span>
+                    <span className="text-[10px] text-[#7A6458] block">
+                      ({formatPrice(item.priceLKR, currency)} each)
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+              {/* Special Customer Instructions Note */}
+              {selectedOrderForItemsPopup.specialNote && (
+                <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-950 mt-2">
+                  <span className="font-bold block text-amber-900 mb-0.5 flex items-center gap-1">
+                    <span>📝 Customer Instructions:</span>
+                  </span>
+                  <p className="italic">{selectedOrderForItemsPopup.specialNote}</p>
+                </div>
+              )}
+
+              {/* Delivery Address if delivery */}
+              {selectedOrderForItemsPopup.orderType === 'delivery' && selectedOrderForItemsPopup.deliveryAddress && (
+                <div className="p-2.5 bg-[#FAF7F2] rounded-2xl border border-[#E8DFC8] text-xs text-[#5D4E46] mt-2">
+                  <span className="font-bold block text-[#241A18] mb-0.5 flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-[#8C102A]" />
+                    <span>Delivery Address:</span>
+                  </span>
+                  <p>{selectedOrderForItemsPopup.deliveryAddress}, {selectedOrderForItemsPopup.city}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Financial Summary & Actions */}
+            <div className="pt-3 border-t border-[#E8DFC8] mt-2 space-y-2">
+              <div className="bg-[#FAF7F2] p-2.5 rounded-2xl border border-[#E8DFC8] space-y-1 text-xs text-[#3D2C24]">
+                <div className="flex justify-between">
+                  <span className="text-[#7A6458]">Items Subtotal:</span>
+                  <span className="font-medium">{formatPrice(selectedOrderForItemsPopup.subtotalLKR, currency)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#7A6458]">Delivery Fee:</span>
+                  <span className="font-medium">
+                    {selectedOrderForItemsPopup.orderType === 'pickup'
+                      ? 'Free (Parlour Pickup)'
+                      : formatPrice(selectedOrderForItemsPopup.deliveryFeeLKR, currency)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm font-black text-[#8C102A] pt-1 border-t border-[#E8DFC8]">
+                  <span>Grand Total:</span>
+                  <span>{formatPrice(selectedOrderForItemsPopup.grandTotalLKR, currency)}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const o = selectedOrderForItemsPopup;
+                    setSelectedOrderForItemsPopup(null);
+                    setSelectedOrderForInvoice(o);
+                  }}
+                  className="flex-1 py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Printer className="w-4 h-4 text-slate-600" />
+                  <span>Print Slip</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedOrderForItemsPopup(null)}
+                  className="flex-1 py-2 px-3 rounded-xl bg-[#8C102A] hover:bg-[#A31634] text-white font-bold text-xs transition-colors cursor-pointer shadow-sm text-center"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ======================================================== */}
       {/* MODAL: PRINTABLE ORDER INVOICE / RECEIPT */}
