@@ -16,6 +16,7 @@ import {
   completeOrderRefund,
   createManualReturnBill,
   updateReturnBill,
+  isCapturedReturnedBill,
   ORDERS_UPDATED_EVENT,
   syncOrdersFromFirestore,
   mergeOrdersIntoStorage,
@@ -294,16 +295,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const deliveredOrders = orders.filter((o) => o.status === 'delivered');
     const cancelledOrders = orders.filter((o) => o.status === 'cancelled');
 
-    // Returned bills & refunds (any cancelled order with refundStatus, or cancelled captured card orders)
-    const returnedBillsList = orders.filter((o) => {
-      if (o.status !== 'cancelled') return false;
-      if (o.refundStatus) return true;
-      return (
-        o.paymentMethod === 'card' &&
-        o.orderType !== 'pickup' &&
-        (!!o.paidAt || !!o.confirmedAt)
-      );
-    });
+    // Returned bills & refunds: ONLY orders where payment was already captured by card and cancelled after confirmation, or manual return bills
+    const returnedBillsList = orders.filter(isCapturedReturnedBill);
 
     const completedRefundsTotalLKR = returnedBillsList
       .filter((o) => o.refundStatus === 'completed')
@@ -398,11 +391,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       // Returned bills are automatically & exclusively routed to the Returned Bills table - do NOT show in Orders & Kitchen!
-      const isReturnedBill =
-        order.status === 'cancelled' &&
-        (!!order.refundStatus ||
-          (order.paymentMethod === 'card' && order.orderType !== 'pickup' && (!!order.paidAt || !!order.confirmedAt)));
-      if (isReturnedBill) {
+      if (isCapturedReturnedBill(order)) {
         return false;
       }
 
@@ -435,16 +424,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // -----------------------------------------------------------
   const filteredReturnedBills = useMemo(() => {
     return orders.filter((order) => {
-      // Must be a cancelled card order that was confirmed/captured or has refundStatus
-      if (order.status !== 'cancelled') return false;
-      const isReturnedBill =
-        order.status === 'cancelled' &&
-        order.paymentMethod === 'card' &&
-        (!!order.refundStatus || !!order.paidAt || !!order.confirmedAt || order.cancelledBy === 'admin');
-        !!order.refundStatus ||
-        (order.paymentMethod === 'card' && order.orderType !== 'pickup' && (!!order.paidAt || !!order.confirmedAt));
-
-      if (!isReturnedBill) return false;
+      // ONLY include orders where card payment was already confirmed/captured, or manual return bills!
+      // Orders cancelled by admin before confirmation are strictly excluded!
+      if (!isCapturedReturnedBill(order)) return false;
 
       // Branch filter
       if (selectedBranchFilter !== 'all' && order.branchId !== selectedBranchFilter) {
@@ -1566,12 +1548,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <RotateCcw className="w-4 h-4 text-[#8C102A]" />
                 </div>
                 <div className="mt-2 text-xl sm:text-2xl font-black text-[#241A18]">
-                  {orders.filter((o) => o.status === 'cancelled' && o.paymentMethod === 'card').length}
-                  {orders.filter((o) => o.status === 'cancelled' && (o.paymentMethod === 'card' || !!o.refundStatus)).length}
+                  {orders.filter(isCapturedReturnedBill).length}
                 </div>
                 <div className="text-[11px] text-[#8A7970] mt-0.5">
-                  Card transactions cancelled after authorization
-                  Transactions cancelled & routed to returns
+                  Captured card orders cancelled after confirmation
                 </div>
               </div>
 

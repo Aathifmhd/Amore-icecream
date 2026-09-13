@@ -58,6 +58,26 @@ export function getAllOrders(): Record<string, OrderRecord> {
       deleteOrderFromFirestore('AMO-3899').catch(() => {});
     }
 
+    // Ensure any card order cancelled before admin confirmation does NOT have refundStatus
+    let hadCleanup = false;
+    for (const key of Object.keys(parsed)) {
+      const o = parsed[key];
+      if (
+        o.status === 'cancelled' &&
+        o.paymentMethod === 'card' &&
+        !o.confirmedAt &&
+        !o.orderReference.startsWith('RET-') &&
+        o.refundStatus !== undefined
+      ) {
+        delete o.refundStatus;
+        delete o.refundAmountLKR;
+        hadCleanup = true;
+      }
+    }
+    if (hadCleanup) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+    }
+
     return parsed;
   } catch (err) {
     console.error('Failed to load orders from localStorage:', err);
@@ -253,7 +273,18 @@ export function mergeOrdersIntoStorage(incomingOrders: OrderRecord[]): void {
         new Date(order.updatedAt || order.createdAt).getTime() >=
           new Date(existing.updatedAt || existing.createdAt).getTime()
       ) {
-        all[order.orderReference] = { ...existing, ...order };
+        const merged = { ...existing, ...order };
+        // Strip refundStatus if card order was cancelled before confirmation
+        if (
+          merged.status === 'cancelled' &&
+          merged.paymentMethod === 'card' &&
+          !merged.confirmedAt &&
+          !merged.orderReference.startsWith('RET-')
+        ) {
+          delete merged.refundStatus;
+          delete merged.refundAmountLKR;
+        }
+        all[order.orderReference] = merged;
         hasChanges = true;
       }
     }
@@ -314,6 +345,30 @@ export function getAllOrdersAdmin(): OrderRecord[] {
 }
 
 /**
+ * Strict Policy Helper:
+ * Checks if an order is an official Returned Bill (payment was already confirmed and captured
+ * before cancellation, or is a manual counter return bill).
+ * An order cancelled by admin/customer BEFORE confirming the order (no payment captured)
+ * is NEVER a returned bill!
+ */
+export function isCapturedReturnedBill(order: OrderRecord): boolean {
+  if (order.status !== 'cancelled') return false;
+
+  // Manual return bill created by admin
+  if (order.orderReference.startsWith('RET-') || order.items?.some((i) => i.itemId === 'returned-item-manual')) {
+    return true;
+  }
+
+  // Card delivery order that was confirmed by admin/owner before being cancelled
+  return (
+    order.paymentMethod === 'card' &&
+    order.orderType !== 'pickup' &&
+    Boolean(order.confirmedAt) &&
+    Boolean(order.refundStatus)
+  );
+}
+
+/**
  * Admin: Permanently delete an order from storage & firestore
  * CRUD Policy: Confirmed, preparing, on the way, or delivered orders cannot be deleted.
  */
@@ -323,13 +378,7 @@ export function deleteOrder(orderReference: string): boolean {
     const existing = all[orderReference];
     if (existing) {
       // Accounting & Audit Policy: Returned bills & credit notes can NEVER be deleted!
-      const isReturnedBill =
-        !!existing.refundStatus ||
-        (existing.status === 'cancelled' &&
-          existing.paymentMethod === 'card' &&
-          existing.orderType !== 'pickup' &&
-          (!!existing.paidAt || !!existing.confirmedAt));
-      if (isReturnedBill) {
+      if (isCapturedReturnedBill(existing)) {
         console.warn(`Accounting Policy: Return bill ${orderReference} is a financial credit note and cannot be deleted.`);
         return false;
       }
@@ -416,13 +465,17 @@ export function adminCancelOrderWithReason(
   const now = new Date().toISOString();
   const all = getAllOrders();
   const existing = all[orderReference];
+  if (!existing) return null;
 
+  // STRICT USER POLICY:
+  // "only sent the returned order which is already captured payment order by card payment...
+  // thats mean cancel by owner after confirm the order and captured the payment.
+  // Dont get not payment captured orders that's means cancel by admin before confirm the order"
   const isCardCaptured =
-    existing &&
     existing.paymentMethod === 'card' &&
-    (!!existing.paidAt || !!existing.confirmedAt || existing.status !== 'pending_confirmation');
     existing.orderType !== 'pickup' &&
-    (!!existing.paidAt || !!existing.confirmedAt);
+    Boolean(existing.confirmedAt) &&
+    existing.status !== 'pending_confirmation';
 
   const updates: Partial<OrderRecord> = {
     status: 'cancelled',
@@ -436,6 +489,9 @@ export function adminCancelOrderWithReason(
   if (isCardCaptured) {
     updates.refundStatus = 'pending';
     updates.refundAmountLKR = existing.grandTotalLKR;
+  } else {
+    updates.refundStatus = undefined;
+    updates.refundAmountLKR = undefined;
   }
 
   return updateOrder(orderReference, updates);
@@ -536,11 +592,7 @@ export function generateInconvenienceEmail(
   order: OrderRecord,
   reason: string
 ): { subject: string; body: string } {
-  const isReturnedBill =
-    order.refundStatus ||
-    (order.paymentMethod === 'card' &&
-      order.orderType !== 'pickup' &&
-      (!!order.paidAt || !!order.confirmedAt));
+  const isReturnedBill = isCapturedReturnedBill(order);
 
   const refundAmt = order.refundAmountLKR || order.grandTotalLKR || 0;
   const formattedAmt = `LKR ${refundAmt.toLocaleString()}`;
