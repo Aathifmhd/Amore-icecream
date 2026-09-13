@@ -408,6 +408,7 @@ export function adminCancelOrderWithReason(
   const isCardCaptured =
     existing &&
     existing.paymentMethod === 'card' &&
+    (!!existing.paidAt || !!existing.confirmedAt || existing.status !== 'pending_confirmation');
     existing.orderType !== 'pickup' &&
     (!!existing.paidAt || !!existing.confirmedAt);
 

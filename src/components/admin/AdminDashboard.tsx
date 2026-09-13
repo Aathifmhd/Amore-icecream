@@ -426,8 +426,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // -----------------------------------------------------------
   const filteredReturnedBills = useMemo(() => {
     return orders.filter((order) => {
+      // Must be a cancelled card order that was confirmed/captured or has refundStatus
       if (order.status !== 'cancelled') return false;
       const isReturnedBill =
+        order.status === 'cancelled' &&
+        order.paymentMethod === 'card' &&
+        (!!order.refundStatus || !!order.paidAt || !!order.confirmedAt || order.cancelledBy === 'admin');
         !!order.refundStatus ||
         (order.paymentMethod === 'card' && order.orderType !== 'pickup' && (!!order.paidAt || !!order.confirmedAt));
 
@@ -1556,9 +1560,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <RotateCcw className="w-4 h-4 text-[#8C102A]" />
                 </div>
                 <div className="mt-2 text-xl sm:text-2xl font-black text-[#241A18]">
+                  {orders.filter((o) => o.status === 'cancelled' && o.paymentMethod === 'card').length}
                   {orders.filter((o) => o.status === 'cancelled' && (o.paymentMethod === 'card' || !!o.refundStatus)).length}
                 </div>
                 <div className="text-[11px] text-[#8A7970] mt-0.5">
+                  Card transactions cancelled after authorization
                   Transactions cancelled & routed to returns
                 </div>
               </div>

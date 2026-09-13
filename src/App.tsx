@@ -90,11 +90,12 @@ export default function App() {
   // Admin Session State
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => isAdminAuthenticated());
 
-  // Mobile / Dedicated Page State (reads ?page=menu or ?page=admin)
+  // Mobile / Dedicated Page State (reads ?page=admin, ?tab=returns, etc.)
   const [currentPage, setCurrentPage] = useState<'home' | 'menu' | 'admin'>(() => {
     const params = new URLSearchParams(window.location.search);
     const p = params.get('page');
-    if (p === 'admin') return 'admin';
+    const tab = params.get('tab') || params.get('section');
+    if (p === 'admin' || tab === 'returns' || tab === 'orders') return 'admin';
     if (p === 'menu') return 'menu';
     return 'home';
   });
@@ -110,7 +111,8 @@ export default function App() {
       const params = new URLSearchParams(window.location.search);
       setConfirmOrderRef(params.get('confirmOrder'));
       const p = params.get('page');
-      setCurrentPage(p === 'admin' ? 'admin' : p === 'menu' ? 'menu' : 'home');
+      const tab = params.get('tab') || params.get('section');
+      setCurrentPage(p === 'admin' || tab === 'returns' || tab === 'orders' ? 'admin' : p === 'menu' ? 'menu' : 'home');
       setIsAdminLoggedIn(isAdminAuthenticated());
     };
 
