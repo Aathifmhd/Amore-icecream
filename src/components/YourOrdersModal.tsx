@@ -35,6 +35,7 @@ import {
   Check,
   AlertTriangle,
   Truck,
+  Store,
 } from 'lucide-react';
 import { LocationPickerModal } from './LocationPickerModal';
 
@@ -448,15 +449,24 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                         },
                         {
                           num: 4,
-                          label: order.orderType === 'delivery' ? 'On the Way' : 'Ready',
-                          activeColor: '#2563EB',
-                          breatheClass: 'animate-breathe-blue bg-blue-600 text-white ring-4 ring-blue-600/25',
-                          activeTextClass: 'text-blue-700 font-extrabold',
-                          activeIcon: <Truck className="w-3.5 h-3.5" />,
+                          label: order.orderType === 'delivery' ? 'On the Way' : 'Ready to Pickup',
+                          activeColor: order.orderType === 'delivery' ? '#2563EB' : '#7C3AED',
+                          breatheClass:
+                            order.orderType === 'delivery'
+                              ? 'animate-breathe-blue bg-blue-600 text-white ring-4 ring-blue-600/25'
+                              : 'animate-breathe bg-purple-600 text-white ring-4 ring-purple-600/25',
+                          activeTextClass:
+                            order.orderType === 'delivery' ? 'text-blue-700 font-extrabold' : 'text-purple-700 font-extrabold',
+                          activeIcon:
+                            order.orderType === 'delivery' ? (
+                              <Truck className="w-3.5 h-3.5" />
+                            ) : (
+                              <ShoppingBag className="w-3.5 h-3.5" />
+                            ),
                         },
                         {
                           num: 5,
-                          label: 'Delivered',
+                          label: order.orderType === 'delivery' ? 'Delivered' : 'Picked Up',
                           activeColor: '#059669',
                           breatheClass: 'animate-breathe-green bg-emerald-600 text-white ring-4 ring-emerald-600/25',
                           activeTextClass: 'text-emerald-700 font-extrabold',
@@ -714,7 +724,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                     <div className="p-3 sm:px-5 bg-amber-50/70 border-b border-amber-200/80 flex items-center gap-2 text-xs text-amber-900">
                       <Clock className="w-4 h-4 text-amber-600 shrink-0" />
                       <span>
-                        <strong>Awaiting parlour confirmation:</strong> Our team is verifying fresh kitchen inventory. Payment will only process after confirmation.
+                        <strong>Awaiting parlour confirmation:</strong> Our team is verifying fresh kitchen inventory. {order.orderType === 'pickup' ? 'Your order will be prepared shortly for parlour pickup.' : 'Payment will only process after confirmation.'}
                       </span>
                     </div>
                   )}
@@ -740,11 +750,17 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                             )}
                             {isPreparing
                               ? 'Scooping & Churning Fresh Gelato'
+                              : order.orderType === 'pickup'
+                              ? 'Order Confirmed at Parlour'
                               : 'Order Confirmed & Payment Captured'}
                           </span>
                           <span className="text-[11px] text-[#5D4E46] block mt-0.5">
                             {isPreparing
-                              ? 'Our parlour artisans are crafting your custom flavours and biscuit cones right now.'
+                              ? order.orderType === 'pickup'
+                                ? 'Our parlour artisans are crafting your custom flavours. Your order will be ready for pickup shortly.'
+                                : 'Our parlour artisans are crafting your custom flavours and biscuit cones right now.'
+                              : order.orderType === 'pickup'
+                              ? 'Your pickup order has been approved by the parlour and is queued for preparation. Pay at counter upon collection.'
                               : 'Your order has been approved by the parlour and sent to the preparation queue.'}
                           </span>
                         </div>
@@ -764,31 +780,65 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                   )}
 
                   {isOnTheWay && (
-                    <div className="p-3.5 sm:px-5 bg-sky-50/90 border-b border-sky-200/90 flex items-center justify-between gap-2 text-xs text-sky-950 animate-fadeIn">
+                    <div
+                      className={`p-3.5 sm:px-5 border-b flex items-center justify-between gap-2 text-xs animate-fadeIn ${
+                        order.orderType === 'pickup'
+                          ? 'bg-purple-50/90 border-purple-200/90 text-purple-950'
+                          : 'bg-sky-50/90 border-sky-200/90 text-sky-950'
+                      }`}
+                    >
                       <div className="flex items-center gap-3">
                         <div className="relative shrink-0">
-                          <span className="absolute -inset-1 rounded-full bg-blue-500/25 animate-pulse-glow -z-0" />
-                          <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-xs relative z-10 animate-breathe-blue ring-2 ring-blue-500/20">
-                            <Truck className="w-4 h-4" />
+                          <span
+                            className={`absolute -inset-1 rounded-full animate-pulse-glow -z-0 ${
+                              order.orderType === 'pickup' ? 'bg-purple-500/25' : 'bg-blue-500/25'
+                            }`}
+                          />
+                          <div
+                            className={`w-8 h-8 rounded-full text-white flex items-center justify-center shadow-xs relative z-10 ring-2 ${
+                              order.orderType === 'pickup'
+                                ? 'bg-purple-600 animate-breathe ring-purple-500/20'
+                                : 'bg-blue-600 animate-breathe-blue ring-blue-500/20'
+                            }`}
+                          >
+                            {order.orderType === 'pickup' ? (
+                              <ShoppingBag className="w-4 h-4" />
+                            ) : (
+                              <Truck className="w-4 h-4" />
+                            )}
                           </div>
                         </div>
                         <div>
-                          <span className="font-bold text-sky-950 block text-xs flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse inline-block" />
+                          <span
+                            className={`font-bold block text-xs flex items-center gap-1.5 ${
+                              order.orderType === 'pickup' ? 'text-purple-950' : 'text-sky-950'
+                            }`}
+                          >
+                            <span
+                              className={`w-2 h-2 rounded-full animate-pulse inline-block ${
+                                order.orderType === 'pickup' ? 'bg-purple-600' : 'bg-blue-600'
+                              }`}
+                            />
                             {order.orderType === 'delivery'
                               ? 'Delivery partner on the way'
-                              : 'Ready for pickup at parlour'}
+                              : 'Ready to pickup'}
                           </span>
-                          <span className="text-[11px] text-sky-800 block mt-0.5">
+                          <span
+                            className={`text-[11px] block mt-0.5 ${
+                              order.orderType === 'pickup' ? 'text-purple-800' : 'text-sky-800'
+                            }`}
+                          >
                             {order.orderType === 'delivery'
                               ? 'Your scoops are packed in thermal containers and our delivery partner is en route.'
-                              : 'Your order is ready and waiting for you at our parlour counter.'}
+                              : `Your gelato is freshly prepared and waiting for you at Amore ${order.branchName} counter!`}
                           </span>
                         </div>
                       </div>
                       <a
                         href={`https://wa.me/${branch.whatsapp.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                          `Hello Amore ${branch.name}, checking on order ${order.orderReference} that is on the way.`
+                          order.orderType === 'delivery'
+                            ? `Hello Amore ${branch.name}, checking on order ${order.orderReference} that is on the way.`
+                            : `Hello Amore ${branch.name}, I am on my way to collect order ${order.orderReference}.`
                         )}`}
                         target="_blank"
                         rel="noreferrer"
@@ -895,8 +945,13 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                             <Phone className="w-3 h-3 text-[#8C102A]" />
                             <span>{order.contactNumber}</span>
                           </p>
-                          <div className="flex items-center gap-1.5">
-                            {order.paymentMethod === 'card' ? (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {order.orderType === 'pickup' || order.paymentMethod === 'pay_at_parlour' ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
+                                <Store className="w-3 h-3 text-purple-600" />
+                                <span>Pay at the Parlour / Counter</span>
+                              </span>
+                            ) : order.paymentMethod === 'card' ? (
                               <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700">
                                 <CreditCard className="w-3 h-3" />
                                 <span>Card {order.cardBrand ? `(${order.cardBrand})` : ''}</span>

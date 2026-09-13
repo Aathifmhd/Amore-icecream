@@ -13,6 +13,7 @@ import {
   adminSetDelivered,
   adminCancelOrderWithReason,
   generateInconvenienceEmail,
+  completeOrderRefund,
   ORDERS_UPDATED_EVENT,
   syncOrdersFromFirestore,
   mergeOrdersIntoStorage,
@@ -84,6 +85,8 @@ import {
   FileText,
   Truck,
   Lock,
+  Store,
+  RotateCcw,
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -93,7 +96,7 @@ interface AdminDashboardProps {
   onToggleCurrency: (c: Currency) => void;
 }
 
-type AdminTab = 'overview' | 'orders' | 'menu' | 'branches';
+type AdminTab = 'overview' | 'orders' | 'returns' | 'menu' | 'branches';
 type MenuCatalogSubTab = 'scoops' | 'coffee' | 'cakes';
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -112,6 +115,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>('all');
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<OrderRecord | null>(null);
+  const [selectedOrderForReturnInvoice, setSelectedOrderForReturnInvoice] = useState<OrderRecord | null>(null);
+  const [returnSearchQuery, setReturnSearchQuery] = useState('');
+  const [returnStatusFilter, setReturnStatusFilter] = useState<'all' | 'pending' | 'completed'>('all');
   const [selectedOrderForEdit, setSelectedOrderForEdit] = useState<OrderRecord | null>(null);
   const [isCreateOrderModalOpen, setIsCreateOrderModalOpen] = useState(false);
   const [expandedOrderItems, setExpandedOrderItems] = useState<Record<string, boolean>>({});
@@ -252,8 +258,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const deliveredOrders = orders.filter((o) => o.status === 'delivered');
     const cancelledOrders = orders.filter((o) => o.status === 'cancelled');
 
-    // Strictly calculate revenue from completed delivered/picked orders
-    const totalRevenueLKR = deliveredOrders.reduce((sum, o) => sum + (o.grandTotalLKR || 0), 0);
+    // Returned bills & refunds (cancelled card orders that were confirmed/captured)
+    const returnedBillsList = orders.filter((o) => {
+      return (
+        o.status === 'cancelled' &&
+        o.paymentMethod === 'card' &&
+        (!!o.refundStatus || !!o.paidAt || !!o.confirmedAt || o.cancelledBy === 'admin')
+      );
+    });
+
+    const completedRefundsTotalLKR = returnedBillsList
+      .filter((o) => o.refundStatus === 'completed')
+      .reduce((sum, o) => sum + (o.refundAmountLKR || o.grandTotalLKR || 0), 0);
+
+    const pendingRefundsTotalLKR = returnedBillsList
+      .filter((o) => o.refundStatus !== 'completed')
+      .reduce((sum, o) => sum + (o.refundAmountLKR || o.grandTotalLKR || 0), 0);
+
+    const pendingRefundCount = returnedBillsList.filter((o) => o.refundStatus !== 'completed').length;
+
+    // Gross delivered revenue
+    const totalDeliveredGrossLKR = deliveredOrders.reduce((sum, o) => sum + (o.grandTotalLKR || 0), 0);
+
+    // Deduct completed refunds from gross sales
+    const totalRevenueLKR = Math.max(0, totalDeliveredGrossLKR - completedRefundsTotalLKR);
 
     const branchRevenue: Record<string, number> = {
       akurana: 0,
@@ -266,6 +294,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       branchRevenue[b] = (branchRevenue[b] || 0) + (o.grandTotalLKR || 0);
     });
 
+    returnedBillsList.filter((o) => o.refundStatus === 'completed').forEach((o) => {
+      const b = o.branchId || 'akurana';
+      branchRevenue[b] = Math.max(0, (branchRevenue[b] || 0) - (o.refundAmountLKR || o.grandTotalLKR || 0));
+    });
+
     return {
       totalAllOrders,
       totalOrders: deliveredOrders.length, // Only delivery completed orders count as Total Orders
@@ -274,6 +307,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       onTheWayCount: onTheWayOrders.length,
       deliveredCount: deliveredOrders.length,
       cancelledCount: cancelledOrders.length,
+      totalDeliveredGrossLKR,
+      completedRefundsTotalLKR,
+      pendingRefundsTotalLKR,
+      pendingRefundCount,
       totalRevenueLKR,
       branchRevenue,
     };
@@ -307,6 +344,58 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       return true;
     });
   }, [orders, selectedBranchFilter, orderStatusFilter, orderSearchQuery]);
+
+  // -----------------------------------------------------------
+  // FILTERED RETURNED BILLS (REFUNDS)
+  // -----------------------------------------------------------
+  const filteredReturnedBills = useMemo(() => {
+    return orders.filter((order) => {
+      // Must be a cancelled card order that was confirmed/captured or has refundStatus
+      const isReturnedBill =
+        order.status === 'cancelled' &&
+        order.paymentMethod === 'card' &&
+        (!!order.refundStatus || !!order.paidAt || !!order.confirmedAt || order.cancelledBy === 'admin');
+
+      if (!isReturnedBill) return false;
+
+      // Branch filter
+      if (selectedBranchFilter !== 'all' && order.branchId !== selectedBranchFilter) {
+        return false;
+      }
+
+      // Return Status filter
+      if (returnStatusFilter === 'pending' && order.refundStatus === 'completed') {
+        return false;
+      }
+      if (returnStatusFilter === 'completed' && order.refundStatus !== 'completed') {
+        return false;
+      }
+
+      // Search query
+      if (returnSearchQuery.trim()) {
+        const q = returnSearchQuery.toLowerCase();
+        const matchesRef = order.orderReference.toLowerCase().includes(q);
+        const matchesName = order.customerName.toLowerCase().includes(q);
+        const matchesPhone = order.contactNumber.toLowerCase().includes(q);
+        if (!matchesRef && !matchesName && !matchesPhone) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [orders, selectedBranchFilter, returnStatusFilter, returnSearchQuery]);
+
+  const handleCompleteReturn = (orderRef: string) => {
+    if (
+      window.confirm(
+        `Mark refund for order ${orderRef} as completed? This will confirm payment reversal to customer's card and deduct the amount from Gross Sales.`
+      )
+    ) {
+      completeOrderRefund(orderRef);
+      refreshAllData();
+    }
+  };
 
   // -----------------------------------------------------------
   // ORDER ACTIONS (CRUD & LIFECYCLE)
@@ -512,6 +601,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             <button
               type="button"
+              onClick={() => setActiveTab('returns')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'returns'
+                  ? 'bg-[#8C102A] text-white shadow-xs'
+                  : 'text-[#5D4E46] hover:bg-[#EFE8DC] hover:text-[#241A18]'
+              }`}
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>Returned Bills</span>
+              {metrics.pendingRefundCount > 0 ? (
+                <span className="px-1.5 py-0.2 rounded-full bg-red-600 text-white text-[10px] font-black animate-pulse">
+                  {metrics.pendingRefundCount}
+                </span>
+              ) : (
+                <span className="text-[10px] font-normal opacity-70">({metrics.cancelledCount})</span>
+              )}
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActiveTab('menu')}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'menu'
@@ -574,14 +683,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
               <div className="bg-white p-4 rounded-2xl border border-[#E8DFC8] shadow-xs">
                 <div className="flex items-center justify-between text-xs font-bold text-[#7A6458] uppercase">
-                  <span>Gross Sales</span>
+                  <span>Gross Sales (Net)</span>
                   <DollarSign className="w-4 h-4 text-emerald-600" />
                 </div>
                 <div className="mt-2 text-xl sm:text-2xl font-black text-[#241A18]">
                   {formatPrice(metrics.totalRevenueLKR, currency)}
                 </div>
                 <div className="text-[11px] text-[#8A7970] mt-0.5">
-                  Delivered / Picked orders only
+                  {metrics.completedRefundsTotalLKR > 0 ? (
+                    <span className="text-amber-800 font-medium">
+                      Delivered: {formatPrice(metrics.totalDeliveredGrossLKR, currency)} - Refunds: {formatPrice(metrics.completedRefundsTotalLKR, currency)}
+                    </span>
+                  ) : (
+                    'Delivered / Picked orders only'
+                  )}
                 </div>
               </div>
 
@@ -600,14 +715,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
               <div className="bg-white p-4 rounded-2xl border border-[#E8DFC8] shadow-xs">
                 <div className="flex items-center justify-between text-xs font-bold text-[#7A6458] uppercase">
-                  <span>On The Way</span>
+                  <span>Dispatched / Ready</span>
                   <Truck className="w-4 h-4 text-blue-600" />
                 </div>
                 <div className="mt-2 text-xl sm:text-2xl font-black text-blue-700">
-                  {metrics.onTheWayCount} orders
+                  {metrics.onTheWayCount} active
                 </div>
                 <div className="text-[11px] text-[#8A7970] mt-0.5">
-                  With delivery partner
+                  On the way or ready to pickup
                 </div>
               </div>
 
@@ -670,7 +785,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <option value="pending_confirmation">Pending Confirmation</option>
                   <option value="confirmed">Confirmed</option>
                   <option value="preparing">In Kitchen (Preparing)</option>
-                  <option value="on_the_way">On the Way (Delivery Partner)</option>
+                  <option value="on_the_way">On the Way / Ready to Pickup</option>
                   <option value="delivered">Delivered / Picked</option>
                   <option value="cancelled">Cancelled</option>
                 </select>
@@ -867,9 +982,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               </span>
                               <div className="flex flex-col gap-0.5 mt-1">
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white border border-[#D9CBB7] text-[#5D4E46]">
-                                  {order.paymentMethod === 'card' ? '💳 Card' : '💵 Cash/COD'}
+                                  {order.orderType === 'pickup' || order.paymentMethod === 'pay_at_parlour'
+                                    ? '🏪 Pay at Parlour'
+                                    : order.paymentMethod === 'card'
+                                    ? '💳 Card'
+                                    : '💵 Cash/COD'}
                                 </span>
-                                {order.paymentMethod === 'card' && (
+                                {order.paymentMethod === 'card' && order.orderType !== 'pickup' && order.paymentMethod !== 'pay_at_parlour' && (
                                   <span
                                     className={`text-[9px] font-bold px-1.5 py-0.2 rounded inline-block ${
                                       order.status === 'pending_confirmation'
@@ -899,7 +1018,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                       Paused ({formatCountdown(remainingSeconds)})
                                     </span>
                                     <span className="text-[10px] text-amber-900/80 block font-medium">
-                                      Customer editing address
+                                      {order.orderType === 'pickup' ? 'Customer updating order' : 'Customer editing address'}
                                     </span>
                                   </div>
                                 ) : inGracePeriod ? (
@@ -909,7 +1028,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                       Grace Period ({formatCountdown(remainingSeconds)})
                                     </span>
                                     <span className="text-[10px] text-amber-900/80 block font-medium">
-                                      Customer reviewing address
+                                      {order.orderType === 'pickup' ? 'Customer reviewing pickup' : 'Customer reviewing address'}
                                     </span>
                                   </div>
                                 ) : (
@@ -919,18 +1038,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                       Customer Waiting
                                     </span>
                                     <span className="text-[10px] text-emerald-800 block font-bold">
-                                      Address Confirmed
+                                      {order.orderType === 'pickup' ? 'Pickup Confirmed' : 'Address Confirmed'}
                                     </span>
                                   </div>
                                 )
                               ) : order.status === 'confirmed' ? (
                                 <div className="space-y-0.5">
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-blue-100 text-blue-900 border border-blue-300">
-                                    <CheckCircle2 className="w-3 h-3 text-blue-700" />
-                                    Confirmed
+                                    {order.orderType === 'pickup' ? (
+                                      <>
+                                        <Store className="w-3 h-3 text-blue-700" />
+                                        <span>Confirmed (Pickup)</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <CheckCircle2 className="w-3 h-3 text-blue-700" />
+                                        <span>Confirmed</span>
+                                      </>
+                                    )}
                                   </span>
                                   <span className="text-[10px] text-emerald-700 block font-bold">
-                                    Payment Captured
+                                    {order.orderType === 'pickup' ? '🏪 Pay at Counter' : 'Payment Captured'}
                                   </span>
                                 </div>
                               ) : order.status === 'preparing' ? (
@@ -945,22 +1073,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 </div>
                               ) : order.status === 'on_the_way' ? (
                                 <div className="space-y-0.5">
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-sky-100 text-sky-900 border border-sky-300">
-                                    <Truck className="w-3 h-3 text-sky-700" />
-                                    On The Way
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold border ${
+                                      order.orderType === 'pickup'
+                                        ? 'bg-purple-100 text-purple-900 border-purple-300'
+                                        : 'bg-sky-100 text-sky-900 border-sky-300'
+                                    }`}
+                                  >
+                                    {order.orderType === 'pickup' ? (
+                                      <Store className="w-3 h-3 text-purple-700" />
+                                    ) : (
+                                      <Truck className="w-3 h-3 text-sky-700" />
+                                    )}
+                                    {order.orderType === 'pickup' ? 'Ready to Pickup' : 'On The Way'}
                                   </span>
-                                  <span className="text-[10px] text-sky-800 block font-medium">
-                                    {order.orderType === 'delivery' ? 'With Delivery Partner' : 'Ready for Pickup'}
+                                  <span
+                                    className={`text-[10px] block font-medium ${
+                                      order.orderType === 'pickup' ? 'text-purple-800 font-bold' : 'text-sky-800'
+                                    }`}
+                                  >
+                                    {order.orderType === 'pickup' ? 'Waiting at Parlour Counter' : 'With Delivery Partner'}
                                   </span>
                                 </div>
                               ) : order.status === 'delivered' ? (
                                 <div className="space-y-0.5">
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
                                     <CheckCircle2 className="w-3 h-3 text-emerald-700" />
-                                    Delivered
+                                    {order.orderType === 'pickup' ? 'Picked Up' : 'Delivered'}
                                   </span>
                                   <span className="text-[10px] text-emerald-800 block font-medium">
-                                    Fulfilled & Completed
+                                    {order.orderType === 'pickup' ? 'Collected by Customer' : 'Fulfilled & Completed'}
                                   </span>
                                 </div>
                               ) : (
@@ -1076,20 +1218,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => handleHandoverToDelivery(order.orderReference)}
-                                    className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shadow-2xs transition-colors cursor-pointer"
-                                    title="Handover order to delivery partner"
+                                    className={`inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg text-white text-[11px] font-bold shadow-2xs transition-colors cursor-pointer ${
+                                      order.orderType === 'pickup'
+                                        ? 'bg-purple-600 hover:bg-purple-700'
+                                        : 'bg-blue-600 hover:bg-blue-700'
+                                    }`}
+                                    title={
+                                      order.orderType === 'pickup'
+                                        ? 'Mark order as Ready to Pickup'
+                                        : 'Handover order to delivery partner'
+                                    }
                                   >
-                                    <Truck className="w-3.5 h-3.5" />
-                                    <span>{order.orderType === 'delivery' ? 'Handover to Delivery Partner' : 'Handover / Ready for Pickup'}</span>
+                                    {order.orderType === 'pickup' ? (
+                                      <ShoppingBag className="w-3.5 h-3.5" />
+                                    ) : (
+                                      <Truck className="w-3.5 h-3.5" />
+                                    )}
+                                    <span>
+                                      {order.orderType === 'pickup'
+                                        ? 'Mark Ready to Pickup'
+                                        : 'Handover to Delivery Partner'}
+                                    </span>
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => handleSetDelivered(order.orderReference)}
                                     className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold transition-colors cursor-pointer"
-                                    title="Mark order directly as Delivered"
+                                    title={order.orderType === 'pickup' ? 'Mark order directly as Picked Up' : 'Mark order directly as Delivered'}
                                   >
                                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                    <span>Mark Delivered</span>
+                                    <span>{order.orderType === 'pickup' ? 'Mark Picked Up' : 'Mark Delivered'}</span>
                                   </button>
                                   <button
                                     type="button"
@@ -1115,10 +1273,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     type="button"
                                     onClick={() => handleSetDelivered(order.orderReference)}
                                     className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-2xs transition-colors cursor-pointer"
-                                    title="Mark order as Delivered / Completed"
+                                    title={order.orderType === 'pickup' ? 'Mark order as Picked Up / Completed' : 'Mark order as Delivered / Completed'}
                                   >
                                     <CheckCircle2 className="w-3.5 h-3.5" />
-                                    <span>Mark Delivered</span>
+                                    <span>{order.orderType === 'pickup' ? 'Mark Picked Up' : 'Mark Delivered'}</span>
                                   </button>
                                   <button
                                     type="button"
@@ -1141,7 +1299,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 <div className="flex flex-col gap-1 min-w-[120px]">
                                   <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700">
                                     <CheckCircle2 className="w-3.5 h-3.5" />
-                                    Fulfilled & Delivered
+                                    {order.orderType === 'pickup' ? 'Fulfilled & Picked Up' : 'Fulfilled & Delivered'}
                                   </span>
                                   <button
                                     type="button"
@@ -1200,6 +1358,326 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     <Lock className="w-3.5 h-3.5 text-[#A69488]" />
                                   </span>
                                 )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* TAB: RETURNED BILLS & REFUNDS */}
+        {/* ======================================================== */}
+        {activeTab === 'returns' && (
+          <div className="space-y-6">
+            {/* KPI Stat Cards for Returns */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+              <div className="bg-white p-4 rounded-2xl border border-[#E8DFC8] shadow-xs">
+                <div className="flex items-center justify-between text-xs font-bold text-[#7A6458] uppercase">
+                  <span>Total Returned Bills</span>
+                  <RotateCcw className="w-4 h-4 text-[#8C102A]" />
+                </div>
+                <div className="mt-2 text-xl sm:text-2xl font-black text-[#241A18]">
+                  {orders.filter((o) => o.status === 'cancelled' && o.paymentMethod === 'card').length}
+                </div>
+                <div className="text-[11px] text-[#8A7970] mt-0.5">
+                  Card transactions cancelled after authorization
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-amber-200 bg-amber-50/40 shadow-xs">
+                <div className="flex items-center justify-between text-xs font-bold text-amber-800 uppercase">
+                  <span>Pending Refund Reversal</span>
+                  <Clock className="w-4 h-4 text-amber-600 animate-pulse" />
+                </div>
+                <div className="mt-2 text-xl sm:text-2xl font-black text-amber-900">
+                  {formatPrice(metrics.pendingRefundsTotalLKR, currency)}
+                </div>
+                <div className="text-[11px] text-amber-800 font-semibold mt-0.5 flex items-center gap-1">
+                  <span>⚠️</span>
+                  <span>{metrics.pendingRefundCount} {metrics.pendingRefundCount === 1 ? 'bill requires' : 'bills require'} refund completion</span>
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-emerald-200 bg-emerald-50/40 shadow-xs">
+                <div className="flex items-center justify-between text-xs font-bold text-emerald-800 uppercase">
+                  <span>Completed Refunds</span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div className="mt-2 text-xl sm:text-2xl font-black text-emerald-950">
+                  {formatPrice(metrics.completedRefundsTotalLKR, currency)}
+                </div>
+                <div className="text-[11px] text-emerald-800 font-medium mt-0.5">
+                  Deducted directly from Gross Sales in Kitchen
+                </div>
+              </div>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div className="bg-white p-4 rounded-2xl border border-[#E8DFC8] shadow-xs flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 flex-1 min-w-[280px]">
+                {/* Search Bar */}
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="w-4 h-4 text-[#7A6458] absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={returnSearchQuery}
+                    onChange={(e) => setReturnSearchQuery(e.target.value)}
+                    placeholder="Search returned bill by ref, customer, phone..."
+                    className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm rounded-xl border border-[#D9CBB7] focus:outline-hidden focus:border-[#8C102A] bg-[#FAF7F2]/50 focus:bg-white transition-all"
+                  />
+                  {returnSearchQuery && (
+                    <button
+                      onClick={() => setReturnSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#7A6458] hover:text-[#241A18] cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Return Status Filter */}
+                <div className="flex items-center gap-1 bg-[#FAF7F2] p-1 rounded-xl border border-[#E8DFC8]">
+                  <button
+                    type="button"
+                    onClick={() => setReturnStatusFilter('all')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      returnStatusFilter === 'all'
+                        ? 'bg-[#8C102A] text-white shadow-2xs'
+                        : 'text-[#5D4E46] hover:text-[#241A18]'
+                    }`}
+                  >
+                    All Returns
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReturnStatusFilter('pending')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      returnStatusFilter === 'pending'
+                        ? 'bg-amber-600 text-white shadow-2xs'
+                        : 'text-amber-800 hover:text-amber-950'
+                    }`}
+                  >
+                    <span>Pending Action</span>
+                    {metrics.pendingRefundCount > 0 && (
+                      <span className="w-4 h-4 rounded-full bg-red-600 text-white text-[9px] flex items-center justify-center font-black">
+                        {metrics.pendingRefundCount}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReturnStatusFilter('completed')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      returnStatusFilter === 'completed'
+                        ? 'bg-emerald-600 text-white shadow-2xs'
+                        : 'text-emerald-800 hover:text-emerald-950'
+                    }`}
+                  >
+                    Completed
+                  </button>
+                </div>
+
+                {/* Branch Filter */}
+                <select
+                  value={selectedBranchFilter}
+                  onChange={(e) => setSelectedBranchFilter(e.target.value)}
+                  className="px-3 py-2 text-xs rounded-xl border border-[#D9CBB7] bg-[#FAF7F2] text-[#3D2C24] font-bold focus:outline-hidden focus:border-[#8C102A] cursor-pointer"
+                >
+                  <option value="all">All Branches</option>
+                  <option value="akurana">Akurana Flagship</option>
+                  <option value="colombo">Colombo 03</option>
+                  <option value="arugambay">Arugam Bay</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Returned Bills Table */}
+            <div className="bg-white rounded-2xl border border-[#E8DFC8] shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-[#FAF7F2] border-b border-[#E8DFC8] text-[11px] uppercase tracking-wider text-[#7A6458] font-bold">
+                      <th className="px-4 py-3">Return / Order Ref</th>
+                      <th className="px-4 py-3">Customer & Contact</th>
+                      <th className="px-4 py-3">Card / Branch</th>
+                      <th className="px-4 py-3">Returned Items</th>
+                      <th className="px-4 py-3">Cancellation Reason</th>
+                      <th className="px-4 py-3">Return Amount</th>
+                      <th className="px-4 py-3">Refund Status</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#EFE8DC]">
+                    {filteredReturnedBills.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="px-4 py-12 text-center text-[#7A6458]">
+                          <div className="max-w-md mx-auto space-y-2">
+                            <RotateCcw className="w-10 h-10 text-slate-300 mx-auto" />
+                            <p className="font-bold text-sm text-[#241A18]">No Returned Bills Found</p>
+                            <p className="text-xs text-[#7A6458]">
+                              When an order paid by card is cancelled by parlour management after confirmation, it will automatically appear here for refund processing.
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredReturnedBills.map((order) => {
+                        const isCompleted = order.refundStatus === 'completed';
+                        const returnAmount = order.refundAmountLKR || order.grandTotalLKR || 0;
+
+                        return (
+                          <tr key={order.orderReference} className="hover:bg-[#FAF7F2]/60 transition-colors">
+                            {/* Ref & Date */}
+                            <td className="px-4 py-3 align-top">
+                              <span className="font-mono font-bold text-xs text-[#8C102A] block">
+                                {order.orderReference}
+                              </span>
+                              <span className="text-[10px] text-[#7A6458] block mt-0.5">
+                                Ordered: {new Date(order.createdAt).toLocaleDateString()}
+                              </span>
+                              {order.refundedAt && (
+                                <span className="text-[10px] text-emerald-800 font-semibold block mt-0.5">
+                                  Refunded: {new Date(order.refundedAt).toLocaleDateString()}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Customer */}
+                            <td className="px-4 py-3 align-top">
+                              <span className="font-bold text-xs text-[#241A18] block">
+                                {order.customerName}
+                              </span>
+                              <span className="text-[11px] text-[#7A6458] block flex items-center gap-1 mt-0.5">
+                                <Phone className="w-3 h-3 text-[#7A6458]" />
+                                <span>{order.contactNumber}</span>
+                              </span>
+                              {order.emailAddress && (
+                                <span className="text-[10px] text-slate-500 block truncate max-w-[180px]">
+                                  {order.emailAddress}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Card / Branch */}
+                            <td className="px-4 py-3 align-top">
+                              <div className="space-y-1">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#FAF7F2] border border-[#E8DFC8] text-[11px] font-semibold text-[#3D2C24]">
+                                  <MapPin className="w-3 h-3 text-[#8C102A]" />
+                                  <span>{order.branchName?.split(' ')[0] || 'Akurana'}</span>
+                                </span>
+                                <div className="text-[10px] font-mono text-[#5C4D44] block">
+                                  {order.cardBrand || 'Card'} •••• {order.cardLast4 || '****'}
+                                </div>
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-50 border border-amber-200 text-amber-900 inline-block">
+                                  Online Card Payment
+                                </span>
+                              </div>
+                            </td>
+
+                            {/* Returned Items */}
+                            <td className="px-4 py-3 align-top min-w-[200px] max-w-[260px]">
+                              <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+                                {order.items.map((it, idx) => (
+                                  <div key={idx} className="flex items-center justify-between text-[11px] py-0.5">
+                                    <span className="truncate pr-1 text-[#241A18]">
+                                      <strong className="text-[#8C102A]">{it.quantity}×</strong> {it.name}
+                                    </span>
+                                    <span className="font-mono text-[10px] text-[#5C4D44] shrink-0">
+                                      {formatPrice(it.priceLKR * it.quantity, currency)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </td>
+
+                            {/* Cancellation Reason */}
+                            <td className="px-4 py-3 align-top max-w-[220px]">
+                              <div className="p-2 rounded-xl bg-red-50/70 border border-red-200 text-[11px] text-red-950 space-y-1">
+                                <p className="font-semibold leading-tight">
+                                  {order.cancellationReason || 'Cancelled by Parlour Management'}
+                                </p>
+                                {order.cancelledBy === 'admin' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setViewingInconvenienceOrder(order)}
+                                    className="text-[10px] text-[#8C102A] hover:underline font-bold block cursor-pointer"
+                                  >
+                                    View Apology Letter
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* Return Amount */}
+                            <td className="px-4 py-3 align-top">
+                              <span className="font-black text-sm text-[#8C102A] block">
+                                {formatPrice(returnAmount, currency)}
+                              </span>
+                              <span className="text-[10px] text-[#7A6458] block mt-0.5">
+                                100% Bill Value
+                              </span>
+                            </td>
+
+                            {/* Status */}
+                            <td className="px-4 py-3 align-top">
+                              {isCompleted ? (
+                                <div className="space-y-0.5">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-100 text-emerald-950 border border-emerald-300">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                                    <span>Refund Completed</span>
+                                  </span>
+                                  <span className="text-[10px] text-emerald-800 block font-medium">
+                                    Deducted from Gross Sales
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="space-y-0.5">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-100 text-amber-950 border border-amber-300 animate-pulse">
+                                    <Clock className="w-3.5 h-3.5 text-amber-700" />
+                                    <span>Pending Refund</span>
+                                  </span>
+                                  <span className="text-[10px] text-amber-800 block font-medium">
+                                    Awaiting Payment Return
+                                  </span>
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Actions */}
+                            <td className="px-4 py-3 align-top text-right">
+                              <div className="flex flex-col items-end gap-1.5 min-w-[140px]">
+                                {!isCompleted ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCompleteReturn(order.orderReference)}
+                                    className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer active:scale-95 w-full"
+                                    title="Confirm that refund payment to customer's card is completed. Deducts amount from Kitchen Gross Sales."
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                    <span>Complete Return</span>
+                                  </button>
+                                ) : (
+                                  <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200 block text-center w-full">
+                                    ✓ Settled & Deducted
+                                  </span>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedOrderForReturnInvoice(order)}
+                                  className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-xs font-bold transition-all cursor-pointer w-full"
+                                  title="Print official Returned Bill / Refund Credit Note"
+                                >
+                                  <Printer className="w-3.5 h-3.5 text-slate-600" />
+                                  <span>Print Return Bill</span>
+                                </button>
                               </div>
                             </td>
                           </tr>
@@ -1757,6 +2235,153 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               >
                 <Printer className="w-4 h-4" />
                 <span>Print Invoice</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: PRINTABLE RETURN BILL / REFUND CREDIT NOTE */}
+      {/* ======================================================== */}
+      {selectedOrderForReturnInvoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 border border-[#E8DFC8] shadow-2xl relative animate-scaleIn max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setSelectedOrderForReturnInvoice(null)}
+              className="absolute top-4 right-4 p-2 rounded-full text-[#7A6458] hover:text-[#241A18] hover:bg-[#FAF7F2] cursor-pointer"
+              title="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="text-center pb-4 border-b border-[#E8DFC8]">
+              <AmoreLogo size="sm" />
+              <h2 className="font-serif-title font-bold text-xl text-[#241A18] mt-2">
+                Amore Speciality Ice Cream
+              </h2>
+              <div className="mt-1.5 inline-flex items-center gap-1 px-3 py-0.5 rounded-full bg-red-100 text-red-900 border border-red-300 font-bold text-xs uppercase tracking-wider">
+                <RotateCcw className="w-3.5 h-3.5 text-red-700" />
+                <span>Returned Bill & Credit Note</span>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+                <span className="font-mono font-bold text-xs bg-[#FAF7F2] px-3 py-1 rounded-md border border-[#E8DFC8] text-[#8C102A]">
+                  Order Ref: {selectedOrderForReturnInvoice.orderReference}
+                </span>
+                <span
+                  className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                    selectedOrderForReturnInvoice.refundStatus === 'completed'
+                      ? 'bg-emerald-100 text-emerald-950 border border-emerald-300'
+                      : 'bg-amber-100 text-amber-950 border border-amber-300'
+                  }`}
+                >
+                  {selectedOrderForReturnInvoice.refundStatus === 'completed' ? 'Refund Completed' : 'Pending Reversal'}
+                </span>
+              </div>
+            </div>
+
+            <div className="py-4 space-y-2 text-xs text-[#3D2C24] border-b border-[#E8DFC8]">
+              <div className="flex justify-between">
+                <span className="text-[#7A6458]">Original Order Date:</span>
+                <span className="font-medium">
+                  {new Date(selectedOrderForReturnInvoice.createdAt).toLocaleString()}
+                </span>
+              </div>
+              {selectedOrderForReturnInvoice.refundedAt && (
+                <div className="flex justify-between">
+                  <span className="text-[#7A6458]">Refund Settled Date:</span>
+                  <span className="font-bold text-emerald-800">
+                    {new Date(selectedOrderForReturnInvoice.refundedAt).toLocaleString()}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-[#7A6458]">Customer Name:</span>
+                <span className="font-bold">{selectedOrderForReturnInvoice.customerName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#7A6458]">Contact Phone:</span>
+                <span>{selectedOrderForReturnInvoice.contactNumber}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#7A6458]">Issuing Branch:</span>
+                <span>{selectedOrderForReturnInvoice.branchName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#7A6458]">Payment Method:</span>
+                <span className="font-mono font-medium">
+                  {selectedOrderForReturnInvoice.cardBrand || 'Card'} •••• {selectedOrderForReturnInvoice.cardLast4 || '****'}
+                </span>
+              </div>
+            </div>
+
+            {/* Cancellation Reason Note */}
+            <div className="py-3 px-3.5 my-3 rounded-2xl bg-red-50 border border-red-200 text-xs text-red-950 space-y-1">
+              <span className="font-bold block uppercase tracking-wider text-[10px] text-red-900">
+                Reason for Order Return / Cancellation:
+              </span>
+              <p className="font-medium leading-relaxed">
+                {selectedOrderForReturnInvoice.cancellationReason || 'Cancelled by Parlour Management after payment capture'}
+              </p>
+            </div>
+
+            {/* Returned Items Table */}
+            <div className="py-4 border-b border-[#E8DFC8]">
+              <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#7A6458] mb-2">
+                Returned Products Credited:
+              </h4>
+              <div className="space-y-2">
+                {selectedOrderForReturnInvoice.items.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-xs">
+                    <div>
+                      <span className="font-bold text-[#8C102A]">{item.quantity}x</span>{' '}
+                      <span className="font-medium text-[#241A18]">{item.name}</span>
+                      {item.format && (
+                        <span className="text-[10px] text-[#7A6458] block">
+                          Format: {item.format.replace('-', ' ')}
+                        </span>
+                      )}
+                    </div>
+                    <span className="font-bold">
+                      {formatPrice(item.priceLKR * item.quantity, currency)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Total Return Breakdown */}
+            <div className="py-4 space-y-1.5 text-xs text-[#3D2C24]">
+              <div className="flex justify-between">
+                <span className="text-[#7A6458]">Items Total Refunded:</span>
+                <span>{formatPrice(selectedOrderForReturnInvoice.subtotalLKR, currency)}</span>
+              </div>
+              {selectedOrderForReturnInvoice.deliveryFeeLKR > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-[#7A6458]">Delivery Fee Refunded:</span>
+                  <span>{formatPrice(selectedOrderForReturnInvoice.deliveryFeeLKR, currency)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-base font-black text-[#8C102A] pt-2 border-t border-[#E8DFC8]">
+                <span>Total Amount Credited / Returned:</span>
+                <span>{formatPrice(selectedOrderForReturnInvoice.refundAmountLKR || selectedOrderForReturnInvoice.grandTotalLKR, currency)}</span>
+              </div>
+            </div>
+
+            <div className="pt-2 text-[10px] text-[#7A6458] text-center border-t border-[#E8DFC8] space-y-1">
+              <p>Accounting Notice: Completed refund amounts are automatically deducted from Kitchen Gross Sales.</p>
+              <p>Authorized by Amore Operations & Audit Management</p>
+            </div>
+
+            {/* Print Action */}
+            <div className="mt-4 pt-4 border-t border-[#E8DFC8] flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="w-full py-2.5 px-4 rounded-xl bg-[#8C102A] text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-sm hover:bg-[#A31634] transition-colors"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print Return Bill & Credit Note</span>
               </button>
             </div>
           </div>
@@ -2644,7 +3269,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div>
                 <p className="font-bold">Payment & Customer Live Notice</p>
                 <p className="text-[11px] text-emerald-800 mt-0.5">
-                  Confirming this order will capture customer payment ({confirmingOrder.paymentMethod === 'card' ? 'Pre-authorized card charged' : 'Cash on delivery marked'}) and notify the customer's portal in real-time.
+                  {confirmingOrder.orderType === 'pickup' || confirmingOrder.paymentMethod === 'pay_at_parlour'
+                    ? 'Confirming this order will approve parlour preparation (customer will settle bill at parlour counter upon collection) and notify the customer in real-time.'
+                    : `Confirming this order will capture customer payment (${confirmingOrder.paymentMethod === 'card' ? 'Pre-authorized card charged' : 'Cash on delivery marked'}) and notify the customer's portal in real-time.`}
                 </p>
               </div>
             </div>
@@ -2664,7 +3291,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md cursor-pointer flex items-center gap-1.5"
               >
                 <Check className="w-4 h-4" />
-                <span>Yes, Confirm Order & Capture Payment</span>
+                <span>
+                  {confirmingOrder.orderType === 'pickup' || confirmingOrder.paymentMethod === 'pay_at_parlour'
+                    ? 'Yes, Confirm Parlour Order'
+                    : 'Yes, Confirm Order & Capture Payment'}
+                </span>
               </button>
             </div>
           </div>

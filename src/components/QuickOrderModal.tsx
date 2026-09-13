@@ -22,6 +22,7 @@ import {
   Phone,
   User as UserIcon,
   Navigation,
+  Store,
 } from 'lucide-react';
 import { type User } from '../firebase';
 import { LocationPickerModal } from './LocationPickerModal';
@@ -71,15 +72,15 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [specialNote, setSpecialNote] = useState('');
 
-  // Payment Method Selection
-  // When currency is USD, only 'card' is allowed. When LKR, 'card' or 'cod' are allowed.
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'cod'>('card');
+  // Payment Method Selection: 'card' or 'cod' for delivery; 'pay_at_parlour' for pickup
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'cod' | 'pay_at_parlour'>('card');
 
   // Secured Card Payment State
   const [cardNumber, setCardNumber] = useState('');
   const [cardHolder, setCardHolder] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
+  const [isReturnPolicyOpen, setIsReturnPolicyOpen] = useState(false);
 
   // Automatic Branch Detection
   const [detectedBranchId, setDetectedBranchId] = useState<BranchId>(initialBranch);
@@ -101,12 +102,21 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
     }
   }, [currentUser]);
 
-  // Enforce USD rule: If currency is USD, cash on delivery is not allowed
+  // Sync payment method when orderType switches: Parlour Pickup defaults to 'pay_at_parlour'
   useEffect(() => {
-    if (currency === 'USD' && paymentMethod === 'cod') {
+    if (orderType === 'pickup') {
+      setPaymentMethod('pay_at_parlour');
+    } else if (paymentMethod === 'pay_at_parlour') {
       setPaymentMethod('card');
     }
-  }, [currency, paymentMethod]);
+  }, [orderType]);
+
+  // Enforce USD rule: If currency is USD and delivery is selected, cash on delivery is not allowed
+  useEffect(() => {
+    if (orderType === 'delivery' && currency === 'USD' && paymentMethod === 'cod') {
+      setPaymentMethod('card');
+    }
+  }, [currency, paymentMethod, orderType]);
 
   // Reset state on close
   useEffect(() => {
@@ -273,9 +283,9 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
       return;
     }
 
-    // 3. Validate Card Details if Card payment is selected
+    // 3. Validate Card Details only if Doorstep Delivery with Card payment is selected
     const cleanCard = cardNumber.replace(/\s/g, '');
-    if (paymentMethod === 'card') {
+    if (orderType === 'delivery' && paymentMethod === 'card') {
       if (cleanCard.length < 15) {
         alert('Please enter a valid 16-digit card number.');
         return;
@@ -292,7 +302,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
 
     // 4. Trigger 2.5s Processing Animation
     setStep('processing');
-    setProcessingMessage('Securing payment details...');
+    setProcessingMessage(orderType === 'pickup' ? 'Locking in your parlour pickup order...' : 'Securing payment details...');
 
     setTimeout(() => {
       setProcessingMessage(`Routing order to Amore ${assignedBranch.city} parlour...`);
@@ -328,10 +338,10 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
         grandTotalLKR,
         currency,
         status: 'pending_confirmation',
-        paymentMethod: paymentMethod === 'card' ? 'card' : 'cash_on_delivery',
+        paymentMethod: orderType === 'pickup' ? 'pay_at_parlour' : paymentMethod === 'card' ? 'card' : 'cod',
         paidAt: undefined,
-        cardLast4: paymentMethod === 'card' ? cleanCard.slice(-4) : undefined,
-        cardBrand: paymentMethod === 'card' ? getCardBrand(cardNumber) : undefined,
+        cardLast4: orderType === 'delivery' && paymentMethod === 'card' ? cleanCard.slice(-4) : undefined,
+        cardBrand: orderType === 'delivery' && paymentMethod === 'card' ? getCardBrand(cardNumber) : undefined,
         userId: currentUser?.uid,
       };
 
@@ -794,114 +804,166 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
               )}
             </div>
 
-            {/* PAYMENT METHOD SELECTION & USD CASH RESTRICTION */}
+            {/* PAYMENT METHOD SELECTION & PARLOUR PICKUP HANDLING */}
             <div className={`space-y-3 pt-2 border-t border-[#E8DFC8] ${!currentUser ? 'opacity-40 pointer-events-none' : ''}`}>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider text-[#3D2C24] flex items-center gap-1.5">
-                  <CreditCard className="w-4 h-4 text-[#8C102A]" />
-                  <span>Payment Method</span>
+                  {orderType === 'pickup' ? (
+                    <>
+                      <Store className="w-4 h-4 text-purple-700" />
+                      <span>Payment Method</span>
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="w-4 h-4 text-[#8C102A]" />
+                      <span>Payment Method</span>
+                    </>
+                  )}
                 </span>
-                {currency === 'USD' && (
+                {orderType === 'pickup' ? (
+                  <span className="text-[10px] font-bold text-purple-800 bg-purple-100 px-2.5 py-0.5 rounded-full border border-purple-200">
+                    Pay at Parlour
+                  </span>
+                ) : currency === 'USD' ? (
                   <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md">
                     USD: Card Only
                   </span>
-                )}
+                ) : null}
               </div>
 
-              {/* Payment Method Selector */}
-              <div className={`grid ${currency === 'USD' ? 'grid-cols-1' : 'grid-cols-2'} gap-2`}>
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('card')}
-                  className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
-                    paymentMethod === 'card'
-                      ? 'bg-red-50/70 border-[#8C102A] ring-1 ring-[#8C102A] shadow-xs'
-                      : 'bg-[#FAF7F2] border-[#D9CBB7] hover:bg-white'
-                  }`}
-                >
-                  <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-blue-600 shrink-0">
-                    <CreditCard className="w-4 h-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-[#241A18]">Credit / Debit Card</p>
-                    <p className="text-[10px] text-slate-500">Visa, Mastercard, Amex</p>
-                  </div>
-                </button>
-
-                {/* Cash on Delivery is strictly hidden when USD currency is active */}
-                {currency !== 'USD' && (
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('cod')}
-                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
-                      paymentMethod === 'cod'
-                        ? 'bg-red-50/70 border-[#8C102A] ring-1 ring-[#8C102A] shadow-xs'
-                        : 'bg-[#FAF7F2] border-[#D9CBB7] hover:bg-white'
-                    }`}
-                  >
-                    <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-emerald-600 shrink-0">
-                      <Banknote className="w-4 h-4" />
+              {orderType === 'pickup' ? (
+                /* Dedicated Parlour Pickup Payment Banner (Card & COD hidden) */
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-50 via-[#FAF7F2] to-amber-50/70 border border-purple-200/90 shadow-2xs space-y-2 animate-fadeIn">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center shrink-0 border border-purple-200 shadow-2xs">
+                      <Store className="w-5 h-5" />
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-[#241A18]">Cash on Delivery</p>
-                      <p className="text-[10px] text-slate-500">Pay cash upon arrival (LKR)</p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <h4 className="font-serif-title text-sm font-bold text-[#241A18]">
+                          Pay at the Parlour Counter
+                        </h4>
+                        <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
+                          Zero Advance Charge
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#5D4E46] mt-1 leading-relaxed">
+                        No online payment needed now. Pay in person using <strong>Cash, Card, or QR payment</strong> when you pick up your order at Amore {assignedBranch.name}.
+                      </p>
                     </div>
-                  </button>
-                )}
-              </div>
-
-              {/* Card Payment Inputs */}
-              {paymentMethod === 'card' && (
-                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5 animate-fadeIn">
-                  <div className="flex items-center justify-between text-xs text-slate-600 mb-1">
-                    <span className="font-bold">Card Details</span>
-                    <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                      <Lock className="w-3 h-3 text-emerald-600" />
-                      256-bit Encrypted
-                    </span>
-                  </div>
-
-                  {/* Card Number */}
-                  <div>
-                    <input
-                      type="text"
-                      required={paymentMethod === 'card'}
-                      placeholder="Card number (16 digits)"
-                      value={cardNumber}
-                      onChange={handleCardNumberChange}
-                      className="w-full px-3 py-2 bg-white text-xs border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-[#8C102A] font-mono tracking-wider"
-                    />
-                  </div>
-
-                  {/* Cardholder, Expiry, CVV */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <input
-                      type="text"
-                      required={paymentMethod === 'card'}
-                      placeholder="Name on card"
-                      value={cardHolder}
-                      onChange={(e) => setCardHolder(e.target.value)}
-                      className="col-span-1 px-3 py-2 bg-white text-xs border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-[#8C102A]"
-                    />
-                    <input
-                      type="text"
-                      required={paymentMethod === 'card'}
-                      placeholder="MM/YY"
-                      value={cardExpiry}
-                      onChange={handleCardExpiryChange}
-                      className="col-span-1 px-3 py-2 bg-white text-xs border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-[#8C102A] font-mono text-center"
-                    />
-                    <input
-                      type="password"
-                      maxLength={4}
-                      required={paymentMethod === 'card'}
-                      placeholder="CVV"
-                      value={cardCvv}
-                      onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, ''))}
-                      className="col-span-1 px-3 py-2 bg-white text-xs border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-[#8C102A] font-mono text-center"
-                    />
                   </div>
                 </div>
+              ) : (
+                /* Delivery Payment Method Selector (Card vs COD) */
+                <>
+                  <div className={`grid ${currency === 'USD' ? 'grid-cols-1' : 'grid-cols-2'} gap-2`}>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('card')}
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
+                        paymentMethod === 'card'
+                          ? 'bg-red-50/70 border-[#8C102A] ring-1 ring-[#8C102A] shadow-xs'
+                          : 'bg-[#FAF7F2] border-[#D9CBB7] hover:bg-white'
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-blue-600 shrink-0">
+                        <CreditCard className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-[#241A18]">Credit / Debit Card</p>
+                        <p className="text-[10px] text-slate-500">Visa, Mastercard, Amex</p>
+                      </div>
+                    </button>
+
+                    {/* Cash on Delivery is strictly hidden when USD currency is active */}
+                    {currency !== 'USD' && (
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('cod')}
+                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
+                          paymentMethod === 'cod'
+                            ? 'bg-red-50/70 border-[#8C102A] ring-1 ring-[#8C102A] shadow-xs'
+                            : 'bg-[#FAF7F2] border-[#D9CBB7] hover:bg-white'
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-emerald-600 shrink-0">
+                          <Banknote className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-[#241A18]">Cash on Delivery</p>
+                          <p className="text-[10px] text-slate-500">Pay cash upon arrival (LKR)</p>
+                        </div>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Card Payment Inputs */}
+                  {paymentMethod === 'card' && (
+                    <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5 animate-fadeIn">
+                      <div className="flex items-center justify-between text-xs text-slate-600 mb-1">
+                        <span className="font-bold">Card Details</span>
+                        <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                          <Lock className="w-3 h-3 text-emerald-600" />
+                          256-bit Encrypted
+                        </span>
+                      </div>
+
+                      {/* Card Number */}
+                      <div>
+                        <input
+                          type="text"
+                          required={paymentMethod === 'card'}
+                          placeholder="Card number (16 digits)"
+                          value={cardNumber}
+                          onChange={handleCardNumberChange}
+                          className="w-full px-3 py-2 bg-white text-xs border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-[#8C102A] font-mono tracking-wider"
+                        />
+                      </div>
+
+                      {/* Cardholder, Expiry, CVV */}
+                      <div className="grid grid-cols-3 gap-2">
+                        <input
+                          type="text"
+                          required={paymentMethod === 'card'}
+                          placeholder="Name on card"
+                          value={cardHolder}
+                          onChange={(e) => setCardHolder(e.target.value)}
+                          className="col-span-1 px-3 py-2 bg-white text-xs border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-[#8C102A]"
+                        />
+                        <input
+                          type="text"
+                          required={paymentMethod === 'card'}
+                          placeholder="MM/YY"
+                          value={cardExpiry}
+                          onChange={handleCardExpiryChange}
+                          className="col-span-1 px-3 py-2 bg-white text-xs border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-[#8C102A] font-mono text-center"
+                        />
+                        <input
+                          type="password"
+                          maxLength={4}
+                          required={paymentMethod === 'card'}
+                          placeholder="CVV"
+                          value={cardCvv}
+                          onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, ''))}
+                          className="col-span-1 px-3 py-2 bg-white text-xs border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-[#8C102A] font-mono text-center"
+                        />
+                      </div>
+
+                      {/* Return & Refund Policy Link (Only on Card Payment) */}
+                      <div className="pt-1 flex items-center justify-between text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() => setIsReturnPolicyOpen(true)}
+                          className="text-[#8C102A] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          <span>Return & Refund Policy</span>
+                        </button>
+                        <span className="text-[10px] text-slate-500">100% money-back guarantee</span>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
@@ -959,6 +1021,68 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
           setDeliveryCoords(loc.coords);
         }}
       />
+
+      {/* Return & Refund Policy Modal */}
+      {isReturnPolicyOpen && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-[#E8DFC8] space-y-4 animate-scaleUp">
+            <div className="flex items-center justify-between pb-3 border-b border-[#F0E8DC]">
+              <div className="flex items-center gap-2 text-[#8C102A]">
+                <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-serif-title text-base font-bold text-[#241A18]">
+                  Card Return & Refund Policy
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsReturnPolicyOpen(false)}
+                className="w-8 h-8 rounded-full bg-[#FAF7F2] text-slate-500 hover:text-black flex items-center justify-center cursor-pointer transition-colors"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-[#5C4D44] leading-relaxed">
+              <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200">
+                <p className="font-bold text-emerald-950 flex items-center gap-1.5 mb-1">
+                  <span>🛡️</span>
+                  <span>100% Refund Guarantee</span>
+                </p>
+                <p className="text-emerald-900 text-[11px] leading-relaxed">
+                  If your order cannot be fulfilled by our parlour kitchen or is cancelled by management after your card payment has been captured, you are eligible for an immediate 100% refund of the full bill amount.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <h4 className="font-bold text-[#241A18] text-xs">Refund Method & Timeline:</h4>
+                <ul className="list-disc list-inside space-y-1 text-[11px] text-[#6B5A51]">
+                  <li>Refunds are credited directly back to the original debit/credit card used during checkout.</li>
+                  <li>Once approved by parlour management, funds typically reflect in your account within <strong>2 to 3 business days</strong> depending on your issuing bank.</li>
+                  <li>A formal <strong>Returned Bill & Credit Note</strong> is generated and logged in our system for your financial records.</li>
+                </ul>
+              </div>
+
+              <div className="space-y-1">
+                <h4 className="font-bold text-[#241A18] text-xs">Direct Parlour Support:</h4>
+                <p className="text-[11px] text-[#6B5A51]">
+                  For questions regarding returned transactions or immediate status inquiries, please contact our counter team at <strong>+94 11 234 5678</strong> or WhatsApp us with your Order Reference code.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setIsReturnPolicyOpen(false)}
+                className="w-full py-2.5 px-4 rounded-xl bg-[#8C102A] hover:bg-[#A31634] text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+              >
+                Understood & Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

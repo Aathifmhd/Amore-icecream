@@ -389,7 +389,8 @@ export function adminSetDelivered(orderReference: string): OrderRecord | null {
 }
 
 /**
- * Admin: Cancels order with formal reason and generates apology / inconvenience email
+ * Admin: Cancels order with formal reason and generates apology / inconvenience email.
+ * If the cancelled order was paid by card and was confirmed/captured, it is queued for refund in Returned Bills.
  */
 export function adminCancelOrderWithReason(
   orderReference: string,
@@ -397,12 +398,39 @@ export function adminCancelOrderWithReason(
   emailContent?: string
 ): OrderRecord | null {
   const now = new Date().toISOString();
-  return updateOrder(orderReference, {
+  const all = getAllOrders();
+  const existing = all[orderReference];
+
+  const isCardCaptured =
+    existing &&
+    existing.paymentMethod === 'card' &&
+    (!!existing.paidAt || !!existing.confirmedAt || existing.status !== 'pending_confirmation');
+
+  const updates: Partial<OrderRecord> = {
     status: 'cancelled',
     cancelledAt: now,
     cancelledBy: 'admin',
     cancellationReason: reason,
     inconvenienceEmailContent: emailContent,
+    updatedAt: now,
+  };
+
+  if (isCardCaptured) {
+    updates.refundStatus = 'pending';
+    updates.refundAmountLKR = existing.grandTotalLKR;
+  }
+
+  return updateOrder(orderReference, updates);
+}
+
+/**
+ * Admin: Marks a returned bill's card refund as completed / settled
+ */
+export function completeOrderRefund(orderReference: string): OrderRecord | null {
+  const now = new Date().toISOString();
+  return updateOrder(orderReference, {
+    refundStatus: 'completed',
+    refundedAt: now,
     updatedAt: now,
   });
 }
@@ -418,6 +446,8 @@ export function generateInconvenienceEmail(
   const paymentNotice =
     order.paymentMethod === 'card'
       ? 'Your card payment authorization has been immediately voided and no charges were made.'
+      : order.orderType === 'pickup' || order.paymentMethod === 'pay_at_parlour'
+      ? 'As you selected Pay at the Parlour, your order has been cancelled with no obligation or fee.'
       : 'As you selected Cash on Delivery, your order has been cancelled with no obligation or fee.';
 
   const body = `From: zenatiqcodes@gmail.com
@@ -497,7 +527,7 @@ export function createAdminOrder(orderData: Partial<OrderRecord>): OrderRecord {
     grandTotalLKR: orderData.grandTotalLKR || 0,
     currency: orderData.currency || 'LKR',
     status: orderData.status || 'confirmed',
-    paymentMethod: orderData.paymentMethod || 'cash',
+    paymentMethod: orderData.paymentMethod || (orderData.orderType === 'pickup' ? 'pay_at_parlour' : 'cash'),
     specialNote: orderData.specialNote || 'Manual Admin Order',
     updatedAt: now,
   };

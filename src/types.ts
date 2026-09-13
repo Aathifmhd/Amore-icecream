@@ -91,7 +91,7 @@ export interface OrderFormData {
   city?: string;
   branch: BranchId;
   pickupTime: string;
-  paymentMethod: 'card' | 'cash';
+  paymentMethod: 'card' | 'cash' | 'pay_at_parlour';
   cardDetails?: {
     cardNumber: string;
     cardholderName: string;
@@ -122,7 +122,7 @@ export interface OrderRecord {
   grandTotalLKR: number;
   currency: Currency;
   status: 'pending_confirmation' | 'paid' | 'confirmed' | 'cancelled' | 'preparing' | 'on_the_way' | 'delivered';
-  paymentMethod?: 'card' | 'cash' | 'cod';
+  paymentMethod?: 'card' | 'cash' | 'cod' | 'pay_at_parlour';
   paidAt?: string;
   cardLast4?: string;
   cardBrand?: string;
@@ -139,5 +139,8 @@ export interface OrderRecord {
   isGracePeriodPaused?: boolean;
   gracePeriodRemainingSeconds?: number;
   gracePeriodPausedAt?: string;
+  refundStatus?: 'pending' | 'completed';
+  refundedAt?: string;
+  refundAmountLKR?: number;
 }
 

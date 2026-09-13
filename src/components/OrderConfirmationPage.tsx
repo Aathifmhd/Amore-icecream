@@ -22,6 +22,8 @@ import {
   Receipt,
   ShieldCheck,
   Sparkles,
+  Store,
+  X,
 } from 'lucide-react';
 
 interface OrderConfirmationPageProps {
@@ -40,9 +42,10 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
   const [order, setOrder] = useState<OrderRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [copiedRef, setCopiedRef] = useState(false);
+  const [isReturnPolicyOpen, setIsReturnPolicyOpen] = useState(false);
 
   // Payment form state
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'card' | 'cash'>('card');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'card' | 'cash' | 'pay_at_parlour'>('card');
   const [cardHolder, setCardHolder] = useState('');
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
@@ -59,6 +62,9 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
     if (loaded) {
       setOrder(loaded);
       setCardHolder(loaded.customerName || '');
+      if (loaded.orderType === 'pickup') {
+        setSelectedPaymentMethod('pay_at_parlour');
+      }
       if (loaded.status === 'confirmed' || loaded.status === 'paid') {
         setPaymentSuccess(true);
       }
@@ -70,6 +76,9 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
       getOrderFromFirestore(orderReference).then((remoteOrder) => {
         if (remoteOrder) {
           setOrder(remoteOrder);
+          if (remoteOrder.orderType === 'pickup') {
+            setSelectedPaymentMethod('pay_at_parlour');
+          }
           if (remoteOrder.status === 'confirmed' || remoteOrder.status === 'paid') {
             setPaymentSuccess(true);
           }
@@ -79,6 +88,9 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
       const unsubscribe = subscribeToOrder(orderReference, (liveOrder) => {
         if (liveOrder) {
           setOrder(liveOrder);
+          if (liveOrder.orderType === 'pickup') {
+            setSelectedPaymentMethod('pay_at_parlour');
+          }
           if (liveOrder.status === 'confirmed' || liveOrder.status === 'paid') {
             setPaymentSuccess(true);
           }
@@ -124,7 +136,10 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
     e.preventDefault();
     if (!order) return;
 
-    if (selectedPaymentMethod === 'card') {
+    const isPickup = order.orderType === 'pickup';
+    const effectivePaymentMethod = isPickup ? 'pay_at_parlour' : selectedPaymentMethod;
+
+    if (!isPickup && selectedPaymentMethod === 'card') {
       const cleanCard = cardNumber.replace(/\s/g, '');
       if (cleanCard.length < 15) {
         alert('Please enter a valid 16-digit card number.');
@@ -145,11 +160,11 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
     setTimeout(() => {
       setIsProcessing(false);
       const updated = updateOrder(order.orderReference, {
-        status: selectedPaymentMethod === 'card' ? 'paid' : 'confirmed',
-        paymentMethod: selectedPaymentMethod,
-        paidAt: new Date().toISOString(),
-        cardLast4: selectedPaymentMethod === 'card' ? cardNumber.replace(/\s/g, '').slice(-4) : undefined,
-        cardBrand: selectedPaymentMethod === 'card' ? getCardBrand(cardNumber) : undefined,
+        status: !isPickup && selectedPaymentMethod === 'card' ? 'paid' : 'confirmed',
+        paymentMethod: effectivePaymentMethod,
+        paidAt: !isPickup && selectedPaymentMethod === 'card' ? new Date().toISOString() : undefined,
+        cardLast4: !isPickup && selectedPaymentMethod === 'card' ? cardNumber.replace(/\s/g, '').slice(-4) : undefined,
+        cardBrand: !isPickup && selectedPaymentMethod === 'card' ? getCardBrand(cardNumber) : undefined,
       });
 
       if (updated) {
@@ -166,7 +181,15 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
       .map((it) => `• ${it.name} (${it.format || 'Standard'}) × ${it.quantity} = ${formatPrice(it.priceLKR * it.quantity, currency)}`)
       .join('\n');
 
-    const msg = `🍨 *Amore Order Confirmation & Receipt*\n*Order Ref:* ${order.orderReference}\n*Status:* ${paymentSuccess ? (order.paymentMethod === 'card' ? 'PAID & CONFIRMED' : 'CONFIRMED (Cash on Delivery)') : 'PENDING'}\n*Customer:* ${order.customerName}\n*Phone:* ${order.contactNumber}\n*Type:* ${order.orderType === 'delivery' ? `Delivery to ${order.deliveryAddress}, ${order.city}` : `Pickup at ${order.branchName}`}\n*Kitchen Branch:* ${order.branchName} (${order.branchCity})\n\n*Ordered Products:*\n${itemsSummary}\n\n*Total Bill:* ${formatPrice(order.grandTotalLKR, currency)}\n\n_Thank you for ordering with Amore Sri Lanka!_`;
+    const statusText = paymentSuccess
+      ? order.paymentMethod === 'card'
+        ? 'PAID & CONFIRMED'
+        : order.orderType === 'pickup' || order.paymentMethod === 'pay_at_parlour'
+        ? 'CONFIRMED (Pay at Parlour)'
+        : 'CONFIRMED (Cash on Delivery)'
+      : 'PENDING';
+
+    const msg = `🍨 *Amore Order Confirmation & Receipt*\n*Order Ref:* ${order.orderReference}\n*Status:* ${statusText}\n*Customer:* ${order.customerName}\n*Phone:* ${order.contactNumber}\n*Type:* ${order.orderType === 'delivery' ? `Delivery to ${order.deliveryAddress}, ${order.city}` : `Pickup at ${order.branchName}`}\n*Kitchen Branch:* ${order.branchName} (${order.branchCity})\n\n*Ordered Products:*\n${itemsSummary}\n\n*Total Bill:* ${formatPrice(order.grandTotalLKR, currency)}\n\n_Thank you for ordering with Amore Sri Lanka!_`;
 
     const url = `https://wa.me/${cleanNumber || '94771234567'}?text=${encodeURIComponent(msg)}`;
     window.open(url, '_blank');
@@ -249,13 +272,17 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
               </div>
               <div>
                 <span className="text-[11px] font-extrabold uppercase tracking-widest text-emerald-800 block">
-                  Order Confirmed & Payment Verified
+                  {order.orderType === 'pickup' ? 'Order Confirmed at Parlour' : 'Order Confirmed & Payment Verified'}
                 </span>
                 <h2 className="font-serif-title text-xl sm:text-2xl font-bold text-emerald-950">
                   Thank You, {order.customerName}!
                 </h2>
                 <p className="text-xs text-emerald-800 mt-0.5">
-                  Your order is confirmed at the <strong>{order.branchName}</strong> kitchen. Our team is handcrafting your scoops.
+                  {order.orderType === 'pickup' ? (
+                    <>Your pickup order is confirmed at the <strong>{order.branchName}</strong> counter. Pay upon collection.</>
+                  ) : (
+                    <>Your order is confirmed at the <strong>{order.branchName}</strong> kitchen. Our team is handcrafting your scoops.</>
+                  )}
                 </p>
               </div>
             </div>
@@ -482,7 +509,11 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
                   <div className="flex justify-between">
                     <span className="text-[#7A6458]">Payment Method:</span>
                     <span className="font-bold text-[#241A18] uppercase">
-                      {order.paymentMethod === 'card' ? 'Online Card Payment' : 'Cash on Delivery'}
+                      {order.orderType === 'pickup' || order.paymentMethod === 'pay_at_parlour'
+                        ? 'Pay at the Parlour Counter'
+                        : order.paymentMethod === 'card'
+                        ? 'Online Card Payment'
+                        : 'Cash on Delivery'}
                     </span>
                   </div>
 
@@ -515,139 +546,150 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
                 </div>
               ) : (
                 <form onSubmit={handleCompleteOrder} className="space-y-4">
-                  {/* Payment Method Tabs */}
-                  <div className="grid grid-cols-2 gap-2 p-1 bg-[#F2ECE4] rounded-2xl border border-[#D9CBB7]">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedPaymentMethod('card')}
-                      className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        selectedPaymentMethod === 'card'
-                          ? 'bg-white text-[#8C102A] shadow-xs'
-                          : 'text-[#6B5A51] hover:text-[#241A18]'
-                      }`}
-                    >
-                      <CreditCard className="w-4 h-4" />
-                      <span>Credit / Debit Card</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setSelectedPaymentMethod('cash')}
-                      className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        selectedPaymentMethod === 'cash'
-                          ? 'bg-white text-[#8C102A] shadow-xs'
-                          : 'text-[#6B5A51] hover:text-[#241A18]'
-                      }`}
-                    >
-                      <Banknote className="w-4 h-4" />
-                      <span>{order.orderType === 'delivery' ? 'Cash on Delivery' : 'Pay at Counter'}</span>
-                    </button>
-                  </div>
-
-                  {/* Card Payment Form Fields */}
-                  {selectedPaymentMethod === 'card' ? (
-                    <div className="space-y-3 pt-1">
-                      <div className="flex items-center justify-between text-[11px] font-bold text-[#5C4D44]">
-                        <span className="flex items-center gap-1 text-emerald-800">
-                          <Lock className="w-3 h-3 text-emerald-700" />
-                          <span>256-Bit SSL Encrypted Card Gateway</span>
-                        </span>
-                        <span className="text-[10px] text-[#7A6458]">Visa • MC • Amex</span>
-                      </div>
-
-                      {/* Cardholder Name */}
-                      <div>
-                        <label className="block text-[11px] font-bold uppercase tracking-wider text-[#5C4D44] mb-1">
-                          Name on Card
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. Aathif Mohamed"
-                          value={cardHolder}
-                          onChange={(e) => setCardHolder(e.target.value)}
-                          className="w-full px-3 py-2.5 text-xs text-[#241A18] bg-white border border-[#D9CBB7] rounded-xl focus:ring-2 focus:ring-[#8C102A] outline-hidden placeholder:text-[#A8988F]"
-                        />
-                      </div>
-
-                      {/* Card Number */}
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="text-[11px] font-bold uppercase tracking-wider text-[#5C4D44]">
-                            Card Number
-                          </label>
-                          <span className="text-[10px] font-bold text-[#8C102A]">
-                            {cardNumber ? getCardBrand(cardNumber) : ''}
-                          </span>
-                        </div>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            required
-                            maxLength={19}
-                            placeholder="4532 •••• •••• 8912"
-                            value={cardNumber}
-                            onChange={handleCardNumberChange}
-                            className="w-full pl-9 pr-3 py-2.5 text-xs font-mono text-[#241A18] bg-white border border-[#D9CBB7] rounded-xl focus:ring-2 focus:ring-[#8C102A] outline-hidden placeholder:text-[#A8988F]"
-                          />
-                          <CreditCard className="w-4 h-4 text-[#8C102A] absolute left-3 top-3" />
-                        </div>
-                      </div>
-
-                      {/* Expiry & CVV */}
-                      <div className="grid grid-cols-2 gap-2.5">
-                        <div>
-                          <label className="block text-[11px] font-bold uppercase tracking-wider text-[#5C4D44] mb-1">
-                            Expiry (MM/YY)
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            maxLength={5}
-                            placeholder="08/28"
-                            value={cardExpiry}
-                            onChange={handleCardExpiryChange}
-                            className="w-full px-3 py-2.5 text-xs font-mono text-[#241A18] bg-white border border-[#D9CBB7] rounded-xl focus:ring-2 focus:ring-[#8C102A] outline-hidden placeholder:text-[#A8988F]"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[11px] font-bold uppercase tracking-wider text-[#5C4D44] mb-1">
-                            CVV Security Code
-                          </label>
-                          <input
-                            type="password"
-                            required
-                            maxLength={4}
-                            placeholder="•••"
-                            value={cardCvv}
-                            onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                            className="w-full px-3 py-2.5 text-xs font-mono text-[#241A18] bg-white border border-[#D9CBB7] rounded-xl focus:ring-2 focus:ring-[#8C102A] outline-hidden placeholder:text-[#A8988F]"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="p-2.5 bg-emerald-50/80 rounded-xl border border-emerald-200 flex items-center gap-2 text-[11px] text-emerald-900">
-                        <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
-                        <span>Mock payment simulator with instant card authorization.</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-4 bg-[#FAF7F2] rounded-2xl border border-[#E8DFC8] space-y-2 text-xs text-[#5C4D44]">
+                  {order.orderType === 'pickup' ? (
+                    <div className="p-4 bg-gradient-to-r from-purple-50 via-[#FAF7F2] to-amber-50/70 rounded-2xl border border-purple-200/90 space-y-2 text-xs animate-fadeIn">
                       <div className="flex items-center gap-2 text-[#241A18] font-bold">
-                        <Banknote className="w-4 h-4 text-amber-700" />
-                        <span>
-                          {order.orderType === 'delivery'
-                            ? 'Cash on Delivery (Pay to Rider)'
-                            : 'Pay Cash at Parlour Counter'}
-                        </span>
+                        <Store className="w-4 h-4 text-purple-700" />
+                        <span>Pay at Parlour Counter on Collection</span>
                       </div>
-                      <p className="text-[11px] leading-relaxed text-[#6B5A51]">
-                        {order.orderType === 'delivery'
-                          ? `Please prepare exact cash of ${formatPrice(order.grandTotalLKR, currency)} for the delivery rider upon doorstep arrival.`
-                          : `Please present your order reference code ${order.orderReference} at the ${order.branchName} parlour counter.`}
+                      <p className="text-[11px] leading-relaxed text-[#5D4E46]">
+                        No online payment required. Settle your bill via <strong>Cash, Card, or QR payment</strong> when collecting your scoops at Amore {order.branchName} counter.
                       </p>
                     </div>
+                  ) : (
+                    <>
+                      {/* Payment Method Tabs */}
+                      <div className="grid grid-cols-2 gap-2 p-1 bg-[#F2ECE4] rounded-2xl border border-[#D9CBB7]">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPaymentMethod('card')}
+                          className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                            selectedPaymentMethod === 'card'
+                              ? 'bg-white text-[#8C102A] shadow-xs'
+                              : 'text-[#6B5A51] hover:text-[#241A18]'
+                          }`}
+                        >
+                          <CreditCard className="w-4 h-4" />
+                          <span>Credit / Debit Card</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPaymentMethod('cash')}
+                          className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                            selectedPaymentMethod === 'cash'
+                              ? 'bg-white text-[#8C102A] shadow-xs'
+                              : 'text-[#6B5A51] hover:text-[#241A18]'
+                          }`}
+                        >
+                          <Banknote className="w-4 h-4" />
+                          <span>Cash on Delivery</span>
+                        </button>
+                      </div>
+
+                      {/* Card Payment Form Fields */}
+                      {selectedPaymentMethod === 'card' ? (
+                        <div className="space-y-3 pt-1">
+                          <div className="flex items-center justify-between text-[11px] font-bold text-[#5C4D44]">
+                            <span className="flex items-center gap-1 text-emerald-800">
+                              <Lock className="w-3 h-3 text-emerald-700" />
+                              <span>256-Bit SSL Encrypted Card Gateway</span>
+                            </span>
+                            <span className="text-[10px] text-[#7A6458]">Visa • MC • Amex</span>
+                          </div>
+
+                          {/* Cardholder Name */}
+                          <div>
+                            <label className="block text-[11px] font-bold uppercase tracking-wider text-[#5C4D44] mb-1">
+                              Cardholder Full Name
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="e.g. Aathif Mohamed"
+                              value={cardHolder}
+                              onChange={(e) => setCardHolder(e.target.value)}
+                              className="w-full px-3 py-2.5 text-xs text-[#241A18] bg-white border border-[#D9CBB7] rounded-xl focus:ring-2 focus:ring-[#8C102A] outline-hidden placeholder:text-[#A8988F]"
+                            />
+                          </div>
+
+                          {/* Card Number */}
+                          <div>
+                            <label className="block text-[11px] font-bold uppercase tracking-wider text-[#5C4D44] mb-1">
+                              Card Number
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="4000 1234 5678 9010"
+                              value={cardNumber}
+                              onChange={handleCardNumberChange}
+                              className="w-full px-3 py-2.5 text-xs font-mono text-[#241A18] bg-white border border-[#D9CBB7] rounded-xl focus:ring-2 focus:ring-[#8C102A] outline-hidden placeholder:text-[#A8988F] tracking-wider"
+                            />
+                          </div>
+
+                          {/* Expiry & CVV */}
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[11px] font-bold uppercase tracking-wider text-[#5C4D44] mb-1">
+                                Expiration (MM/YY)
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                placeholder="MM/YY"
+                                value={cardExpiry}
+                                onChange={handleCardExpiryChange}
+                                className="w-full px-3 py-2.5 text-xs font-mono text-[#241A18] bg-white border border-[#D9CBB7] rounded-xl focus:ring-2 focus:ring-[#8C102A] outline-hidden placeholder:text-[#A8988F]"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-bold uppercase tracking-wider text-[#5C4D44] mb-1">
+                                CVV Security Code
+                              </label>
+                              <input
+                                type="password"
+                                required
+                                maxLength={4}
+                                placeholder="•••"
+                                value={cardCvv}
+                                onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                                className="w-full px-3 py-2.5 text-xs font-mono text-[#241A18] bg-white border border-[#D9CBB7] rounded-xl focus:ring-2 focus:ring-[#8C102A] outline-hidden placeholder:text-[#A8988F]"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="p-2.5 bg-emerald-50/80 rounded-xl border border-emerald-200 flex items-center gap-2 text-[11px] text-emerald-900">
+                            <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
+                            <span>Mock payment simulator with instant card authorization.</span>
+                          </div>
+
+                          {/* Return & Refund Policy Link (Strictly on Card Payment) */}
+                          <div className="pt-1 flex items-center justify-between text-[11px]">
+                            <button
+                              type="button"
+                              onClick={() => setIsReturnPolicyOpen(true)}
+                              className="text-[#8C102A] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              <span>View Return & Refund Policy</span>
+                            </button>
+                            <span className="text-[10px] text-[#7A6458]">100% money-back guarantee</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-4 bg-[#FAF7F2] rounded-2xl border border-[#E8DFC8] space-y-2 text-xs text-[#5C4D44]">
+                          <div className="flex items-center gap-2 text-[#241A18] font-bold">
+                            <Banknote className="w-4 h-4 text-amber-700" />
+                            <span>Cash on Delivery (Pay to Rider)</span>
+                          </div>
+                          <p className="text-[11px] leading-relaxed text-[#6B5A51]">
+                            Please prepare exact cash of {formatPrice(order.grandTotalLKR, currency)} for the delivery rider upon doorstep arrival.
+                          </p>
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {/* Submit Button */}
@@ -665,7 +707,9 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
                       <>
                         <Sparkles className="w-4 h-4 text-amber-200" />
                         <span>
-                          {selectedPaymentMethod === 'card'
+                          {order.orderType === 'pickup'
+                            ? `Confirm Parlour Pickup Order • ${formatPrice(order.grandTotalLKR, currency)}`
+                            : selectedPaymentMethod === 'card'
                             ? `Pay ${formatPrice(order.grandTotalLKR, currency)} & Complete Order`
                             : 'Confirm & Complete Order'}
                         </span>
@@ -678,6 +722,68 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
           </div>
         </div>
       </main>
+
+      {/* Return & Refund Policy Modal */}
+      {isReturnPolicyOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-[#E8DFC8] space-y-4 animate-scaleUp">
+            <div className="flex items-center justify-between pb-3 border-b border-[#F0E8DC]">
+              <div className="flex items-center gap-2 text-[#8C102A]">
+                <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-serif-title text-base font-bold text-[#241A18]">
+                  Card Return & Refund Policy
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsReturnPolicyOpen(false)}
+                className="w-8 h-8 rounded-full bg-[#FAF7F2] text-slate-500 hover:text-black flex items-center justify-center cursor-pointer transition-colors"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-[#5C4D44] leading-relaxed">
+              <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200">
+                <p className="font-bold text-emerald-950 flex items-center gap-1.5 mb-1">
+                  <span>🛡️</span>
+                  <span>100% Refund Guarantee</span>
+                </p>
+                <p className="text-emerald-900 text-[11px] leading-relaxed">
+                  If your order cannot be fulfilled by our parlour kitchen or is cancelled by management after your card payment has been captured, you are eligible for an immediate 100% refund of the full bill amount.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <h4 className="font-bold text-[#241A18] text-xs">Refund Method & Timeline:</h4>
+                <ul className="list-disc list-inside space-y-1 text-[11px] text-[#6B5A51]">
+                  <li>Refunds are credited directly back to the original debit/credit card used during checkout.</li>
+                  <li>Once approved by parlour management, funds typically reflect in your account within <strong>2 to 3 business days</strong> depending on your issuing bank.</li>
+                  <li>A formal <strong>Returned Bill & Credit Note</strong> is generated and logged in our system for your financial records.</li>
+                </ul>
+              </div>
+
+              <div className="space-y-1">
+                <h4 className="font-bold text-[#241A18] text-xs">Direct Parlour Support:</h4>
+                <p className="text-[11px] text-[#6B5A51]">
+                  For questions regarding returned transactions or immediate status inquiries, please contact our counter team at <strong>+94 11 234 5678</strong> or WhatsApp us with your Order Reference code.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setIsReturnPolicyOpen(false)}
+                className="w-full py-2.5 px-4 rounded-xl bg-[#8C102A] hover:bg-[#A31634] text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+              >
+                Understood & Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
