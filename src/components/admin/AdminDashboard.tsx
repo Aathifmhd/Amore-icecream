@@ -249,21 +249,19 @@ const PaginationControls: React.FC<PaginationControlsProps> = ({
 };
 
 // -----------------------------------------------------------
-// PRODUCT IMAGE PICKER (DROPDOWN + BROWSER/FIREBASE STORAGE)
+// PRODUCT IMAGE PICKER (DROPDOWN WITH BROWSE OPTION IN MIDDLE)
 // -----------------------------------------------------------
 interface ProductImagePickerProps {
   value: string;
   onChange: (url: string) => void;
   label?: string;
-  categoryHint?: 'scoops' | 'coffee' | 'cakes';
 }
 
 const ProductImagePicker: React.FC<ProductImagePickerProps> = ({
   value,
   onChange,
-  label = 'Product Image / Photo',
+  label = 'Product Image',
 }) => {
-  const [sourceMode, setSourceMode] = useState<'dropdown' | 'browser' | 'url'>('dropdown');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'fallback' | 'error'>('idle');
   const [uploadMessage, setUploadMessage] = useState<string>('');
@@ -277,6 +275,10 @@ const ProductImagePicker: React.FC<ProductImagePickerProps> = ({
     });
     return cats;
   }, []);
+
+  const isPresetUrl = useMemo(() => {
+    return CATALOG_PRESET_IMAGES.some((p) => p.url === value);
+  }, [value]);
 
   const handleFileUpload = async (file: File) => {
     if (!file) return;
@@ -299,7 +301,7 @@ const ProductImagePicker: React.FC<ProductImagePickerProps> = ({
         setUploadMessage('Saved to Firebase Cloud Storage');
       } else {
         setUploadStatus('fallback');
-        setUploadMessage('Optimized and ready (Base64 storage)');
+        setUploadMessage('Optimized and saved');
       }
     } catch (err: any) {
       console.error('Image upload failed:', err);
@@ -309,206 +311,148 @@ const ProductImagePicker: React.FC<ProductImagePickerProps> = ({
     }
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleFileUpload(e.dataTransfer.files[0]);
-    }
-  };
-
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <label className="block font-bold text-[#3D2C24] text-xs">
-          {label}
-        </label>
-        {/* Source Mode Switcher */}
-        <div className="flex items-center bg-[#FAF7F2] p-0.5 rounded-lg border border-[#E8DFC8] text-[11px]">
-          <button
-            type="button"
-            onClick={() => setSourceMode('dropdown')}
-            className={`px-2 py-1 rounded-md font-bold transition-all cursor-pointer flex items-center gap-1 ${
-              sourceMode === 'dropdown'
-                ? 'bg-[#8C102A] text-white shadow-2xs'
-                : 'text-[#5D4E46] hover:text-[#241A18]'
-            }`}
-          >
-            <FolderOpen className="w-3 h-3" />
-            <span>Dropdown</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setSourceMode('browser')}
-            className={`px-2 py-1 rounded-md font-bold transition-all cursor-pointer flex items-center gap-1 ${
-              sourceMode === 'browser'
-                ? 'bg-[#8C102A] text-white shadow-2xs'
-                : 'text-[#5D4E46] hover:text-[#241A18]'
-            }`}
-          >
-            <Upload className="w-3 h-3" />
-            <span>Browser</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setSourceMode('url')}
-            className={`px-2 py-1 rounded-md font-bold transition-all cursor-pointer flex items-center gap-1 ${
-              sourceMode === 'url'
-                ? 'bg-[#8C102A] text-white shadow-2xs'
-                : 'text-[#5D4E46] hover:text-[#241A18]'
-            }`}
-          >
-            <ExternalLink className="w-3 h-3" />
-            <span>Link</span>
-          </button>
-        </div>
+      <label className="block font-bold text-[#3D2C24] text-xs">
+        {label}
+      </label>
+
+      {/* Hidden File Input for Device Browsing */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept="image/*"
+        onChange={(e) => {
+          if (e.target.files && e.target.files.length > 0) {
+            handleFileUpload(e.target.files[0]);
+          }
+        }}
+        className="hidden"
+      />
+
+      {/* Image Dropdown with Browse in the middle & Quick Browse Button */}
+      <div className="flex gap-2 items-center">
+        <select
+          value={value && !isPresetUrl ? '__CUSTOM_UPLOADED__' : value}
+          onChange={(e) => {
+            const selectedVal = e.target.value;
+            if (selectedVal === '__BROWSE_DEVICE__') {
+              fileInputRef.current?.click();
+              return;
+            }
+            if (selectedVal && selectedVal !== '__CUSTOM_UPLOADED__') {
+              onChange(selectedVal);
+              setUploadStatus('idle');
+            }
+          }}
+          disabled={isUploading}
+          className="flex-1 px-3 py-2.5 text-xs rounded-xl border border-[#D9CBB7] bg-white focus:outline-hidden focus:border-[#8C102A]"
+        >
+          <option value="">-- Select Product Image --</option>
+
+          {/* Group 1: Brand Signatures */}
+          {categories['Brand Signatures'] && (
+            <optgroup label="✨ Brand Signatures">
+              {categories['Brand Signatures'].map((item) => (
+                <option key={item.id} value={item.url}>
+                  {item.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+
+          {/* Group 2: Gelato Flavours */}
+          {categories['Gelato Flavours'] && (
+            <optgroup label="🍨 Gelato Flavours">
+              {categories['Gelato Flavours'].map((item) => (
+                <option key={item.id} value={item.url}>
+                  {item.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+
+          {/* MIDDLE OF THE DROPDOWN: Browse Option */}
+          <optgroup label="📁 Upload New Image">
+            <option value="__BROWSE_DEVICE__" className="font-bold text-[#8C102A]">
+              📂 ➜ Browse & Upload from Device / Computer...
+            </option>
+          </optgroup>
+
+          {/* Group 3: Specialty Coffee */}
+          {categories['Specialty Coffee'] && (
+            <optgroup label="☕ Specialty Barista Coffee">
+              {categories['Specialty Coffee'].map((item) => (
+                <option key={item.id} value={item.url}>
+                  {item.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+
+          {/* Group 4: Artisan Cakes */}
+          {categories['Artisan Cakes'] && (
+            <optgroup label="🍰 Artisan Cakes & Bakery">
+              {categories['Artisan Cakes'].map((item) => (
+                <option key={item.id} value={item.url}>
+                  {item.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+
+          {/* Custom Uploaded Image Option */}
+          {value && !isPresetUrl && (
+            <optgroup label="📷 Current Uploaded Image">
+              <option value="__CUSTOM_UPLOADED__">
+                ✓ Currently Uploaded Photo
+              </option>
+            </optgroup>
+          )}
+        </select>
+
+        {/* Browse Button */}
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading}
+          className="px-3.5 py-2.5 rounded-xl bg-[#8C102A] text-white font-bold text-xs flex items-center gap-1.5 hover:bg-[#A31634] shrink-0 cursor-pointer shadow-xs transition-all disabled:opacity-50"
+          title="Browse Computer / Phone for Photo"
+        >
+          {isUploading ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Upload className="w-3.5 h-3.5" />
+          )}
+          <span>{isUploading ? 'Uploading...' : 'Browse'}</span>
+        </button>
       </div>
 
-      {/* Mode 1: Dropdown Selection */}
-      {sourceMode === 'dropdown' && (
-        <div className="space-y-2">
-          <select
-            value={value}
-            onChange={(e) => {
-              if (e.target.value) {
-                onChange(e.target.value);
-                setUploadStatus('idle');
-              }
-            }}
-            className="w-full px-3 py-2 text-xs rounded-xl border border-[#D9CBB7] bg-white focus:outline-hidden focus:border-[#8C102A]"
-          >
-            <option value="">-- Choose from Catalog Library --</option>
-            {(Object.entries(categories) as [string, CatalogPresetImage[]][]).map(([catName, items]) => (
-              <optgroup key={catName} label={catName}>
-                {items.map((item) => (
-                  <option key={item.id} value={item.url}>
-                    {item.name}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-
-          {/* Quick preset thumbnail pills */}
-          <div className="flex gap-2 overflow-x-auto pb-1 pt-0.5 scrollbar-thin">
-            {CATALOG_PRESET_IMAGES.slice(0, 8).map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => {
-                  onChange(preset.url);
-                  setUploadStatus('idle');
-                }}
-                className={`shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-medium transition-all cursor-pointer ${
-                  value === preset.url
-                    ? 'border-[#8C102A] bg-red-50 text-[#8C102A] font-bold ring-1 ring-[#8C102A]'
-                    : 'border-[#E8DFC8] bg-white text-[#5D4E46] hover:bg-[#FAF7F2]'
-                }`}
-                title={preset.name}
-              >
-                <img
-                  src={preset.url}
-                  alt={preset.name}
-                  className="w-4 h-4 rounded-full object-cover"
-                />
-                <span className="truncate max-w-[100px]">{preset.name}</span>
-              </button>
-            ))}
-          </div>
+      {/* Upload Progress / Status Alerts */}
+      {uploadStatus === 'success' && (
+        <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">
+          <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{uploadMessage}</span>
         </div>
       )}
 
-      {/* Mode 2: Browser / Device File Upload to Firebase Storage */}
-      {sourceMode === 'browser' && (
-        <div className="space-y-2">
-          <input
-            type="file"
-            ref={fileInputRef}
-            accept="image/*"
-            onChange={(e) => {
-              if (e.target.files && e.target.files.length > 0) {
-                handleFileUpload(e.target.files[0]);
-              }
-            }}
-            className="hidden"
-          />
-
-          <div
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-[#D9CBB7] hover:border-[#8C102A] rounded-2xl p-4 text-center cursor-pointer bg-[#FAF7F2] hover:bg-white transition-all group"
-          >
-            {isUploading ? (
-              <div className="flex flex-col items-center justify-center py-2 space-y-2">
-                <Loader2 className="w-7 h-7 text-[#8C102A] animate-spin" />
-                <span className="text-xs font-bold text-[#8C102A]">
-                  Uploading to Firebase Storage...
-                </span>
-                <span className="text-[10px] text-[#7A6458]">
-                  Optimizing image resolution & compression
-                </span>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-1 space-y-1.5">
-                <div className="w-10 h-10 rounded-full bg-white shadow-2xs border border-[#E8DFC8] flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Upload className="w-5 h-5 text-[#8C102A]" />
-                </div>
-                <div className="text-xs font-bold text-[#241A18]">
-                  Click to browse computer / phone or drag image here
-                </div>
-                <div className="text-[10px] text-[#7A6458]">
-                  JPG, PNG, WebP • Auto-optimized & stored in Firebase
-                </div>
-              </div>
-            )}
-          </div>
-
-          {uploadStatus === 'success' && (
-            <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">
-              <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>{uploadMessage}</span>
-            </div>
-          )}
-
-          {uploadStatus === 'fallback' && (
-            <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl">
-              <Check className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>{uploadMessage}</span>
-            </div>
-          )}
-
-          {uploadStatus === 'error' && (
-            <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 px-3 py-1.5 rounded-xl">
-              <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-              <span>{uploadMessage}</span>
-            </div>
-          )}
+      {uploadStatus === 'fallback' && (
+        <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl">
+          <Check className="w-4 h-4 text-amber-600 shrink-0" />
+          <span>{uploadMessage}</span>
         </div>
       )}
 
-      {/* Mode 3: Direct Web Link URL */}
-      {sourceMode === 'url' && (
-        <div>
-          <input
-            type="url"
-            value={value}
-            onChange={(e) => {
-              onChange(e.target.value);
-              setUploadStatus('idle');
-            }}
-            placeholder="https://images.unsplash.com/..."
-            className="w-full px-3 py-2 text-xs rounded-xl border border-[#D9CBB7] focus:outline-hidden focus:border-[#8C102A]"
-          />
+      {uploadStatus === 'error' && (
+        <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 px-3 py-1.5 rounded-xl">
+          <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+          <span>{uploadMessage}</span>
         </div>
       )}
 
       {/* Live Preview Box */}
       {value ? (
-        <div className="flex items-center gap-3 p-2 bg-[#FAF7F2] rounded-xl border border-[#E8DFC8]">
+        <div className="flex items-center gap-3 p-2.5 bg-[#FAF7F2] rounded-xl border border-[#E8DFC8]">
           <div className="w-14 h-14 rounded-lg overflow-hidden bg-white border border-[#D9CBB7] shrink-0">
             <img
               src={value}
@@ -523,7 +467,7 @@ const ProductImagePicker: React.FC<ProductImagePickerProps> = ({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#8C102A]">
-                Preview
+                Selected Image
               </span>
               {value.includes('firebasestorage.app') || value.includes('firebasestorage.googleapis.com') ? (
                 <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md font-semibold">
@@ -531,11 +475,11 @@ const ProductImagePicker: React.FC<ProductImagePickerProps> = ({
                 </span>
               ) : value.startsWith('data:') ? (
                 <span className="text-[9px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-md font-semibold">
-                  Local Optimized
+                  Uploaded Photo
                 </span>
               ) : (
                 <span className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-md font-semibold">
-                  Web Asset / Catalog
+                  Catalog Library
                 </span>
               )}
             </div>
@@ -3697,7 +3641,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <ProductImagePicker
                   value={newProductImage}
                   onChange={setNewProductImage}
-                  label="Product Photo / Image (Select Dropdown or Browse Device)"
+                  label="Product Image"
                 />
               </div>
 
@@ -3783,7 +3727,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       item: { ...editingMenuItem.item, image: url },
                     })
                   }
-                  label="Product Photo / Image (Select Dropdown or Browse Device)"
+                  label="Product Image"
                 />
               </div>
 
