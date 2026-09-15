@@ -3,6 +3,8 @@ import { OrderRecord, Currency } from '../types';
 import {
   getUserOrdersList,
   cancelOrder,
+  deleteCustomerHistoryOrder,
+  clearCustomerOrderHistory,
   ORDERS_UPDATED_EVENT,
   generateInconvenienceEmail,
   syncOrdersFromFirestore,
@@ -38,6 +40,7 @@ import {
   Truck,
   Store,
   History,
+  Trash2,
 } from 'lucide-react';
 import { LocationPickerModal } from './LocationPickerModal';
 
@@ -253,6 +256,34 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
     setConfirmCancelRef(null);
     setCancelNotification(`Order ${orderRef} was cancelled. Any card payment hold has been released.`);
     refreshOrders();
+  };
+
+  // Delete a specific history order
+  const handleDeleteHistoryOrder = (orderRef: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (window.confirm(`Delete order #${orderRef} from your order history?`)) {
+      deleteCustomerHistoryOrder(orderRef);
+      if (selectedHistoryOrder?.orderReference === orderRef) {
+        setSelectedHistoryOrder(null);
+      }
+      setCancelNotification(`Order #${orderRef} was deleted from your history.`);
+      refreshOrders();
+    }
+  };
+
+  // Clear all past history orders
+  const handleClearAllHistory = () => {
+    if (historyOrders.length === 0) return;
+    if (
+      window.confirm(
+        `Are you sure you want to clear all ${historyOrders.length} past order records from your history?`
+      )
+    ) {
+      clearCustomerOrderHistory(currentUser?.uid);
+      setSelectedHistoryOrder(null);
+      setCancelNotification('All past order history has been cleared.');
+      refreshOrders();
+    }
   };
 
   const handleCopyApologyText = (text: string) => {
@@ -1081,6 +1112,22 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
               </div>
             ) : (
               <div className="space-y-3 animate-fadeIn">
+                {/* History Section Header Bar with Clear History Button */}
+                <div className="flex items-center justify-between px-1 pb-1">
+                  <span className="text-[11px] font-bold text-[#7A6458] uppercase tracking-wider">
+                    Archived Orders ({historyOrders.length})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleClearAllHistory}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-rose-700 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 transition-all cursor-pointer shadow-2xs active:scale-95"
+                    title="Clear all past orders from your history"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Clear History</span>
+                  </button>
+                </div>
+
                 {historyOrders.map((order) => {
                   const isDelivered = order.status === 'delivered';
                   const isCancelled = order.status === 'cancelled';
@@ -1147,7 +1194,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                       </div>
 
                       {/* Bottom Row: Payment & Action Buttons */}
-                      <div className="flex items-center justify-between pt-1 border-t border-[#E8DFC8]/50">
+                      <div className="flex items-center justify-between pt-1 border-t border-[#E8DFC8]/50 gap-2 flex-wrap">
                         <span className="text-[11px] text-[#7A6458]">
                           Payment: <strong className="text-[#241A18]">{order.paymentMethod === 'card' ? '💳 Card' : order.paymentMethod === 'pay_at_parlour' ? '🏪 Parlour' : '💵 Cash'}</strong>
                         </span>
@@ -1163,6 +1210,15 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                               <span>Apology Note</span>
                             </button>
                           )}
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteHistoryOrder(order.orderReference, e)}
+                            className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-rose-50 text-rose-600 hover:text-rose-700 border border-rose-200 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                            title={`Delete order #${order.orderReference} from history`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Delete</span>
+                          </button>
                           <button
                             type="button"
                             onClick={() => setSelectedHistoryOrder(order)}
@@ -1345,12 +1401,21 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
               </div>
             </div>
 
-            {/* 3. Footer: Simple, clean Close */}
+            {/* 3. Footer: Simple, clean Close & Delete Order */}
             <div className="p-4 bg-[#FAF7F2] border-t border-[#E8DFC8] flex items-center gap-2">
               <button
                 type="button"
+                onClick={() => handleDeleteHistoryOrder(selectedHistoryOrder.orderReference)}
+                className="py-2.5 px-4 rounded-xl bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0"
+                title="Delete this order record from history"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Order</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => setSelectedHistoryOrder(null)}
-                className="w-full py-2.5 px-4 rounded-xl bg-[#8C102A] hover:bg-[#A31634] text-white font-bold text-xs shadow-xs transition-colors cursor-pointer text-center"
+                className="flex-1 py-2.5 px-4 rounded-xl bg-[#8C102A] hover:bg-[#A31634] text-white font-bold text-xs shadow-xs transition-colors cursor-pointer text-center"
               >
                 Close
               </button>

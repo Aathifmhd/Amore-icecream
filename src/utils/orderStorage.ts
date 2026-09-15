@@ -46,6 +46,35 @@ export function recordSessionOrderRef(ref: string): void {
   }
 }
 
+export const CUSTOMER_DELETED_HISTORY_KEY = 'amore_customer_deleted_history_v1';
+
+export function getCustomerDeletedHistoryRefs(): string[] {
+  try {
+    const raw = localStorage.getItem(CUSTOMER_DELETED_HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function removeSessionOrderRef(ref: string): void {
+  try {
+    const refs = getSessionOrderRefs();
+    const updated = refs.filter((r) => r !== ref);
+    sessionStorage.setItem(SESSION_ORDERS_KEY, JSON.stringify(updated));
+  } catch {
+    // Ignore
+  }
+}
+
+export function clearSessionOrderRefs(): void {
+  try {
+    sessionStorage.removeItem(SESSION_ORDERS_KEY);
+  } catch {
+    // Ignore
+  }
+}
+
 export function getAllOrders(): Record<string, OrderRecord> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -156,6 +185,7 @@ export function getUserOrdersList(userId?: string | null): OrderRecord[] {
     const all = getAllOrders();
     const list = Object.values(all);
     const sessionRefs = getSessionOrderRefs();
+    const deletedHistoryRefs = getCustomerDeletedHistoryRefs();
 
     let filtered: OrderRecord[] = [];
     if (userId && userId.trim()) {
@@ -163,12 +193,18 @@ export function getUserOrdersList(userId?: string | null): OrderRecord[] {
       filtered = list.filter(
         (o) =>
           o.orderReference !== 'AMO-3899' &&
+          !o.customerDeletedHistory &&
+          !deletedHistoryRefs.includes(o.orderReference) &&
           (o.userId === userId || sessionRefs.includes(o.orderReference))
       );
     } else {
       // Unauthenticated visitor: ONLY orders placed in this specific browser session
       filtered = list.filter(
-        (o) => o.orderReference !== 'AMO-3899' && sessionRefs.includes(o.orderReference)
+        (o) =>
+          o.orderReference !== 'AMO-3899' &&
+          !o.customerDeletedHistory &&
+          !deletedHistoryRefs.includes(o.orderReference) &&
+          sessionRefs.includes(o.orderReference)
       );
     }
 
@@ -398,6 +434,68 @@ export function deleteOrder(orderReference: string): boolean {
     return false;
   } catch (err) {
     console.error('Failed to delete order:', err);
+    return false;
+  }
+}
+
+/**
+ * Customer: Delete a specific order from customer's history
+ */
+export function deleteCustomerHistoryOrder(orderReference: string): boolean {
+  try {
+    // 1. Add to local deleted history refs
+    const deletedRefs = getCustomerDeletedHistoryRefs();
+    if (!deletedRefs.includes(orderReference)) {
+      deletedRefs.push(orderReference);
+      localStorage.setItem(CUSTOMER_DELETED_HISTORY_KEY, JSON.stringify(deletedRefs));
+    }
+
+    // 2. Remove from session order refs
+    removeSessionOrderRef(orderReference);
+
+    // 3. Mark customerDeletedHistory on order record in localStorage and Firestore
+    const existing = getOrder(orderReference);
+    if (existing) {
+      updateOrder(orderReference, { customerDeletedHistory: true });
+      // If the order was cancelled and not a captured return bill, delete it permanently
+      if (existing.status === 'cancelled' && !isCapturedReturnedBill(existing)) {
+        deleteOrder(orderReference);
+      }
+    }
+
+    notifyOrdersUpdated();
+    return true;
+  } catch (err) {
+    console.error('Failed to delete customer history order:', err);
+    return false;
+  }
+}
+
+/**
+ * Customer: Clear all history orders
+ */
+export function clearCustomerOrderHistory(userId?: string | null): boolean {
+  try {
+    const userOrders = getUserOrdersList(userId);
+    const historyList = userOrders.filter((o) => o.status === 'delivered' || o.status === 'cancelled');
+
+    const deletedRefs = getCustomerDeletedHistoryRefs();
+    historyList.forEach((order) => {
+      if (!deletedRefs.includes(order.orderReference)) {
+        deletedRefs.push(order.orderReference);
+      }
+      removeSessionOrderRef(order.orderReference);
+      updateOrder(order.orderReference, { customerDeletedHistory: true });
+      if (order.status === 'cancelled' && !isCapturedReturnedBill(order)) {
+        deleteOrder(order.orderReference);
+      }
+    });
+
+    localStorage.setItem(CUSTOMER_DELETED_HISTORY_KEY, JSON.stringify(deletedRefs));
+    notifyOrdersUpdated();
+    return true;
+  } catch (err) {
+    console.error('Failed to clear customer order history:', err);
     return false;
   }
 }

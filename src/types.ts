@@ -142,5 +142,6 @@ export interface OrderRecord {
   refundStatus?: 'pending' | 'completed';
   refundedAt?: string;
   refundAmountLKR?: number;
+  customerDeletedHistory?: boolean;
 }
 
