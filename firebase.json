@@ -18,5 +18,8 @@
       "database": "ai-studio-amorespecialityi-69550dea-de1c-46c0-8653-ecc1cc5e4b9d",
       "rules": "firestore.rules"
     }
-  ]
+  ],
+  "storage": {
+    "rules": "storage.rules"
+  }
 }

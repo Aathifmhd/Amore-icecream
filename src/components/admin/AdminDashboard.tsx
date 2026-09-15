@@ -21,7 +21,7 @@ import {
   syncOrdersFromFirestore,
   mergeOrdersIntoStorage,
 } from '../../utils/orderStorage';
-import { subscribeToAllOrders } from '../../firebase';
+import { subscribeToAllOrders, uploadProductImageToFirebase } from '../../firebase';
 import {
   getAllGelatoFlavours,
   getAllCoffeeItems,
@@ -41,7 +41,7 @@ import {
   syncMenuFromFirestore,
   subscribeToRealtimeMenu,
 } from '../../utils/menuStorage';
-import { AMORE_BRANCHES } from '../../data/iceCreamData';
+import { AMORE_BRANCHES, CATALOG_PRESET_IMAGES, CatalogPresetImage } from '../../data/iceCreamData';
 import {
   OrderRecord,
   ScoopItem,
@@ -94,6 +94,10 @@ import {
   Lock,
   Store,
   RotateCcw,
+  Upload,
+  FolderOpen,
+  Loader2,
+  Image as ImageIcon,
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -244,6 +248,322 @@ const PaginationControls: React.FC<PaginationControlsProps> = ({
   );
 };
 
+// -----------------------------------------------------------
+// PRODUCT IMAGE PICKER (DROPDOWN + BROWSER/FIREBASE STORAGE)
+// -----------------------------------------------------------
+interface ProductImagePickerProps {
+  value: string;
+  onChange: (url: string) => void;
+  label?: string;
+  categoryHint?: 'scoops' | 'coffee' | 'cakes';
+}
+
+const ProductImagePicker: React.FC<ProductImagePickerProps> = ({
+  value,
+  onChange,
+  label = 'Product Image / Photo',
+}) => {
+  const [sourceMode, setSourceMode] = useState<'dropdown' | 'browser' | 'url'>('dropdown');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'fallback' | 'error'>('idle');
+  const [uploadMessage, setUploadMessage] = useState<string>('');
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const categories = useMemo(() => {
+    const cats: Record<string, CatalogPresetImage[]> = {};
+    CATALOG_PRESET_IMAGES.forEach((p) => {
+      if (!cats[p.category]) cats[p.category] = [];
+      cats[p.category].push(p);
+    });
+    return cats;
+  }, []);
+
+  const handleFileUpload = async (file: File) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setUploadStatus('error');
+      setUploadMessage('Please choose a valid image file (PNG, JPG, WebP).');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadStatus('idle');
+    setUploadMessage('Uploading image to Firebase Cloud Storage...');
+
+    try {
+      const result = await uploadProductImageToFirebase(file);
+      onChange(result.url);
+      setIsUploading(false);
+      if (result.storageType === 'firebase_storage') {
+        setUploadStatus('success');
+        setUploadMessage('Saved to Firebase Cloud Storage');
+      } else {
+        setUploadStatus('fallback');
+        setUploadMessage('Optimized and ready (Base64 storage)');
+      }
+    } catch (err: any) {
+      console.error('Image upload failed:', err);
+      setIsUploading(false);
+      setUploadStatus('error');
+      setUploadMessage(err?.message || 'Upload failed. Please try another image.');
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFileUpload(e.dataTransfer.files[0]);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="block font-bold text-[#3D2C24] text-xs">
+          {label}
+        </label>
+        {/* Source Mode Switcher */}
+        <div className="flex items-center bg-[#FAF7F2] p-0.5 rounded-lg border border-[#E8DFC8] text-[11px]">
+          <button
+            type="button"
+            onClick={() => setSourceMode('dropdown')}
+            className={`px-2 py-1 rounded-md font-bold transition-all cursor-pointer flex items-center gap-1 ${
+              sourceMode === 'dropdown'
+                ? 'bg-[#8C102A] text-white shadow-2xs'
+                : 'text-[#5D4E46] hover:text-[#241A18]'
+            }`}
+          >
+            <FolderOpen className="w-3 h-3" />
+            <span>Dropdown</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSourceMode('browser')}
+            className={`px-2 py-1 rounded-md font-bold transition-all cursor-pointer flex items-center gap-1 ${
+              sourceMode === 'browser'
+                ? 'bg-[#8C102A] text-white shadow-2xs'
+                : 'text-[#5D4E46] hover:text-[#241A18]'
+            }`}
+          >
+            <Upload className="w-3 h-3" />
+            <span>Browser</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSourceMode('url')}
+            className={`px-2 py-1 rounded-md font-bold transition-all cursor-pointer flex items-center gap-1 ${
+              sourceMode === 'url'
+                ? 'bg-[#8C102A] text-white shadow-2xs'
+                : 'text-[#5D4E46] hover:text-[#241A18]'
+            }`}
+          >
+            <ExternalLink className="w-3 h-3" />
+            <span>Link</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Mode 1: Dropdown Selection */}
+      {sourceMode === 'dropdown' && (
+        <div className="space-y-2">
+          <select
+            value={value}
+            onChange={(e) => {
+              if (e.target.value) {
+                onChange(e.target.value);
+                setUploadStatus('idle');
+              }
+            }}
+            className="w-full px-3 py-2 text-xs rounded-xl border border-[#D9CBB7] bg-white focus:outline-hidden focus:border-[#8C102A]"
+          >
+            <option value="">-- Choose from Catalog Library --</option>
+            {(Object.entries(categories) as [string, CatalogPresetImage[]][]).map(([catName, items]) => (
+              <optgroup key={catName} label={catName}>
+                {items.map((item) => (
+                  <option key={item.id} value={item.url}>
+                    {item.name}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+
+          {/* Quick preset thumbnail pills */}
+          <div className="flex gap-2 overflow-x-auto pb-1 pt-0.5 scrollbar-thin">
+            {CATALOG_PRESET_IMAGES.slice(0, 8).map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => {
+                  onChange(preset.url);
+                  setUploadStatus('idle');
+                }}
+                className={`shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-medium transition-all cursor-pointer ${
+                  value === preset.url
+                    ? 'border-[#8C102A] bg-red-50 text-[#8C102A] font-bold ring-1 ring-[#8C102A]'
+                    : 'border-[#E8DFC8] bg-white text-[#5D4E46] hover:bg-[#FAF7F2]'
+                }`}
+                title={preset.name}
+              >
+                <img
+                  src={preset.url}
+                  alt={preset.name}
+                  className="w-4 h-4 rounded-full object-cover"
+                />
+                <span className="truncate max-w-[100px]">{preset.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Mode 2: Browser / Device File Upload to Firebase Storage */}
+      {sourceMode === 'browser' && (
+        <div className="space-y-2">
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept="image/*"
+            onChange={(e) => {
+              if (e.target.files && e.target.files.length > 0) {
+                handleFileUpload(e.target.files[0]);
+              }
+            }}
+            className="hidden"
+          />
+
+          <div
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className="border-2 border-dashed border-[#D9CBB7] hover:border-[#8C102A] rounded-2xl p-4 text-center cursor-pointer bg-[#FAF7F2] hover:bg-white transition-all group"
+          >
+            {isUploading ? (
+              <div className="flex flex-col items-center justify-center py-2 space-y-2">
+                <Loader2 className="w-7 h-7 text-[#8C102A] animate-spin" />
+                <span className="text-xs font-bold text-[#8C102A]">
+                  Uploading to Firebase Storage...
+                </span>
+                <span className="text-[10px] text-[#7A6458]">
+                  Optimizing image resolution & compression
+                </span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-1 space-y-1.5">
+                <div className="w-10 h-10 rounded-full bg-white shadow-2xs border border-[#E8DFC8] flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Upload className="w-5 h-5 text-[#8C102A]" />
+                </div>
+                <div className="text-xs font-bold text-[#241A18]">
+                  Click to browse computer / phone or drag image here
+                </div>
+                <div className="text-[10px] text-[#7A6458]">
+                  JPG, PNG, WebP • Auto-optimized & stored in Firebase
+                </div>
+              </div>
+            )}
+          </div>
+
+          {uploadStatus === 'success' && (
+            <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">
+              <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{uploadMessage}</span>
+            </div>
+          )}
+
+          {uploadStatus === 'fallback' && (
+            <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl">
+              <Check className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>{uploadMessage}</span>
+            </div>
+          )}
+
+          {uploadStatus === 'error' && (
+            <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 px-3 py-1.5 rounded-xl">
+              <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+              <span>{uploadMessage}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Mode 3: Direct Web Link URL */}
+      {sourceMode === 'url' && (
+        <div>
+          <input
+            type="url"
+            value={value}
+            onChange={(e) => {
+              onChange(e.target.value);
+              setUploadStatus('idle');
+            }}
+            placeholder="https://images.unsplash.com/..."
+            className="w-full px-3 py-2 text-xs rounded-xl border border-[#D9CBB7] focus:outline-hidden focus:border-[#8C102A]"
+          />
+        </div>
+      )}
+
+      {/* Live Preview Box */}
+      {value ? (
+        <div className="flex items-center gap-3 p-2 bg-[#FAF7F2] rounded-xl border border-[#E8DFC8]">
+          <div className="w-14 h-14 rounded-lg overflow-hidden bg-white border border-[#D9CBB7] shrink-0">
+            <img
+              src={value}
+              alt="Active selection preview"
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src =
+                  'https://images.unsplash.com/photo-1560008581-09826d1de69e?auto=format&fit=crop&w=600&q=80';
+              }}
+            />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#8C102A]">
+                Preview
+              </span>
+              {value.includes('firebasestorage.app') || value.includes('firebasestorage.googleapis.com') ? (
+                <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md font-semibold">
+                  Firebase Cloud Storage
+                </span>
+              ) : value.startsWith('data:') ? (
+                <span className="text-[9px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-md font-semibold">
+                  Local Optimized
+                </span>
+              ) : (
+                <span className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-md font-semibold">
+                  Web Asset / Catalog
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-[#5D4E46] truncate mt-0.5" title={value}>
+              {value}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              onChange('');
+              setUploadStatus('idle');
+            }}
+            className="p-1 rounded-lg text-[#7A6458] hover:text-red-600 hover:bg-white transition-colors cursor-pointer"
+            title="Remove Image"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      ) : (
+        <div className="text-[11px] text-[#7A6458] italic">
+          No image selected yet. Default catalogue photo will be applied if left empty.
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onSignOut,
   onBackToStore,
@@ -345,6 +665,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [cakeItems, setCakeItems] = useState<MenuItem[]>([]);
   const [menuSearchQuery, setMenuSearchQuery] = useState('');
   const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
+  const [newProductImage, setNewProductImage] = useState<string>('');
   const [editingMenuItem, setEditingMenuItem] = useState<{
     type: 'scoop' | 'coffee' | 'cake';
     item: ScoopItem | MenuItem;
@@ -2167,19 +2488,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             </span>
                           )}
                         </div>
-
-                        {/* Stock Availability Toggle Badge */}
-                        <button
-                          type="button"
-                          onClick={() => handleToggleStock(scoop.id, 'scoops')}
-                          className={`absolute top-2 right-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold shadow-xs transition-all cursor-pointer ${
-                            scoop.isAvailable !== false
-                              ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                              : 'bg-red-600 text-white hover:bg-red-700'
-                          }`}
-                        >
-                          {scoop.isAvailable !== false ? 'In Stock' : 'Sold Out'}
-                        </button>
                       </div>
 
                       {/* Info */}
@@ -2220,9 +2528,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
 
                     {/* Actions Footer */}
-                    <div className="mt-4 pt-3 border-t border-[#EFE8DC] flex items-center justify-between">
-                      <span className="text-[10px] text-[#7A6458] font-mono">ID: {scoop.id}</span>
-                      <div className="flex items-center gap-1.5">
+                    <div className="mt-4 pt-3 border-t border-[#EFE8DC] flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-[#7A6458] font-mono shrink-0">ID: {scoop.id}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        {/* Stock Availability Toggle Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStock(scoop.id, 'scoops')}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                            scoop.isAvailable !== false
+                              ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+                              : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
+                          }`}
+                          title={scoop.isAvailable !== false ? 'Click to mark Out of Stock' : 'Click to mark In Stock'}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${scoop.isAvailable !== false ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                          <span>{scoop.isAvailable !== false ? 'In Stock' : 'Out of Stock'}</span>
+                        </button>
                         <button
                           type="button"
                           onClick={() => setEditingMenuItem({ type: 'scoop', item: scoop })}
@@ -2257,17 +2579,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           alt={coffee.name}
                           className="w-full h-full object-cover"
                         />
-                        <button
-                          type="button"
-                          onClick={() => handleToggleStock(coffee.id, 'coffee')}
-                          className={`absolute top-2 right-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold shadow-xs cursor-pointer ${
-                            coffee.isAvailable !== false
-                              ? 'bg-emerald-600 text-white'
-                              : 'bg-red-600 text-white'
-                          }`}
-                        >
-                          {coffee.isAvailable !== false ? 'In Stock' : 'Sold Out'}
-                        </button>
                       </div>
 
                       <h3 className="font-serif-title font-bold text-base text-[#241A18]">
@@ -2287,13 +2598,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </div>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-[#EFE8DC] flex items-center justify-between">
-                      <span className="text-[10px] text-[#7A6458] font-mono">ID: {coffee.id}</span>
-                      <div className="flex items-center gap-1.5">
+                    <div className="mt-4 pt-3 border-t border-[#EFE8DC] flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-[#7A6458] font-mono shrink-0">ID: {coffee.id}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        {/* Stock Availability Toggle Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStock(coffee.id, 'coffee')}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                            coffee.isAvailable !== false
+                              ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+                              : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
+                          }`}
+                          title={coffee.isAvailable !== false ? 'Click to mark Out of Stock' : 'Click to mark In Stock'}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${coffee.isAvailable !== false ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                          <span>{coffee.isAvailable !== false ? 'In Stock' : 'Out of Stock'}</span>
+                        </button>
                         <button
                           type="button"
                           onClick={() => setEditingMenuItem({ type: 'coffee', item: coffee })}
                           className="p-1.5 rounded-lg border border-[#D9CBB7] hover:border-[#8C102A] text-[#5D4E46] hover:text-[#8C102A] transition-colors cursor-pointer"
+                          title="Edit Coffee Details & Pricing"
                         >
                           <Edit className="w-3.5 h-3.5" />
                         </button>
@@ -2301,6 +2627,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           type="button"
                           onClick={() => handleDeleteMenuItem(coffee.id, coffee.name, 'coffee')}
                           className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                          title="Delete Coffee"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -2322,17 +2649,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           alt={cake.name}
                           className="w-full h-full object-cover"
                         />
-                        <button
-                          type="button"
-                          onClick={() => handleToggleStock(cake.id, 'cakes')}
-                          className={`absolute top-2 right-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold shadow-xs cursor-pointer ${
-                            cake.isAvailable !== false
-                              ? 'bg-emerald-600 text-white'
-                              : 'bg-red-600 text-white'
-                          }`}
-                        >
-                          {cake.isAvailable !== false ? 'In Stock' : 'Sold Out'}
-                        </button>
                       </div>
 
                       <h3 className="font-serif-title font-bold text-base text-[#241A18]">
@@ -2352,13 +2668,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </div>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-[#EFE8DC] flex items-center justify-between">
-                      <span className="text-[10px] text-[#7A6458] font-mono">ID: {cake.id}</span>
-                      <div className="flex items-center gap-1.5">
+                    <div className="mt-4 pt-3 border-t border-[#EFE8DC] flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-[#7A6458] font-mono shrink-0">ID: {cake.id}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        {/* Stock Availability Toggle Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStock(cake.id, 'cakes')}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                            cake.isAvailable !== false
+                              ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+                              : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
+                          }`}
+                          title={cake.isAvailable !== false ? 'Click to mark Out of Stock' : 'Click to mark In Stock'}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${cake.isAvailable !== false ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                          <span>{cake.isAvailable !== false ? 'In Stock' : 'Out of Stock'}</span>
+                        </button>
                         <button
                           type="button"
                           onClick={() => setEditingMenuItem({ type: 'cake', item: cake })}
                           className="p-1.5 rounded-lg border border-[#D9CBB7] hover:border-[#8C102A] text-[#5D4E46] hover:text-[#8C102A] transition-colors cursor-pointer"
+                          title="Edit Cake Details & Pricing"
                         >
                           <Edit className="w-3.5 h-3.5" />
                         </button>
@@ -2366,6 +2697,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           type="button"
                           onClick={() => handleDeleteMenuItem(cake.id, cake.name, 'cake')}
                           className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                          title="Delete Cake"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -3249,7 +3581,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 const tagline = formData.get('tagline') as string;
                 const description = formData.get('description') as string;
                 const price = Number(formData.get('price')) || 650;
-                const imageUrl = (formData.get('image') as string) || 'https://images.unsplash.com/photo-1560008581-09826d1de69e?auto=format&fit=crop&w=600&q=80';
+                const defaultFallbackUrl =
+                  categoryType === 'coffee'
+                    ? 'https://images.unsplash.com/photo-1541167760496-1628856ab772?auto=format&fit=crop&w=600&q=80'
+                    : categoryType === 'cakes'
+                    ? 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80'
+                    : 'https://images.unsplash.com/photo-1560008581-09826d1de69e?auto=format&fit=crop&w=600&q=80';
+                const imageUrl = newProductImage.trim() || defaultFallbackUrl;
 
                 if (categoryType === 'scoops') {
                   createScoopItem({
@@ -3294,6 +3632,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 }
 
                 refreshAllData();
+                setNewProductImage('');
                 setIsAddItemModalOpen(false);
               }}
               className="space-y-4 text-xs"
@@ -3355,19 +3694,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
 
               <div>
-                <label className="block font-bold text-[#3D2C24] mb-1">Image URL (Optional)</label>
-                <input
-                  type="url"
-                  name="image"
-                  placeholder="https://..."
-                  className="w-full px-3 py-2 rounded-xl border border-[#D9CBB7] focus:outline-hidden focus:border-[#8C102A]"
+                <ProductImagePicker
+                  value={newProductImage}
+                  onChange={setNewProductImage}
+                  label="Product Photo / Image (Select Dropdown or Browse Device)"
                 />
               </div>
 
               <div className="pt-2 flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsAddItemModalOpen(false)}
+                  onClick={() => {
+                    setNewProductImage('');
+                    setIsAddItemModalOpen(false);
+                  }}
                   className="px-4 py-2 rounded-xl border border-[#D9CBB7] text-[#5D4E46] font-bold cursor-pointer"
                 >
                   Cancel
@@ -3435,31 +3775,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
 
               <div>
-                <label className="block font-bold text-[#3D2C24] mb-1">Image URL</label>
-                <div className="flex gap-3 items-center">
-                  <div className="w-14 h-14 rounded-xl overflow-hidden bg-[#FAF7F2] border border-[#D9CBB7] shrink-0">
-                    <img
-                      src={editingMenuItem.item.image || 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80'}
-                      alt="Preview"
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80';
-                      }}
-                    />
-                  </div>
-                  <input
-                    type="url"
-                    value={editingMenuItem.item.image || ''}
-                    onChange={(e) =>
-                      setEditingMenuItem({
-                        ...editingMenuItem,
-                        item: { ...editingMenuItem.item, image: e.target.value },
-                      })
-                    }
-                    placeholder="https://images.unsplash.com/..."
-                    className="flex-1 px-3 py-2 rounded-xl border border-[#D9CBB7] focus:outline-hidden focus:border-[#8C102A]"
-                  />
-                </div>
+                <ProductImagePicker
+                  value={editingMenuItem.item.image || ''}
+                  onChange={(url) =>
+                    setEditingMenuItem({
+                      ...editingMenuItem,
+                      item: { ...editingMenuItem.item, image: url },
+                    })
+                  }
+                  label="Product Photo / Image (Select Dropdown or Browse Device)"
+                />
               </div>
 
               {editingMenuItem.type === 'scoop' ? (

@@ -27,6 +27,179 @@ export const ASSET_IMAGES = {
   chocolateScoop: chocolateScoopImg,
 };
 
+export interface CatalogPresetImage {
+  id: string;
+  name: string;
+  category: 'Brand Signatures' | 'Gelato Flavours' | 'Specialty Coffee' | 'Artisan Cakes';
+  url: string;
+  description: string;
+}
+
+export const CATALOG_PRESET_IMAGES: CatalogPresetImage[] = [
+  // Brand Signatures
+  {
+    id: 'sig-durian-cone',
+    name: 'Amore Durian Waffle Cone',
+    category: 'Brand Signatures',
+    url: ASSET_IMAGES.durianCone,
+    description: 'Iconic golden waffle cone with handcrafted durian gelato',
+  },
+  {
+    id: 'sig-durian-biscuit',
+    name: 'Durian Biscuit Cup',
+    category: 'Brand Signatures',
+    url: ASSET_IMAGES.durianScoop,
+    description: 'Crispy wafer cup with premium custard durian swirl',
+  },
+  {
+    id: 'sig-pistachio',
+    name: 'Bronte Pistachio Scoop',
+    category: 'Brand Signatures',
+    url: ASSET_IMAGES.pistachioScoop,
+    description: 'Authentic Sicilian emerald pistachio gelato',
+  },
+  {
+    id: 'sig-dark-chocolate',
+    name: 'Madagascar Dark Chocolate',
+    category: 'Brand Signatures',
+    url: ASSET_IMAGES.chocolateScoop,
+    description: '70% single-origin decadent dark cacao scoop',
+  },
+  {
+    id: 'sig-cheesecake-coffee',
+    name: 'Cheesecake & Barista Coffee',
+    category: 'Brand Signatures',
+    url: ASSET_IMAGES.cheesecakeCoffee,
+    description: 'Basque burnt cheesecake paired with espresso roast',
+  },
+  {
+    id: 'sig-duo-scoop',
+    name: 'Heritage Artisanal Gelato Duo',
+    category: 'Brand Signatures',
+    url: ASSET_IMAGES.lightScoops,
+    description: 'Classic double scoop cone showcase',
+  },
+  {
+    id: 'sig-parlour',
+    name: 'Amore Flagship Parlour Interior',
+    category: 'Brand Signatures',
+    url: ASSET_IMAGES.cafeInterior,
+    description: 'Warm rattan ambience & artisan churn parlor',
+  },
+
+  // Gelato Flavours
+  {
+    id: 'gelato-strawberry',
+    name: 'Italian Wild Strawberry Swirl',
+    category: 'Gelato Flavours',
+    url: 'https://images.unsplash.com/photo-1560008581-09826d1de69e?auto=format&fit=crop&w=800&q=80',
+    description: 'Fresh berry ripple with creamy sweet milk',
+  },
+  {
+    id: 'gelato-vanilla',
+    name: 'Bourbon Vanilla Bean Gelato',
+    category: 'Gelato Flavours',
+    url: 'https://images.unsplash.com/photo-1501443762994-82bd5dace89a?auto=format&fit=crop&w=800&q=80',
+    description: 'Rich custard infused with pure vanilla caviar',
+  },
+  {
+    id: 'gelato-belgian-choc',
+    name: 'Belgian Chocolate & Cocoa Nib',
+    category: 'Gelato Flavours',
+    url: 'https://images.unsplash.com/photo-1557142046-c704a3adf364?auto=format&fit=crop&w=800&q=80',
+    description: 'Deep silky Belgian fudge gelato',
+  },
+  {
+    id: 'gelato-mango-sorbet',
+    name: 'Alphonso Mango Passion Sorbet',
+    category: 'Gelato Flavours',
+    url: 'https://images.unsplash.com/photo-1587314168485-3236d6710814?auto=format&fit=crop&w=800&q=80',
+    description: 'Tropical sun-ripened dairy-free sorbetto',
+  },
+  {
+    id: 'gelato-matcha',
+    name: 'Uji Ceremonial Matcha Gelato',
+    category: 'Gelato Flavours',
+    url: 'https://images.unsplash.com/photo-1576506295286-5cda18df43e7?auto=format&fit=crop&w=800&q=80',
+    description: 'Stoneground green tea with earthy floral notes',
+  },
+  {
+    id: 'gelato-hazelnut',
+    name: 'Piedmont Roasted Hazelnut',
+    category: 'Gelato Flavours',
+    url: 'https://images.unsplash.com/photo-1580915411954-282cb1b0d780?auto=format&fit=crop&w=800&q=80',
+    description: 'Crushed praline with toasted Nocciola paste',
+  },
+
+  // Specialty Coffee
+  {
+    id: 'coffee-latte-art',
+    name: 'Artisan Cafe Latte / Flat White',
+    category: 'Specialty Coffee',
+    url: 'https://images.unsplash.com/photo-1541167760496-1628856ab772?auto=format&fit=crop&w=800&q=80',
+    description: 'Micro-foamed textured milk over double espresso',
+  },
+  {
+    id: 'coffee-espresso',
+    name: 'Single Origin Espresso Shot',
+    category: 'Specialty Coffee',
+    url: 'https://images.unsplash.com/photo-1510591509098-f4fdc6d0ff04?auto=format&fit=crop&w=800&q=80',
+    description: 'Intense crema extraction with hazelnut notes',
+  },
+  {
+    id: 'coffee-iced-latte',
+    name: 'Iced Spanish Condensed Latte',
+    category: 'Specialty Coffee',
+    url: 'https://images.unsplash.com/photo-1517256064527-09c73fc73e38?auto=format&fit=crop&w=800&q=80',
+    description: 'Chilled espresso over sweet caramelized milk',
+  },
+  {
+    id: 'coffee-coldbrew',
+    name: '24-Hour Nitro Cold Brew',
+    category: 'Specialty Coffee',
+    url: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=800&q=80',
+    description: 'Smooth low-acidity steep with cascading foam',
+  },
+  {
+    id: 'coffee-cappuccino',
+    name: 'Italian Classic Cappuccino',
+    category: 'Specialty Coffee',
+    url: 'https://images.unsplash.com/photo-1572442388796-11668a67e53d?auto=format&fit=crop&w=800&q=80',
+    description: 'Velvety dry foam with dusting of Ceylon cinnamon',
+  },
+
+  // Artisan Cakes
+  {
+    id: 'cake-choc-fudge',
+    name: 'Triple Dark Chocolate Fudge Cake',
+    category: 'Artisan Cakes',
+    url: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80',
+    description: 'Rich multi-layer sponge with ganache frosting',
+  },
+  {
+    id: 'cake-cheesecake',
+    name: 'San Sebastian Basque Cheesecake',
+    category: 'Artisan Cakes',
+    url: 'https://images.unsplash.com/photo-1533134242443-d4fd215305ad?auto=format&fit=crop&w=800&q=80',
+    description: 'Caramelized crust with molten creamy center',
+  },
+  {
+    id: 'cake-tiramisu',
+    name: 'Venetian Espresso Tiramisu',
+    category: 'Artisan Cakes',
+    url: 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?auto=format&fit=crop&w=800&q=80',
+    description: 'Savoiardi ladyfingers soaked in espresso & mascarpone',
+  },
+  {
+    id: 'cake-berry-tart',
+    name: 'French Wild Berry Frangipane',
+    category: 'Artisan Cakes',
+    url: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=800&q=80',
+    description: 'Crisp butter pastry topped with fresh raspberries',
+  },
+];
+
+
 // 3 Sri Lanka Branches
 export const AMORE_BRANCHES: BranchInfo[] = [
   {
