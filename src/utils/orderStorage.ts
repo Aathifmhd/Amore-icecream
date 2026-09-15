@@ -1,4 +1,5 @@
-import { OrderRecord } from '../types';
+import { OrderRecord, BranchId } from '../types';
+import { AMORE_BRANCHES } from '../data/iceCreamData';
 import {
   saveOrderToFirestore,
   updateOrderInFirestore,
@@ -523,7 +524,7 @@ export function createManualReturnBill(data: {
 }): OrderRecord {
   const ref = data.orderReference?.trim() || `RET-${Math.floor(1000 + Math.random() * 9000)}`;
   const now = new Date().toISOString();
-  const branch = AMORE_BRANCHES[data.branchId] || AMORE_BRANCHES['akurana'];
+  const branch = AMORE_BRANCHES.find((b) => b.id === data.branchId) || AMORE_BRANCHES[0];
 
   const newReturnBill: OrderRecord = {
     orderReference: ref,

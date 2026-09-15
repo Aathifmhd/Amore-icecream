@@ -23,6 +23,7 @@ import { isAdminAuthenticated } from './utils/adminAuth';
 import { auth, onAuthStateChanged, type User } from './firebase';
 import { Currency, BranchId, ScoopItem, MenuItem, SelectedOrderItem, ServingFormat } from './types';
 import { ALL_20_FLAVOURS } from './data/iceCreamData';
+import { formatPrice } from './utils/currency';
 import { ShoppingBag } from 'lucide-react';
 import { getUserOrdersList, ORDERS_UPDATED_EVENT } from './utils/orderStorage';
 import {
@@ -95,7 +96,7 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const p = params.get('page');
     const tab = params.get('tab') || params.get('section');
-    if (p === 'admin' || tab === 'returns' || tab === 'orders') return 'admin';
+    if (p === 'admin' || tab === 'returns' || tab === 'orders' || tab === 'history' || tab === 'order-history') return 'admin';
     if (p === 'menu') return 'menu';
     return 'home';
   });
@@ -112,7 +113,13 @@ export default function App() {
       setConfirmOrderRef(params.get('confirmOrder'));
       const p = params.get('page');
       const tab = params.get('tab') || params.get('section');
-      setCurrentPage(p === 'admin' || tab === 'returns' || tab === 'orders' ? 'admin' : p === 'menu' ? 'menu' : 'home');
+      setCurrentPage(
+        p === 'admin' || tab === 'returns' || tab === 'orders' || tab === 'history' || tab === 'order-history'
+          ? 'admin'
+          : p === 'menu'
+          ? 'menu'
+          : 'home'
+      );
       setIsAdminLoggedIn(isAdminAuthenticated());
     };
 

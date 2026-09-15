@@ -37,6 +37,7 @@ import {
   AlertTriangle,
   Truck,
   Store,
+  History,
 } from 'lucide-react';
 import { LocationPickerModal } from './LocationPickerModal';
 
@@ -60,6 +61,10 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [now, setNow] = useState<number>(Date.now());
   const [expandedOrderRef, setExpandedOrderRef] = useState<string | null>(highlightOrderRef || null);
+
+  // Active tab: 'ongoing' for live orders, 'history' for past orders
+  const [activeOrdersTab, setActiveOrdersTab] = useState<'ongoing' | 'history'>('ongoing');
+  const [selectedHistoryOrder, setSelectedHistoryOrder] = useState<OrderRecord | null>(null);
 
   // Cancellation toast notification
   const [cancelNotification, setCancelNotification] = useState<string | null>(null);
@@ -85,18 +90,25 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
     const list = getUserOrdersList(currentUser?.uid);
     setOrders(list);
 
+    const activeList = list.filter((o) => o.status !== 'cancelled' && o.status !== 'delivered');
+    const historyList = list.filter((o) => o.status === 'delivered' || o.status === 'cancelled');
+
     if (highlightOrderRef) {
       const target = list.find((o) => o.orderReference === highlightOrderRef);
       if (target) {
-        setExpandedOrderRef(highlightOrderRef);
+        if (target.status === 'delivered' || target.status === 'cancelled') {
+          setActiveOrdersTab('history');
+          setSelectedHistoryOrder(target);
+        } else {
+          setActiveOrdersTab('ongoing');
+          setExpandedOrderRef(highlightOrderRef);
+        }
       }
-    } else if (list.length > 0 && !expandedOrderRef) {
-      const activeList = list.filter((o) => o.status !== 'cancelled' && o.status !== 'delivered');
-      if (activeList.length > 0) {
-        setExpandedOrderRef(activeList[0].orderReference);
-      } else {
-        setExpandedOrderRef(list[0].orderReference);
-      }
+    } else if (activeList.length === 0 && historyList.length > 0) {
+      // Default to history tab if no ongoing orders are active
+      setActiveOrdersTab('history');
+    } else if (activeList.length > 0 && !expandedOrderRef) {
+      setExpandedOrderRef(activeList[0].orderReference);
     }
   };
 
@@ -155,7 +167,9 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
-        if (viewingApologyOrder) {
+        if (selectedHistoryOrder) {
+          setSelectedHistoryOrder(null);
+        } else if (viewingApologyOrder) {
           setViewingApologyOrder(null);
         } else {
           onClose();
@@ -164,12 +178,13 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose, viewingApologyOrder]);
+  }, [isOpen, onClose, viewingApologyOrder, selectedHistoryOrder]);
 
   if (!isOpen) return null;
 
-  // Strictly ongoing active orders only (customer request: no past history)
+  // Active ongoing orders vs Past order history
   const ongoingOrders = orders.filter((o) => o.status !== 'cancelled' && o.status !== 'delivered');
+  const historyOrders = orders.filter((o) => o.status === 'delivered' || o.status === 'cancelled');
 
   // Compute remaining seconds in 2-minute (120s) grace period
   const getRemainingSeconds = (order: OrderRecord): number => {
@@ -285,14 +300,18 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
             </div>
             <div>
               <h2 id="your-orders-title" className="font-serif-title text-xl font-bold text-[#241A18] leading-tight">
-                Your Orders
+                Your Orders & History
               </h2>
               <p className="text-xs text-[#7A6458]">
-                {ongoingOrders.length === 0
-                  ? 'No active orders'
-                  : ongoingOrders.length === 1
-                  ? '1 active order in progress'
-                  : `${ongoingOrders.length} active orders in progress`}
+                {activeOrdersTab === 'ongoing'
+                  ? ongoingOrders.length === 0
+                    ? 'No active orders in progress'
+                    : ongoingOrders.length === 1
+                    ? '1 active order in progress'
+                    : `${ongoingOrders.length} active orders in progress`
+                  : historyOrders.length === 0
+                  ? 'No past orders in history'
+                  : `${historyOrders.length} past order${historyOrders.length > 1 ? 's' : ''} in history`}
               </p>
             </div>
           </div>
@@ -303,6 +322,45 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
             aria-label="Close orders"
           >
             <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Active Orders vs Order History Tab Bar */}
+        <div className="bg-[#FAF7F2] px-4 sm:px-5 pt-2.5 border-b border-[#E8DFC8] flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setActiveOrdersTab('ongoing')}
+            className={`pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+              activeOrdersTab === 'ongoing'
+                ? 'border-[#8C102A] text-[#8C102A]'
+                : 'border-transparent text-[#7A6458] hover:text-[#241A18]'
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>Active Orders</span>
+            {ongoingOrders.length > 0 && (
+              <span className="w-5 h-5 rounded-full bg-[#8C102A] text-white text-[10px] font-black flex items-center justify-center shadow-xs">
+                {ongoingOrders.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveOrdersTab('history')}
+            className={`pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+              activeOrdersTab === 'history'
+                ? 'border-[#8C102A] text-[#8C102A]'
+                : 'border-transparent text-[#7A6458] hover:text-[#241A18]'
+            }`}
+          >
+            <History className="w-3.5 h-3.5" />
+            <span>Order History</span>
+            {historyOrders.length > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-white border border-[#E8DFC8] text-[#5D4E46] text-[10px] font-black">
+                {historyOrders.length}
+              </span>
+            )}
           </button>
         </div>
 
@@ -325,7 +383,8 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
 
         {/* Orders List Container */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-          {ongoingOrders.length === 0 ? (
+          {activeOrdersTab === 'ongoing' ? (
+            ongoingOrders.length === 0 ? (
             /* Empty State - Calming, gentle & encouraging */
             <div className="text-center py-14 px-4">
               <div className="w-16 h-16 rounded-full bg-white border border-[#E8DFC8] flex items-center justify-center mx-auto mb-4 text-[#8C102A] shadow-xs">
@@ -337,6 +396,21 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
               <p className="text-xs text-[#7A6458] max-w-xs mx-auto mt-1.5 mb-6 leading-relaxed">
                 When you order your favorite gelato, live parlour updates and your change window will appear here.
               </p>
+              {historyOrders.length > 0 && (
+                <div className="mt-4 mb-3 p-3 bg-white rounded-2xl border border-[#E8DFC8] text-xs text-[#5D4E46] flex items-center justify-between gap-3 max-w-sm mx-auto shadow-2xs">
+                  <div className="flex items-center gap-2 text-left">
+                    <History className="w-4 h-4 text-[#8C102A] shrink-0" />
+                    <span>You have <strong>{historyOrders.length} past order{historyOrders.length > 1 ? 's' : ''}</strong> in history</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveOrdersTab('history')}
+                    className="px-3 py-1.5 rounded-xl bg-[#8C102A] hover:bg-[#A31634] text-white text-xs font-bold transition-all cursor-pointer shadow-xs shrink-0"
+                  >
+                    View History
+                  </button>
+                </div>
+              )}
               {onBrowseMenu && (
                 <button
                   type="button"
@@ -976,6 +1050,133 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                 </div>
               );
             })
+            )
+          ) : (
+            /* ======================================================== */
+            /* ORDER HISTORY SECTION */
+            /* ======================================================== */
+            historyOrders.length === 0 ? (
+              <div className="text-center py-14 px-4">
+                <div className="w-16 h-16 rounded-full bg-white border border-[#E8DFC8] flex items-center justify-center mx-auto mb-4 text-[#8C102A] shadow-xs">
+                  <History className="w-7 h-7 text-[#8C102A]/80" />
+                </div>
+                <h3 className="font-serif-title text-lg font-bold text-[#241A18]">
+                  No past orders yet
+                </h3>
+                <p className="text-xs text-[#7A6458] max-w-xs mx-auto mt-1.5 mb-6 leading-relaxed">
+                  Once your artisanal gelato order is delivered or completed, receipts and wanted details will be kept here for your records.
+                </p>
+                {onBrowseMenu && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onBrowseMenu();
+                    }}
+                    className="px-6 py-2.5 rounded-full bg-[#8C102A] hover:bg-[#A31634] text-white text-xs font-bold shadow-md transition-all cursor-pointer"
+                  >
+                    Explore Gelato Menu
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3 animate-fadeIn">
+                {historyOrders.map((order) => {
+                  const isDelivered = order.status === 'delivered';
+                  const isCancelled = order.status === 'cancelled';
+                  const totalItemsCount = order.items.reduce((s, i) => s + i.quantity, 0);
+                  const orderDateStr = new Date(order.createdAt).toLocaleDateString([], {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  });
+                  const orderTimeStr = new Date(order.createdAt).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  });
+
+                  return (
+                    <div
+                      key={order.orderReference}
+                      className="bg-white rounded-2xl border border-[#E8DFC8] hover:border-[#8C102A]/50 transition-all p-4 shadow-2xs space-y-3"
+                    >
+                      {/* Top Bar: Ref, Status Badge, Date & Total */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono font-black text-sm text-[#8C102A]">
+                              {order.orderReference}
+                            </span>
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
+                                isDelivered
+                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                  : 'bg-rose-50 text-rose-800 border border-rose-200'
+                              }`}
+                            >
+                              {isDelivered ? '✓ Delivered' : '✕ Cancelled'}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-[#7A6458] mt-1 flex items-center gap-1.5 flex-wrap">
+                            <span>{orderDateStr} at {orderTimeStr}</span>
+                            <span>•</span>
+                            <span className="font-medium text-[#5D4E46]">{order.branchName?.replace(' Flagship', '')}</span>
+                            <span>•</span>
+                            <span>{order.orderType === 'delivery' ? '🚚 Delivery' : '🏪 Pickup'}</span>
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span className="font-bold text-sm text-[#241A18] block">
+                            {formatPrice(order.grandTotalLKR, currency)}
+                          </span>
+                          <span className="text-[10px] text-[#7A6458]">
+                            {totalItemsCount} {totalItemsCount === 1 ? 'item' : 'items'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Middle: Clean Items Summary Line */}
+                      <div className="bg-[#FAF7F2] p-2.5 rounded-xl border border-[#E8DFC8]/70 text-xs text-[#5D4E46]">
+                        <span className="text-[10px] uppercase font-bold text-[#7A6458] block mb-1">
+                          Ordered Flavours & Items:
+                        </span>
+                        <p className="truncate font-medium text-[#241A18]">
+                          {order.items.map((it) => `${it.quantity}× ${it.name}${it.format ? ` (${it.format.replace(/-/g, ' ')})` : ''}`).join(', ')}
+                        </p>
+                      </div>
+
+                      {/* Bottom Row: Payment & Action Buttons */}
+                      <div className="flex items-center justify-between pt-1 border-t border-[#E8DFC8]/50">
+                        <span className="text-[11px] text-[#7A6458]">
+                          Payment: <strong className="text-[#241A18]">{order.paymentMethod === 'card' ? '💳 Card' : order.paymentMethod === 'pay_at_parlour' ? '🏪 Parlour' : '💵 Cash'}</strong>
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {isCancelled && (order.inconvenienceEmailContent || order.cancellationReason) && (
+                            <button
+                              type="button"
+                              onClick={() => setViewingApologyOrder(order)}
+                              className="px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                              title="View Apology & Refund Letter"
+                            >
+                              <Mail className="w-3 h-3 text-amber-700" />
+                              <span>Apology Note</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedHistoryOrder(order)}
+                            className="px-3.5 py-1.5 rounded-xl bg-[#FAF7F2] hover:bg-[#8C102A] text-[#8C102A] hover:text-white border border-[#E8DFC8] hover:border-[#8C102A] font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                          >
+                            <span>View Details 🔍</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
           )}
         </div>
 
@@ -991,6 +1192,172 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* ======================================================== */}
+      {/* USER-FRIENDLY HISTORY ORDER DETAILS POPUP (WANTED DETAILS ONLY) */}
+      {/* ======================================================== */}
+      {selectedHistoryOrder && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-black/65 backdrop-blur-xs animate-fadeIn"
+          onClick={() => setSelectedHistoryOrder(null)}
+        >
+          <div
+            className="bg-white rounded-3xl border border-[#E8DFC8] shadow-2xl w-full max-w-md overflow-hidden animate-scaleUp text-[#3D2C24]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 1. Header: Ref, Status & Close */}
+            <div className="px-5 py-4 bg-[#FAF7F2] border-b border-[#E8DFC8] flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-black text-base text-[#8C102A]">
+                    {selectedHistoryOrder.orderReference}
+                  </span>
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
+                      selectedHistoryOrder.status === 'delivered'
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                        : 'bg-rose-100 text-rose-800 border border-rose-200'
+                    }`}
+                  >
+                    {selectedHistoryOrder.status === 'delivered' ? '✓ Delivered' : '✕ Cancelled'}
+                  </span>
+                </div>
+                <span className="text-[11px] text-[#7A6458] block mt-0.5">
+                  {new Date(selectedHistoryOrder.createdAt).toLocaleDateString([], {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                  })}{' '}
+                  at{' '}
+                  {new Date(selectedHistoryOrder.createdAt).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedHistoryOrder(null)}
+                className="w-8 h-8 rounded-full bg-white hover:bg-gray-100 text-[#5D4E46] border border-[#E8DFC8] flex items-center justify-center cursor-pointer transition-colors"
+                aria-label="Close details"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* 2. Body: Wanted Details Only */}
+            <div className="p-5 space-y-3.5 max-h-[65vh] overflow-y-auto">
+              {/* Quick Details Box: 2-column clean card */}
+              <div className="grid grid-cols-2 gap-2.5 p-3 bg-[#FAF7F2] rounded-2xl border border-[#E8DFC8] text-xs">
+                <div>
+                  <span className="text-[10px] text-[#7A6458] font-bold uppercase tracking-wider block">Branch</span>
+                  <span className="font-bold text-[#241A18] block mt-0.5 truncate">
+                    {selectedHistoryOrder.branchName?.replace(' Flagship', '')}
+                  </span>
+                  <span className="text-[11px] text-[#5D4E46] flex items-center gap-1 mt-0.5">
+                    {selectedHistoryOrder.orderType === 'delivery' ? '🚚 Delivery' : '🏪 Parlour Pickup'}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-[10px] text-[#7A6458] font-bold uppercase tracking-wider block">Customer</span>
+                  <span className="font-bold text-[#241A18] block mt-0.5 truncate">
+                    {selectedHistoryOrder.customerName}
+                  </span>
+                  <span className="text-[11px] text-[#5D4E46] block mt-0.5 font-mono">
+                    {selectedHistoryOrder.contactNumber}
+                  </span>
+                </div>
+
+                {selectedHistoryOrder.orderType === 'delivery' && selectedHistoryOrder.deliveryAddress && (
+                  <div className="col-span-2 pt-2 border-t border-[#E8DFC8]/60">
+                    <span className="text-[10px] text-[#7A6458] font-bold uppercase tracking-wider block">Delivery Address</span>
+                    <span className="text-[#3D2C24] font-medium block mt-0.5 text-xs">
+                      {selectedHistoryOrder.deliveryAddress}{selectedHistoryOrder.city ? `, ${selectedHistoryOrder.city}` : ''}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Short Item List */}
+              <div>
+                <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[#7A6458] mb-1.5 px-1">
+                  <span>Ordered Items ({selectedHistoryOrder.items.length})</span>
+                  <span>Price</span>
+                </div>
+                <div className="divide-y divide-[#E8DFC8]/60 bg-white rounded-2xl border border-[#E8DFC8] overflow-hidden">
+                  {selectedHistoryOrder.items.map((item, idx) => (
+                    <div key={idx} className="p-2.5 flex items-center justify-between gap-2 hover:bg-[#FAF7F2]/40">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-5 h-5 rounded-md bg-[#8C102A]/10 text-[#8C102A] font-black text-[11px] flex items-center justify-center shrink-0">
+                          {item.quantity}×
+                        </span>
+                        <div className="min-w-0">
+                          <span className="font-bold text-[#241A18] block truncate text-xs">
+                            {item.name}
+                          </span>
+                          {item.format && (
+                            <span className="text-[10px] text-[#7A6458] block capitalize">
+                              {item.format.replace(/-/g, ' ')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="font-bold text-[#8C102A] text-xs shrink-0">
+                        {formatPrice(item.priceLKR * item.quantity, currency)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Totals & Payment Method */}
+              <div className="p-3 bg-[#FAF7F2] rounded-2xl border border-[#E8DFC8] space-y-1.5 text-xs">
+                <div className="flex justify-between text-[#7A6458]">
+                  <span>Items Subtotal</span>
+                  <span className="font-medium text-[#241A18]">{formatPrice(selectedHistoryOrder.subtotalLKR, currency)}</span>
+                </div>
+                <div className="flex justify-between text-[#7A6458]">
+                  <span>Delivery Fee</span>
+                  <span className="font-medium text-[#241A18]">
+                    {selectedHistoryOrder.orderType === 'pickup'
+                      ? 'Free (Parlour Pickup)'
+                      : formatPrice(selectedHistoryOrder.deliveryFeeLKR, currency)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-sm font-black text-[#241A18] pt-2 border-t border-[#E8DFC8]">
+                  <span>Total Paid</span>
+                  <span className="text-[#8C102A] text-base">
+                    {formatPrice(selectedHistoryOrder.grandTotalLKR, currency)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-1 text-[11px] text-[#7A6458]">
+                  <span>Payment Method</span>
+                  <span className="font-bold text-[#241A18]">
+                    {selectedHistoryOrder.paymentMethod === 'card'
+                      ? '💳 Card Payment'
+                      : selectedHistoryOrder.paymentMethod === 'pay_at_parlour'
+                      ? '🏪 Paid at Parlour'
+                      : '💵 Cash on Delivery'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Footer: Simple, clean Close */}
+            <div className="p-4 bg-[#FAF7F2] border-t border-[#E8DFC8] flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedHistoryOrder(null)}
+                className="w-full py-2.5 px-4 rounded-xl bg-[#8C102A] hover:bg-[#A31634] text-white font-bold text-xs shadow-xs transition-colors cursor-pointer text-center"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Parlour Apology Notice Modal (if needed) */}
       {viewingApologyOrder && (
