@@ -264,7 +264,7 @@ export const FullMenu: React.FC<FullMenuProps> = ({
           {/* Cone vs Edible Cup Focus Toggle - ONLY shown when Amore Scoops tab is selected */}
           {activeTab === 'scoops' && (
             <div className="flex items-center gap-2 text-xs">
-              <span className="font-semibold text-[#5C4D44] shrink-0">Price Focus:</span>
+              <span className="font-semibold text-[#5C4D44] shrink-0">Type Focus:</span>
               <div className="inline-flex rounded-xl bg-[#FAF7F2] p-1 border border-[#D9CBB7]">
                 <button
                   type="button"

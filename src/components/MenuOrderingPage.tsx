@@ -434,17 +434,20 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
               )}
             </div>
 
-            {/* Price Focus Selector - ONLY for Gelato Scoops */}
+            {/* Type Focus Selector - ONLY for Gelato Scoops */}
             {activeTab === 'scoops' && (
               <div className="flex items-center gap-2 text-xs shrink-0">
                 <span className="font-bold text-[#5C4D44] flex items-center gap-1">
                   <SlidersHorizontal className="w-3.5 h-3.5 text-[#8C102A]" />
-                  <span>Price Focus:</span>
+                  <span>Type Focus:</span>
                 </span>
                 <div className="inline-flex rounded-xl bg-[#FAF7F2] p-1 border border-[#E8DFC8]">
                   <button
                     type="button"
-                    onClick={() => setPreferredFormat('both')}
+                    onClick={() => {
+                      setPreferredFormat('both');
+                      setSelectedFormats({});
+                    }}
                     className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
                       preferredFormat === 'both' ? 'bg-[#8C102A] text-white shadow-xs' : 'text-[#5C4D44] hover:text-[#241A18]'
                     }`}
@@ -453,7 +456,10 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPreferredFormat('biscuit-cup')}
+                    onClick={() => {
+                      setPreferredFormat('biscuit-cup');
+                      setSelectedFormats({});
+                    }}
                     className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
                       preferredFormat === 'biscuit-cup' ? 'bg-amber-700 text-white shadow-xs' : 'text-[#5C4D44] hover:text-amber-800'
                     }`}
@@ -463,7 +469,10 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPreferredFormat('waffle-cone')}
+                    onClick={() => {
+                      setPreferredFormat('waffle-cone');
+                      setSelectedFormats({});
+                    }}
                     className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
                       preferredFormat === 'waffle-cone' ? 'bg-[#8C102A] text-white shadow-xs' : 'text-[#5C4D44] hover:text-[#241A18]'
                     }`}
@@ -502,28 +511,56 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                 const effectiveFormat = activeTab === 'scoops' ? preferredFormat : 'both';
                 const itemsOfThisScoopInTray = orderItems.filter((it) => it.itemId === scoop.id);
                 const hasAnyInTray = itemsOfThisScoopInTray.length > 0;
-                const isOrdered = hasAnyInTray;
 
                 const scoopFormats = getSelectedFormats(scoop.id);
 
-                // Determine active single format selection
+                // Determine active single format selection based on Type Focus
                 const chosenFormat: ServingFormat =
-                  scoopFormats.length > 0
-                    ? scoopFormats[0]
-                    : effectiveFormat === 'biscuit-cup'
+                  effectiveFormat === 'biscuit-cup'
                     ? 'biscuit-cup'
+                    : effectiveFormat === 'waffle-cone'
+                    ? 'waffle-cone'
+                    : scoopFormats.length > 0
+                    ? scoopFormats[0]
                     : 'waffle-cone';
 
                 const isWaffleSelected = chosenFormat === 'waffle-cone';
                 const isBiscuitSelected = chosenFormat === 'biscuit-cup';
 
+                const itemsOfThisFormatInTray =
+                  effectiveFormat === 'biscuit-cup'
+                    ? itemsOfThisScoopInTray.filter(
+                        (it) => it.format === 'biscuit-cup' || it.format === 'double-biscuit-cup'
+                      )
+                    : effectiveFormat === 'waffle-cone'
+                    ? itemsOfThisScoopInTray.filter(
+                        (it) => it.format === 'waffle-cone' || it.format === 'double-cone'
+                      )
+                    : itemsOfThisScoopInTray;
+
+                const isOrdered =
+                  effectiveFormat === 'biscuit-cup' || effectiveFormat === 'waffle-cone'
+                    ? itemsOfThisFormatInTray.length > 0
+                    : hasAnyInTray;
+
                 const scoopInTray = trayItemMap[scoop.id];
-                const scoopTotalQty = scoopInTray ? scoopInTray.totalQty : itemsOfThisScoopInTray.reduce((sum, it) => sum + it.quantity, 0);
+                const scoopTotalQty =
+                  effectiveFormat === 'biscuit-cup' || effectiveFormat === 'waffle-cone'
+                    ? itemsOfThisFormatInTray.reduce((sum, it) => sum + it.quantity, 0)
+                    : scoopInTray
+                    ? scoopInTray.totalQty
+                    : itemsOfThisScoopInTray.reduce((sum, it) => sum + it.quantity, 0);
 
                 const handleCancelFromTray = (e?: React.MouseEvent) => {
                   if (e) e.stopPropagation();
                   if (onRemoveFromTray) {
-                    onRemoveFromTray(scoop.id);
+                    if (effectiveFormat === 'biscuit-cup') {
+                      onRemoveFromTray(scoop.id, ['biscuit-cup', 'double-biscuit-cup']);
+                    } else if (effectiveFormat === 'waffle-cone') {
+                      onRemoveFromTray(scoop.id, ['waffle-cone', 'double-cone']);
+                    } else {
+                      onRemoveFromTray(scoop.id);
+                    }
                   }
                 };
 
@@ -592,6 +629,10 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-800 text-white shadow-xs">
                               Arugam Bay Top Pick
                             </span>
+                          ) : scoop.isSpecial ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[#8C102A] text-white shadow-xs">
+                              Signature
+                            </span>
                           ) : scoop.isPopular ? (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-white shadow-xs">
                               Popular
@@ -605,8 +646,8 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                           </span>
                         </div>
 
-                        {/* Name on image with subtle details indicator */}
-                        <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-white">
+                        {/* Name on image */}
+                        <div className="absolute bottom-2.5 left-3 right-3 text-white flex items-end justify-between">
                           <h4 className="font-serif-title text-base sm:text-lg font-bold drop-shadow-sm leading-snug">
                             {scoop.name}
                           </h4>
@@ -644,61 +685,141 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                         onClick={(e) => e.stopPropagation()}
                         className="space-y-1.5"
                       >
-                        <div className="flex items-center justify-between text-[11px] font-bold text-[#6B574B]">
-                          <span>Select Type:</span>
-                          <span className="text-[10px] text-[#8C102A] font-semibold">
-                            {isSoldOut ? 'Unavailable' : isBiscuitSelected ? 'Biscuit Cup' : 'Waffle Cone'}
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-1.5">
-                          {/* 1. Crisp Waffle Cone Type */}
-                          <button
-                            type="button"
-                            disabled={isSoldOut}
-                            onClick={(e) => handleToggleFormat(scoop.id, 'waffle-cone', e)}
-                            className={`p-2 rounded-xl border text-left transition-all flex flex-col justify-between ${
-                              isSoldOut
-                                ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
-                                : isWaffleSelected
-                                ? 'bg-[#8C102A] text-white border-[#8C102A] shadow-xs ring-2 ring-[#8C102A]/25 cursor-pointer'
-                                : 'bg-[#FAF7F2] hover:bg-[#F3EDE3] text-[#241A18] border-[#E0D5C3] cursor-pointer'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between text-[11px] font-bold mb-0.5">
-                              <span>🍦 Waffle Cone</span>
-                              {isWaffleSelected && !isSoldOut && <Check className="w-3 h-3 text-amber-200" />}
-                            </div>
-                            <div className="text-[11px] font-black">
-                              {formatPrice(scoop.conePriceLKR, currency)}
-                            </div>
-                          </button>
-
-                          {/* 2. Edible Biscuit Cup Type */}
-                          <button
-                            type="button"
-                            disabled={isSoldOut}
-                            onClick={(e) => handleToggleFormat(scoop.id, 'biscuit-cup', e)}
-                            className={`p-2 rounded-xl border text-left transition-all flex flex-col justify-between ${
-                              isSoldOut
-                                ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
-                                : isBiscuitSelected
-                                ? 'bg-amber-700 text-white border-amber-800 shadow-xs ring-2 ring-amber-600/35 cursor-pointer'
-                                : 'bg-amber-50/70 hover:bg-amber-100/80 text-[#8C102A] border-amber-200 cursor-pointer'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between text-[11px] font-bold mb-0.5">
-                              <span className="flex items-center gap-0.5">
-                                <Cookie className="w-3 h-3 text-amber-500" />
-                                <span>Biscuit Cup</span>
+                        {effectiveFormat === 'both' ? (
+                          <>
+                            <div className="flex items-center justify-between text-[11px] font-bold text-[#6B574B]">
+                              <span>Select Type:</span>
+                              <span className="text-[10px] text-[#8C102A] font-semibold">
+                                {isSoldOut ? 'Unavailable' : isBiscuitSelected ? 'Biscuit Cup' : 'Waffle Cone'}
                               </span>
-                              {isBiscuitSelected && !isSoldOut && <Check className="w-3 h-3 text-amber-200" />}
                             </div>
-                            <div className="text-[11px] font-black">
-                              {formatPrice(scoop.biscuitCupPriceLKR, currency)}
+
+                            <div className="grid grid-cols-2 gap-1.5">
+                              {/* 1. Crisp Waffle Cone Type */}
+                              <button
+                                type="button"
+                                disabled={isSoldOut}
+                                onClick={(e) => handleToggleFormat(scoop.id, 'waffle-cone', e)}
+                                className={`p-2 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                                  isSoldOut
+                                    ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                                    : isWaffleSelected
+                                    ? 'bg-[#8C102A] text-white border-[#8C102A] shadow-xs ring-2 ring-[#8C102A]/25 cursor-pointer'
+                                    : 'bg-[#FAF7F2] hover:bg-[#F3EDE3] text-[#241A18] border-[#E0D5C3] cursor-pointer'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between text-[11px] font-bold mb-0.5">
+                                  <span>🍦 Waffle Cone</span>
+                                  {isWaffleSelected && !isSoldOut && <Check className="w-3 h-3 text-amber-200" />}
+                                </div>
+                                <div className="text-[11px] font-black">
+                                  {formatPrice(scoop.conePriceLKR, currency)}
+                                </div>
+                              </button>
+
+                              {/* 2. Edible Biscuit Cup Type */}
+                              <button
+                                type="button"
+                                disabled={isSoldOut}
+                                onClick={(e) => handleToggleFormat(scoop.id, 'biscuit-cup', e)}
+                                className={`p-2 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                                  isSoldOut
+                                    ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                                    : isBiscuitSelected
+                                    ? 'bg-amber-700 text-white border-amber-800 shadow-xs ring-2 ring-amber-600/35 cursor-pointer'
+                                    : 'bg-amber-50/70 hover:bg-amber-100/80 text-[#8C102A] border-amber-200 cursor-pointer'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between text-[11px] font-bold mb-0.5">
+                                  <span className="flex items-center gap-0.5">
+                                    <Cookie className="w-3 h-3 text-amber-500" />
+                                    <span>Biscuit Cup</span>
+                                  </span>
+                                  {isBiscuitSelected && !isSoldOut && <Check className="w-3 h-3 text-amber-200" />}
+                                </div>
+                                <div className="text-[11px] font-black">
+                                  {formatPrice(scoop.biscuitCupPriceLKR, currency)}
+                                </div>
+                              </button>
                             </div>
-                          </button>
-                        </div>
+                          </>
+                        ) : effectiveFormat === 'biscuit-cup' ? (
+                          /* ONLY Biscuit Cup format shown */
+                          <>
+                            <div className="flex items-center justify-between text-[11px] font-bold text-[#6B574B]">
+                              <span className="flex items-center gap-1 text-amber-900">
+                                <Cookie className="w-3 h-3 text-amber-600" />
+                                <span>Type Focus:</span>
+                              </span>
+                              <span className="text-[10px] text-amber-800 font-bold bg-amber-100/80 px-2 py-0.5 rounded-md border border-amber-200">
+                                Edible Biscuit Cup
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              disabled={isSoldOut}
+                              onClick={(e) => handleToggleFormat(scoop.id, 'biscuit-cup', e)}
+                              className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between w-full select-none ${
+                                isSoldOut
+                                  ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                                  : 'bg-amber-700 text-white border-amber-800 shadow-xs ring-2 ring-amber-600/35 cursor-pointer'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold flex items-center gap-1.5">
+                                  <Cookie className="w-3.5 h-3.5 text-amber-300" />
+                                  <span>Edible Biscuit Cup</span>
+                                </span>
+                                {!isSoldOut && (
+                                  <span className="text-[10px] bg-white/20 text-white px-2 py-0.5 rounded-full font-semibold">
+                                    Active Type
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs sm:text-sm font-black">
+                                {formatPrice(scoop.biscuitCupPriceLKR, currency)}
+                              </div>
+                            </button>
+                          </>
+                        ) : (
+                          /* ONLY Waffle Cone format shown */
+                          <>
+                            <div className="flex items-center justify-between text-[11px] font-bold text-[#6B574B]">
+                              <span className="flex items-center gap-1 text-[#8C102A]">
+                                <span>🍦 Type Focus:</span>
+                              </span>
+                              <span className="text-[10px] text-[#8C102A] font-bold bg-[#8C102A]/10 px-2 py-0.5 rounded-md border border-[#8C102A]/20">
+                                Crisp Waffle Cone
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              disabled={isSoldOut}
+                              onClick={(e) => handleToggleFormat(scoop.id, 'waffle-cone', e)}
+                              className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between w-full select-none ${
+                                isSoldOut
+                                  ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                                  : 'bg-[#8C102A] text-white border-[#8C102A] shadow-xs ring-2 ring-[#8C102A]/25 cursor-pointer'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold flex items-center gap-1.5">
+                                  <span>🍦 Crisp Waffle Cone</span>
+                                </span>
+                                {!isSoldOut && (
+                                  <span className="text-[10px] bg-white/20 text-white px-2 py-0.5 rounded-full font-semibold">
+                                    Active Type
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs sm:text-sm font-black">
+                                {formatPrice(scoop.conePriceLKR, currency)}
+                              </div>
+                            </button>
+                          </>
+                        )}
                       </div>
 
                       {/* Card Action Buttons: Details Button & Add to Tray */}
