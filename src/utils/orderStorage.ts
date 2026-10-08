@@ -1,5 +1,5 @@
 import { OrderRecord, BranchId } from '../types';
-import { AMORE_BRANCHES } from '../data/iceCreamData';
+import { AMORE_BRANCHES, resolveBundledImage } from '../data/iceCreamData';
 import {
   saveOrderToFirestore,
   updateOrderInFirestore,
@@ -25,6 +25,18 @@ export function generateOrderReference(prefix: string): string {
   let code = '';
   for (const b of bytes) code += alphabet[b % alphabet.length];
   return `${prefix}-${code}`;
+}
+
+/**
+ * Orders keep a photo URL per item. Ones saved against an older build point at files
+ * that no longer exist, so map them to the current build's copy (see resolveBundledImage).
+ */
+export function withCurrentItemImages(order: OrderRecord): OrderRecord {
+  if (!order?.items?.some((i) => resolveBundledImage(i.image) !== i.image)) return order;
+  return {
+    ...order,
+    items: order.items.map((i) => ({ ...i, image: resolveBundledImage(i.image) })),
+  };
 }
 
 export function notifyOrdersUpdated(): void {
@@ -117,6 +129,14 @@ export function getAllOrders(): Record<string, OrderRecord> {
         hadCleanup = true;
       }
     }
+    for (const key of Object.keys(parsed)) {
+      const fixed = withCurrentItemImages(parsed[key]);
+      if (fixed !== parsed[key]) {
+        parsed[key] = fixed;
+        hadCleanup = true;
+      }
+    }
+
     if (hadCleanup) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
     }

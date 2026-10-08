@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Currency, OrderRecord } from '../types';
-import { recoverOrderByReference, updateOrder } from '../utils/orderStorage';
+import { recoverOrderByReference, updateOrder, withCurrentItemImages } from '../utils/orderStorage';
 import { subscribeToOrder, getOrderFromFirestore } from '../firebase';
 import { formatPrice } from '../utils/currency';
 import { ONLINE_CARD_PAYMENTS_ENABLED } from '../config';
@@ -78,7 +78,7 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
     if (orderReference) {
       getOrderFromFirestore(orderReference).then((remoteOrder) => {
         if (remoteOrder) {
-          setOrder(remoteOrder);
+          setOrder(withCurrentItemImages(remoteOrder));
           if (remoteOrder.orderType === 'pickup') {
             setSelectedPaymentMethod('pay_at_parlour');
           }
@@ -90,7 +90,7 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
 
       const unsubscribe = subscribeToOrder(orderReference, (liveOrder) => {
         if (liveOrder) {
-          setOrder(liveOrder);
+          setOrder(withCurrentItemImages(liveOrder));
           if (liveOrder.orderType === 'pickup') {
             setSelectedPaymentMethod('pay_at_parlour');
           }
