@@ -235,7 +235,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
               Amore Full Menu & Ordering
             </h1>
             <p className="text-[11px] sm:text-xs text-[#7A6458] truncate hidden xs:block">
-              20 Artisanal Gelato Scoops • Barista Coffee • Bakery Cakes
+              20 Artisanal Ice Cream Scoops • Barista Coffee • Bakery Cakes
             </p>
           </div>
 
@@ -339,7 +339,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
           </div>
         </div>
 
-        {/* Category Filters (Requested exact filters: "All items", "Gelato Scoops", "Special Coffee", "And Cakes", and "Arugambay Special" if Arugam Bay selected) */}
+        {/* Category Filters (Requested exact filters: "All items", "Ice Cream Scoops", "Special Coffee", "And Cakes", and "Arugambay Special" if Arugam Bay selected) */}
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 overflow-x-auto no-scrollbar flex items-center gap-2 border-t border-[#E8DFC8]/50 bg-[#FAF7F2]">
           {/* 1. All items */}
           <button
@@ -353,7 +353,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
             All items ({allScoops.length + allCoffee.length + allCakes.length})
           </button>
 
-          {/* 2. Gelato Scoops */}
+          {/* 2. Ice Cream Scoops */}
           <button
             onClick={() => setActiveTab('scoops')}
             className={`px-4 py-2 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap transition-all cursor-pointer border flex items-center gap-1.5 ${
@@ -362,7 +362,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                 : 'bg-white text-[#5C4D44] border-[#E8DFC8] hover:bg-[#F3EDE3]'
             }`}
           >
-            <span>🍨 Gelato Scoops ({allScoops.length})</span>
+            <span>🍨 Ice Cream Scoops ({allScoops.length})</span>
           </button>
 
           {/* 3. Special Coffee */}
@@ -410,7 +410,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-3 sm:px-6 pt-4 space-y-4">
-        {/* Search Bar (MUST) & Price Focus (ONLY for Gelato Scoops) */}
+        {/* Search Bar (MUST) & Price Focus (ONLY for Ice Cream Scoops) */}
         <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-[#E8DFC8] shadow-2xs space-y-3">
           <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
             {/* Search Input (A search bar is MUST) */}
@@ -434,7 +434,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
               )}
             </div>
 
-            {/* Type Focus Selector - ONLY for Gelato Scoops */}
+            {/* Type Focus Selector - ONLY for Ice Cream Scoops */}
             {activeTab === 'scoops' && (
               <div className="flex items-center gap-2 text-xs shrink-0">
                 <span className="font-bold text-[#5C4D44] flex items-center gap-1">
@@ -489,7 +489,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
         <div className="flex items-center justify-between text-xs text-[#7A6458] px-1">
           <span>Found {totalResults} delicious options</span>
           {activeTab === 'scoops' && (
-            <span className="text-amber-800 font-semibold">20/20 Gelato Scoops Churned Fresh</span>
+            <span className="text-amber-800 font-semibold">20/20 Ice Cream Flavours Churned Fresh</span>
           )}
         </div>
 
@@ -499,7 +499,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
             {activeTab === 'all' && (
               <div className="flex items-center gap-2 pt-2">
                 <span className="text-base sm:text-lg font-bold font-serif-title text-[#241A18]">
-                  Artisanal Gelato Scoops ({filteredScoops.length})
+                  Artisanal Ice Cream Scoops ({filteredScoops.length})
                 </span>
                 <div className="h-px bg-[#E8DFC8] flex-1" />
               </div>

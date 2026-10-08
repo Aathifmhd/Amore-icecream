@@ -150,7 +150,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             </p>
           </div>
 
-          {/* Tasting Notes (for Gelato Scoops) */}
+          {/* Tasting Notes (for Ice Cream Scoops) */}
           {scoop && scoop.tastingNotes && scoop.tastingNotes.length > 0 && (
             <div className="pt-1">
               <span className="text-[10px] uppercase font-bold tracking-wider text-[#8A7970] block mb-1.5">

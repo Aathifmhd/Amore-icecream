@@ -8,9 +8,9 @@ import { CurrencyToggle } from '../CurrencyToggle';
 import { isSoldOut, startingPriceLKR, useMenuItems, Reveal } from './mobileHooks';
 
 const HERO_SLIDES = [
-  { src: ASSET_IMAGES.durianScoop, alt: 'Durian gelato in an edible biscuit cup', caption: 'Our iconic Durian', position: 'center 40%' },
-  { src: ASSET_IMAGES.realFlavoursHero, alt: 'Pistachio, mango and cardamom gelato in waffle cones', caption: 'Made with real fruit', position: '50% center' },
-  { src: ASSET_IMAGES.chocolateScoop, alt: 'Rich chocolate gelato with a waffle crisp', caption: 'Rich Belgian chocolate', position: 'center' },
+  { src: ASSET_IMAGES.durianScoop, alt: 'Durian ice cream in an edible biscuit cup', caption: 'Our iconic Durian', position: 'center 40%' },
+  { src: ASSET_IMAGES.realFlavoursHero, alt: 'Pistachio, mango and cardamom ice cream in waffle cones', caption: 'Made with real fruit', position: '50% center' },
+  { src: ASSET_IMAGES.chocolateScoop, alt: 'Rich chocolate ice cream with a waffle crisp', caption: 'Rich Belgian chocolate', position: 'center' },
 ];
 
 interface MobileHomeProps {
@@ -46,7 +46,7 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
   const durian = scoops.find((s) => s.id === 'durian-best');
 
   const categories: { tab: MenuTab; label: string; count: number; image?: string }[] = [
-    { tab: 'scoops', label: 'Gelato', count: scoops.length, image: ASSET_IMAGES.pistachioScoop },
+    { tab: 'scoops', label: 'Ice Cream', count: scoops.length, image: ASSET_IMAGES.pistachioScoop },
     { tab: 'coffee', label: 'Coffee', count: coffee.length, image: coffee[0]?.image },
     { tab: 'cakes', label: 'Cakes', count: cakes.length, image: ASSET_IMAGES.cheesecakeCoffee },
   ];

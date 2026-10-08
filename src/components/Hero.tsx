@@ -198,7 +198,7 @@ export const Hero: React.FC<HeroProps> = ({
               <div className="relative rounded-2xl overflow-hidden aspect-[4/3]">
                 <img loading="lazy" decoding="async"
                   src={ASSET_IMAGES.realFlavoursHero}
-                  alt="Amore Real Flavours — Durian, Alphonso Mango and Cardamom Handcrafted Gelato Cones"
+                  alt="Amore Real Flavours — Durian, Alphonso Mango and Cardamom Handcrafted Ice Cream Cones"
                   className="w-full h-full object-cover transform group-hover:scale-104 transition-transform duration-700"
                   referrerPolicy="no-referrer"
                 />

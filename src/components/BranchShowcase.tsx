@@ -33,7 +33,7 @@ export const BranchShowcase: React.FC<BranchShowcaseProps> = ({
             From the Kandy Hills to Colombo Sunset & Arugam Bay Coast
           </h2>
           <p className="mt-4 text-base sm:text-lg text-[#5C4D44] leading-relaxed">
-            Whether you are gathering with family in Akurana, catching the sea breeze on Marine Drive, or enjoying famous handcrafted gelato and coffee on Main Street in Arugam Bay, Amore serves freshly churned happiness in crisp waffle cones and edible biscuit cups.
+            Whether you are gathering with family in Akurana, catching the sea breeze on Marine Drive, or enjoying famous handcrafted ice cream and coffee on Main Street in Arugam Bay, Amore serves freshly churned happiness in crisp waffle cones and edible biscuit cups.
           </p>
         </div>
 
@@ -111,7 +111,7 @@ export const BranchShowcase: React.FC<BranchShowcaseProps> = ({
                     </span>
                   </div>
                   <p className="text-xs sm:text-sm text-[#5C4D44] leading-relaxed">
-                    Located on vibrant Main Street, our Arugambay parlour is the perfect spot for handcrafted ice cream, barista coffee, and fresh warm pastries. Be sure to try our famous Arugambay specials—including creamy Avocado gelato, refreshing Soursop sorbet, and iced vanilla espresso, all served in our signature crunchy edible biscuit cups.
+                    Located on vibrant Main Street, our Arugambay parlour is the perfect spot for handcrafted ice cream, barista coffee, and fresh warm pastries. Be sure to try our famous Arugambay specials—including creamy Avocado ice cream, refreshing Soursop sorbet, and iced vanilla espresso, all served in our signature crunchy edible biscuit cups.
                   </p>
                 </div>
               )}

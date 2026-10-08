@@ -14,6 +14,25 @@ const CAKES_STORAGE_KEY = 'amore_menu_cakes_v1';
 
 export const MENU_UPDATED_EVENT = 'amore_menu_updated';
 
+/**
+ * Browsers keep a copy of the menu from their first visit. Bump this whenever the
+ * built-in menu in iceCreamData.ts changes so returning visitors drop their stale
+ * copy; admin edits live in Firestore and are merged back in on the next sync.
+ */
+const MENU_DEFAULTS_VERSION = '2026-10-08-ice-cream-wording';
+const MENU_DEFAULTS_VERSION_KEY = 'amore_menu_defaults_version';
+
+try {
+  if (typeof localStorage !== 'undefined' && localStorage.getItem(MENU_DEFAULTS_VERSION_KEY) !== MENU_DEFAULTS_VERSION) {
+    localStorage.removeItem(SCOOPS_STORAGE_KEY);
+    localStorage.removeItem(COFFEE_STORAGE_KEY);
+    localStorage.removeItem(CAKES_STORAGE_KEY);
+    localStorage.setItem(MENU_DEFAULTS_VERSION_KEY, MENU_DEFAULTS_VERSION);
+  }
+} catch {
+  // Storage blocked (private mode etc.) — the built-in menu is used directly
+}
+
 // Fix photo links saved against an older build (see resolveBundledImage)
 function withCurrentImage<T extends { image?: string }>(item: T): T {
   const image = resolveBundledImage(item.image);

@@ -61,7 +61,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
   const sections = [
     {
       id: 'scoops',
-      title: 'Gelato scoops',
+      title: 'Ice cream scoops',
       note: 'Waffle cone or edible biscuit cup',
       items: scoops.filter(
         (s) => (inTab('scoops') || (tab === 'tourist-specials' && s.isArugamBaySpecial)) && matches(s)
@@ -73,7 +73,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
 
   const tabs: { id: MenuTab; label: string }[] = [
     { id: 'all', label: 'All' },
-    { id: 'scoops', label: `🍨 Gelato` },
+    { id: 'scoops', label: `🍨 Ice Cream` },
     { id: 'coffee', label: '☕ Coffee' },
     { id: 'cakes', label: '🍰 Cakes' },
     ...(selectedBranch === 'arugambay' ? [{ id: 'tourist-specials' as MenuTab, label: '🌴 Arugam Bay picks' }] : []),

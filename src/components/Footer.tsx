@@ -32,7 +32,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateToAdmin }) => {
             </div>
 
             <p className="text-xs sm:text-sm text-[#6E5D53] leading-relaxed">
-              Sri Lanka's artisanal gelato brand, famous for our Iconic Durian Custard, 20 handcrafted flavours in freshly baked edible biscuit cups, and specialty roasts.
+              Sri Lanka's artisanal ice cream brand, famous for our Iconic Durian Custard, 20 handcrafted flavours in freshly baked edible biscuit cups, and specialty roasts.
             </p>
 
             <div className="flex items-center gap-2.5 pt-1">

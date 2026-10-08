@@ -38,7 +38,7 @@ export const EdibleBiscuitCupSpotlight: React.FC<EdibleBiscuitCupSpotlightProps>
 
               <div className="p-4 rounded-2xl bg-white/80 border border-[#E0D5C3] shadow-xs">
                 <p className="text-sm font-serif-title italic font-semibold text-[#8C102A]">
-                  "Enjoy your creamy Durian or Mango gelato to the very last spoonful—and then enjoy eating the crunchy waffle cup!"
+                  "Enjoy your creamy Durian or Mango ice cream to the very last spoonful—and then enjoy eating the crunchy waffle cup!"
                 </p>
               </div>
 

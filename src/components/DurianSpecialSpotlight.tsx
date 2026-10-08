@@ -57,7 +57,7 @@ export const DurianSpecialSpotlight: React.FC<DurianSpecialSpotlightProps> = ({
       id: 'biscuit-cone',
       image: ASSET_IMAGES.durianCone,
       title: 'Waffle Biscuit Cone Durian',
-      alt: 'Amore Durian Gelato in Crisp Waffle Biscuit Cone with Pistachio Crumb and Fresh Durian Fruit',
+      alt: 'Amore Durian Ice Cream in Crisp Waffle Biscuit Cone with Pistachio Crumb and Fresh Durian Fruit',
       tag: 'Crisp Waffle Cone',
       servingName: 'In Waffle Cone',
       price: durianItem.conePriceLKR,
@@ -67,7 +67,7 @@ export const DurianSpecialSpotlight: React.FC<DurianSpecialSpotlightProps> = ({
       id: 'biscuit-cup',
       image: durianItem.image || ASSET_IMAGES.durianScoop,
       title: 'Edible Biscuit Cup Durian',
-      alt: 'Amore Iconic Durian Custard Gelato in Crunchy Edible Biscuit Cup with Fresh Durian Fruit',
+      alt: 'Amore Iconic Durian Custard Ice Cream in Crunchy Edible Biscuit Cup with Fresh Durian Fruit',
       tag: 'Crunchy Biscuit Cup',
       servingName: 'In Biscuit Cup',
       price: durianItem.biscuitCupPriceLKR,
@@ -200,13 +200,13 @@ export const DurianSpecialSpotlight: React.FC<DurianSpecialSpotlightProps> = ({
                   The Undisputed King of Amore
                 </div>
                 <h2 className="font-serif-title text-3xl sm:text-4xl font-bold text-[#241A18] leading-tight">
-                  The Iconic Durian Custard Gelato
+                  The Iconic Durian Custard Ice Cream
                 </h2>
                 <p className="text-xs sm:text-sm font-semibold text-emerald-800 tracking-wide uppercase">
                   Bold &bull; Exotic &bull; Unforgettable
                 </p>
                 <p className="text-sm sm:text-base text-[#5D4E46] leading-relaxed">
-                  Sri Lanka's most talked-about scoop. Ripe golden local durian pulp slow-churned in small daily batches with fresh hill country milk into a luscious, aromatic custard gelato that converts even first-time skeptics. Available across all 3 branches in Akurana, Colombo, and Arugam Bay.
+                  Sri Lanka's most talked-about scoop. Ripe golden local durian pulp slow-churned in small daily batches with fresh hill country milk into a luscious, aromatic custard ice cream that converts even first-time skeptics. Available across all 3 branches in Akurana, Colombo, and Arugam Bay.
                 </p>
               </div>
 
@@ -246,7 +246,7 @@ export const DurianSpecialSpotlight: React.FC<DurianSpecialSpotlightProps> = ({
                 {[
                   '100% Real Durian Pulp',
                   'Highland Full-Cream Milk',
-                  'Eggless Gelato',
+                  'Eggless Ice Cream',
                   '100% Halal Ingredients',
                   'Available in Edible Biscuit Cup',
                 ].map((note) => (

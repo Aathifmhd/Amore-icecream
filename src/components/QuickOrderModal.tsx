@@ -412,7 +412,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
         {/* STEP 2: PROCESSING ANIMATION */}
         {step === 'processing' && (
           <div className="p-8 sm:p-12 flex flex-col items-center justify-center text-center space-y-6 animate-fadeIn">
-            {/* Churning Gelato Luxury Spinner */}
+            {/* Churning Ice Cream Luxury Spinner */}
             <div className="relative w-24 h-24 flex items-center justify-center">
               <div className="absolute inset-0 rounded-full border-4 border-[#8C102A]/15 border-t-[#8C102A] animate-spin" />
               <div className="w-16 h-16 rounded-full bg-[#FAF5EE] border border-[#E8DFC8] flex items-center justify-center text-2xl shadow-inner animate-pulse">

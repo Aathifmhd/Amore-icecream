@@ -16,7 +16,7 @@ export const ParlourExperience: React.FC = () => {
     },
     {
       title: 'Open Late Till 11:30 PM',
-      desc: 'Akurana’s favorite evening sanctuary for post-dinner family gelato runs and cozy late-night lattes.',
+      desc: 'Akurana’s favorite evening sanctuary for post-dinner family ice cream runs and cozy late-night lattes.',
       icon: Heart,
     },
   ];

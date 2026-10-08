@@ -607,7 +607,7 @@ export default function App() {
         <section id="full-menu" className="py-16 md:py-20 bg-[#F5EFE6] border-y border-[#E8DFC8]/80 text-center px-4">
           <div className="max-w-3xl mx-auto">
             <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white border border-[#E8DFC8] text-[#8C102A] text-xs font-bold uppercase tracking-wider mb-3.5 shadow-2xs">
-              🍨 20 Gelato Flavours • Barista Coffee • Fresh Cakes
+              🍨 20 Ice Cream Flavours • Barista Coffee • Fresh Cakes
             </span>
             <h2 className="font-serif-title text-2xl sm:text-4xl font-bold text-[#241A18]">
               Explore Our Complete Artisanal Menu

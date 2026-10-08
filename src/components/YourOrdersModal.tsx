@@ -421,7 +421,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                 No active ongoing orders
               </h3>
               <p className="text-xs text-[#7A6458] max-w-xs mx-auto mt-1.5 mb-6 leading-relaxed">
-                When you order your favorite gelato, live parlour updates and your change window will appear here.
+                When you order your favourite ice cream, live parlour updates and your change window will appear here.
               </p>
               {historyOrders.length > 0 && (
                 <div className="mt-4 mb-3 p-3 bg-white rounded-2xl border border-[#E8DFC8] text-xs text-[#5D4E46] flex items-center justify-between gap-3 max-w-sm mx-auto shadow-2xs">
@@ -447,7 +447,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                   }}
                   className="px-6 py-2.5 rounded-full bg-[#8C102A] hover:bg-[#A31634] text-white text-xs font-bold shadow-md transition-all cursor-pointer"
                 >
-                  Explore Gelato Menu
+                  Explore Ice Cream Menu
                 </button>
               )}
             </div>
@@ -854,7 +854,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                               <span className="w-2 h-2 rounded-full bg-[#8C102A] animate-pulse inline-block" />
                             )}
                             {isPreparing
-                              ? 'Scooping & Churning Fresh Gelato'
+                              ? 'Scooping & Churning Fresh Ice Cream'
                               : order.orderType === 'pickup'
                               ? 'Order Confirmed at Parlour'
                               : order.paymentMethod === 'card'
@@ -937,7 +937,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                           >
                             {order.orderType === 'delivery'
                               ? 'Your scoops are packed in thermal containers and our delivery partner is en route.'
-                              : `Your gelato is freshly prepared and waiting for you at Amore ${order.branchName} counter!`}
+                              : `Your ice cream is freshly prepared and waiting for you at Amore ${order.branchName} counter!`}
                           </span>
                         </div>
                       </div>
@@ -1091,7 +1091,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                   No past orders yet
                 </h3>
                 <p className="text-xs text-[#7A6458] max-w-xs mx-auto mt-1.5 mb-6 leading-relaxed">
-                  Once your artisanal gelato order is delivered or completed, receipts and wanted details will be kept here for your records.
+                  Once your artisanal ice cream order is delivered or completed, receipts and wanted details will be kept here for your records.
                 </p>
                 {onBrowseMenu && (
                   <button
@@ -1102,7 +1102,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                     }}
                     className="px-6 py-2.5 rounded-full bg-[#8C102A] hover:bg-[#A31634] text-white text-xs font-bold shadow-md transition-all cursor-pointer"
                   >
-                    Explore Gelato Menu
+                    Explore Ice Cream Menu
                   </button>
                 )}
               </div>
@@ -1234,7 +1234,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
 
         {/* Footer */}
         <div className="bg-white px-5 py-3 border-t border-[#E8DFC8] flex items-center justify-between text-xs text-[#7A6458]">
-          <span>Amore Artisanal Gelato • Fresh Daily</span>
+          <span>Amore Artisanal Ice Cream • Fresh Daily</span>
           <button
             type="button"
             onClick={onClose}

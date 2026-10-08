@@ -232,7 +232,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
       const L = window.L;
       if (!L) return;
 
-      // Create Custom Gelato Pin Icon
+      // Create Custom Ice Cream Pin Icon
       const pinIcon = L.divIcon({
         className: 'amore-custom-map-pin',
         html: `
@@ -354,7 +354,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
                 Pin Your Delivery Address
               </h2>
               <p className="text-[11px] text-[#7A6458]">
-                Detect your GPS or drag the gelato pin directly to your doorstep
+                Detect your GPS or drag the pin directly to your doorstep
               </p>
             </div>
           </div>
