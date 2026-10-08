@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { SelectedOrderItem, BranchId, Currency, OrderRecord } from '../types';
 import { AMORE_BRANCHES } from '../data/iceCreamData';
 import { formatPrice } from '../utils/currency';
-import { saveOrder } from '../utils/orderStorage';
+import { saveOrder, generateOrderReference } from '../utils/orderStorage';
+import { ONLINE_CARD_PAYMENTS_ENABLED } from '../config';
 import {
   X,
   CheckCircle2,
@@ -73,7 +74,9 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
   const [specialNote, setSpecialNote] = useState('');
 
   // Payment Method Selection: 'card' or 'cod' for delivery; 'pay_at_parlour' for pickup
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'cod' | 'pay_at_parlour'>('card');
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'cod' | 'pay_at_parlour'>(
+    ONLINE_CARD_PAYMENTS_ENABLED ? 'card' : 'cod'
+  );
 
   // Secured Card Payment State
   const [cardNumber, setCardNumber] = useState('');
@@ -107,13 +110,13 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
     if (orderType === 'pickup') {
       setPaymentMethod('pay_at_parlour');
     } else if (paymentMethod === 'pay_at_parlour') {
-      setPaymentMethod('card');
+      setPaymentMethod(ONLINE_CARD_PAYMENTS_ENABLED ? 'card' : 'cod');
     }
   }, [orderType]);
 
   // Enforce USD rule: If currency is USD and delivery is selected, cash on delivery is not allowed
   useEffect(() => {
-    if (orderType === 'delivery' && currency === 'USD' && paymentMethod === 'cod') {
+    if (ONLINE_CARD_PAYMENTS_ENABLED && orderType === 'delivery' && currency === 'USD' && paymentMethod === 'cod') {
       setPaymentMethod('card');
     }
   }, [currency, paymentMethod, orderType]);
@@ -285,7 +288,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
 
     // 3. Validate Card Details only if Doorstep Delivery with Card payment is selected
     const cleanCard = cardNumber.replace(/\s/g, '');
-    if (orderType === 'delivery' && paymentMethod === 'card') {
+    if (ONLINE_CARD_PAYMENTS_ENABLED && orderType === 'delivery' && paymentMethod === 'card') {
       if (cleanCard.length < 15) {
         alert('Please enter a valid 16-digit card number.');
         return;
@@ -314,7 +317,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
 
     setTimeout(() => {
       // Generate Order Reference
-      const ref = `AMO-${Math.floor(1000 + Math.random() * 9000)}`;
+      const ref = generateOrderReference('AMO');
       setConfirmedOrderRef(ref);
 
       const newOrder: OrderRecord = {
@@ -526,7 +529,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         {it.image ? (
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={it.image}
                             alt={it.name}
                             className="w-9 h-9 rounded-lg object-cover border border-[#E0D5C3] shrink-0"
@@ -616,7 +619,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
               <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2.5 min-w-0">
                   {currentUser.photoURL ? (
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={currentUser.photoURL}
                       alt="Profile"
                       referrerPolicy="no-referrer"
@@ -824,7 +827,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
                   <span className="text-[10px] font-bold text-purple-800 bg-purple-100 px-2.5 py-0.5 rounded-full border border-purple-200">
                     Pay at Parlour
                   </span>
-                ) : currency === 'USD' ? (
+                ) : ONLINE_CARD_PAYMENTS_ENABLED && currency === 'USD' ? (
                   <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md">
                     USD: Card Only
                   </span>
@@ -856,7 +859,8 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
               ) : (
                 /* Delivery Payment Method Selector (Card vs COD) */
                 <>
-                  <div className={`grid ${currency === 'USD' ? 'grid-cols-1' : 'grid-cols-2'} gap-2`}>
+                  <div className={`grid ${!ONLINE_CARD_PAYMENTS_ENABLED || currency === 'USD' ? 'grid-cols-1' : 'grid-cols-2'} gap-2`}>
+                    {ONLINE_CARD_PAYMENTS_ENABLED && (
                     <button
                       type="button"
                       onClick={() => setPaymentMethod('card')}
@@ -874,9 +878,10 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
                         <p className="text-[10px] text-slate-500">Visa, Mastercard, Amex</p>
                       </div>
                     </button>
+                    )}
 
                     {/* Cash on Delivery is strictly hidden when USD currency is active */}
-                    {currency !== 'USD' && (
+                    {(!ONLINE_CARD_PAYMENTS_ENABLED || currency !== 'USD') && (
                       <button
                         type="button"
                         onClick={() => setPaymentMethod('cod')}
@@ -891,14 +896,18 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
                         </div>
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-[#241A18]">Cash on Delivery</p>
-                          <p className="text-[10px] text-slate-500">Pay cash upon arrival (LKR)</p>
+                          <p className="text-[10px] text-slate-500">
+                            {ONLINE_CARD_PAYMENTS_ENABLED
+                              ? 'Pay cash upon arrival (LKR)'
+                              : 'Pay in LKR cash when your order arrives'}
+                          </p>
                         </div>
                       </button>
                     )}
                   </div>
 
                   {/* Card Payment Inputs */}
-                  {paymentMethod === 'card' && (
+                  {ONLINE_CARD_PAYMENTS_ENABLED && paymentMethod === 'card' && (
                     <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5 animate-fadeIn">
                       <div className="flex items-center justify-between text-xs text-slate-600 mb-1">
                         <span className="font-bold">Card Details</span>

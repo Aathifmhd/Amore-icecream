@@ -13,6 +13,20 @@ const STORAGE_KEY = 'amore_orders_v1';
 const SESSION_ORDERS_KEY = 'amore_session_orders_v1';
 export const ORDERS_UPDATED_EVENT = 'amore_orders_updated';
 
+/**
+ * Creates an order reference like AMO-7KQ4XP. Uses crypto randomness and an alphabet
+ * without look-alike characters (0/O, 1/I/L), giving ~887 million combinations so
+ * references don't collide and can't be guessed.
+ */
+export function generateOrderReference(prefix: string): string {
+  const alphabet = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  let code = '';
+  for (const b of bytes) code += alphabet[b % alphabet.length];
+  return `${prefix}-${code}`;
+}
+
 export function notifyOrdersUpdated(): void {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(ORDERS_UPDATED_EVENT));
@@ -81,11 +95,10 @@ export function getAllOrders(): Record<string, OrderRecord> {
     if (!raw) return {};
     const parsed: Record<string, OrderRecord> = JSON.parse(raw);
 
-    // Completely purge legacy test order AMO-3899 from local storage and firestore
+    // Purge legacy test order AMO-3899 from local storage
     if (parsed['AMO-3899']) {
       delete parsed['AMO-3899'];
       localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-      deleteOrderFromFirestore('AMO-3899').catch(() => {});
     }
 
     // Ensure any card order cancelled before admin confirmation does NOT have refundStatus
@@ -620,7 +633,7 @@ export function createManualReturnBill(data: {
   paymentMethod: 'card' | 'cash';
   cancellationReason: string;
 }): OrderRecord {
-  const ref = data.orderReference?.trim() || `RET-${Math.floor(1000 + Math.random() * 9000)}`;
+  const ref = data.orderReference?.trim() || generateOrderReference('RET');
   const now = new Date().toISOString();
   const branch = AMORE_BRANCHES.find((b) => b.id === data.branchId) || AMORE_BRANCHES[0];
 
@@ -677,8 +690,10 @@ export function updateReturnBill(
   const now = new Date().toISOString();
   return updateOrder(orderReference, {
     ...updates,
-    grandTotalLKR: updates.refundAmountLKR !== undefined ? updates.refundAmountLKR : undefined,
-    subtotalLKR: updates.refundAmountLKR !== undefined ? updates.refundAmountLKR : undefined,
+    // Only overwrite the totals when a new refund amount was given
+    ...(updates.refundAmountLKR !== undefined
+      ? { grandTotalLKR: updates.refundAmountLKR, subtotalLKR: updates.refundAmountLKR }
+      : {}),
     updatedAt: now,
   });
 }
@@ -779,8 +794,7 @@ export function updateOrderStatus(
  * Admin: Create a manual phone or walk-in order
  */
 export function createAdminOrder(orderData: Partial<OrderRecord>): OrderRecord {
-  const refNum = Math.floor(1000 + Math.random() * 9000);
-  const orderRef = orderData.orderReference || `AMO-M${refNum}`;
+  const orderRef = orderData.orderReference || generateOrderReference('AMO-M');
   const now = new Date().toISOString();
 
   const fullOrder: OrderRecord = {
@@ -891,8 +905,12 @@ export function recoverOrderByReference(orderReference: string, searchParams?: U
           currency: parsed.cur || 'LKR',
           status: 'pending_confirmation',
         };
-        // Also cache it
-        saveOrder(reconstructed);
+        // Cache it on this device only. Saving it to Firestore would overwrite the real
+        // order (status, timestamps) with this partial copy from the link.
+        const all = getAllOrders();
+        all[reconstructed.orderReference] = reconstructed;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+        recordSessionOrderRef(reconstructed.orderReference);
         return reconstructed;
       }
     } catch (err) {

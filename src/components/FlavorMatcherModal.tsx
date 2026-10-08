@@ -160,7 +160,7 @@ export const FlavorMatcherModal: React.FC<FlavorMatcherModalProps> = ({
         {recommendedScoop && (
           <div className="space-y-4 text-center animate-fadeIn">
             <div className="relative w-36 h-36 mx-auto rounded-full overflow-hidden border-4 border-[#8C102A]/20 shadow-md">
-              <img
+              <img loading="lazy" decoding="async"
                 src={recommendedScoop.image}
                 alt={recommendedScoop.name}
                 className="w-full h-full object-cover"

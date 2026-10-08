@@ -7,13 +7,12 @@ import {
   clearCustomerOrderHistory,
   ORDERS_UPDATED_EVENT,
   generateInconvenienceEmail,
-  syncOrdersFromFirestore,
   syncUserOrdersFromFirestore,
   mergeOrdersIntoStorage,
   pauseOrderGracePeriod,
   resumeOrderGracePeriod,
 } from '../utils/orderStorage';
-import { subscribeToAllOrders, subscribeToUserOrders, type User } from '../firebase';
+import { subscribeToUserOrders, type User } from '../firebase';
 import { formatPrice } from '../utils/currency';
 import { AMORE_BRANCHES } from '../data/iceCreamData';
 import {
@@ -119,12 +118,7 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
     if (isOpen) {
       refreshOrders();
 
-      // Immediately fetch latest orders from Cloud Firestore so completed/delivered orders
-      // or status changes from Admin panel reflect instantly, whether guest or logged-in!
-      syncOrdersFromFirestore().then(() => {
-        refreshOrders();
-      });
-
+      // Fetch this customer's latest orders so status changes from the Admin panel show up
       if (currentUser?.uid) {
         syncUserOrdersFromFirestore(currentUser.uid).then(() => {
           refreshOrders();
@@ -139,10 +133,12 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
 
     // Real-time listener: any status change made on Admin panel (e.g. marked delivered)
     // immediately updates localStorage and triggers re-render for the customer.
-    const unsubscribeAllOrders = subscribeToAllOrders((allOrders) => {
-      mergeOrdersIntoStorage(allOrders);
-      refreshOrders();
-    });
+    const unsubscribeAllOrders = currentUser?.uid
+      ? subscribeToUserOrders(currentUser.uid, (userOrders) => {
+          mergeOrdersIntoStorage(userOrders);
+          refreshOrders();
+        })
+      : () => {};
 
     const handleSync = () => {
       refreshOrders();

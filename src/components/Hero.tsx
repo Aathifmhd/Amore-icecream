@@ -37,7 +37,7 @@ export const Hero: React.FC<HeroProps> = ({
     >
       {/* Light, Sun-drenched Aesthetic Background Layer */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-        <img
+        <img fetchPriority="high"
           src={ASSET_IMAGES.lightHero}
           alt="Amore Parlour Bright Sunlit Cafe Atmosphere"
           className="w-full h-full object-cover object-center scale-100 filter brightness-[1.03] saturate-[1.05]"
@@ -196,7 +196,7 @@ export const Hero: React.FC<HeroProps> = ({
             {/* Visual Glass Showcase Card */}
             <div className="relative rounded-3xl overflow-hidden shadow-2xl border-2 border-[#E8DFC8] bg-white p-3 sm:p-4 group">
               <div className="relative rounded-2xl overflow-hidden aspect-[4/3]">
-                <img
+                <img loading="lazy" decoding="async"
                   src={ASSET_IMAGES.realFlavoursHero}
                   alt="Amore Real Flavours — Durian, Alphonso Mango and Cardamom Handcrafted Gelato Cones"
                   className="w-full h-full object-cover transform group-hover:scale-104 transition-transform duration-700"
@@ -214,7 +214,7 @@ export const Hero: React.FC<HeroProps> = ({
             {/* Floating Highlight Card 1: Iconic Durian */}
             <div className="absolute -bottom-5 -left-3 sm:-left-6 bg-white/95 backdrop-blur-md p-3 rounded-2xl shadow-xl border border-[#E8DFC8] flex items-center gap-3 max-w-[260px] animate-float-gentle">
               <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-amber-300 shadow-xs">
-                <img
+                <img loading="lazy" decoding="async"
                   src={ASSET_IMAGES.durianScoop}
                   alt="Durian scoop"
                   className="w-full h-full object-cover"

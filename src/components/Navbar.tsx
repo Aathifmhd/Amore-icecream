@@ -145,7 +145,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 title={`Signed in as ${currentUser.displayName || currentUser.email}`}
               >
                 {currentUser.photoURL ? (
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={currentUser.photoURL}
                     alt="Profile"
                     referrerPolicy="no-referrer"
@@ -239,7 +239,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 {currentUser ? (
                   currentUser.photoURL ? (
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={currentUser.photoURL}
                       alt="Profile"
                       referrerPolicy="no-referrer"
@@ -318,7 +318,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 >
                   <div className="flex items-center gap-2.5">
                     {currentUser.photoURL ? (
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={currentUser.photoURL}
                         alt="Profile"
                         referrerPolicy="no-referrer"

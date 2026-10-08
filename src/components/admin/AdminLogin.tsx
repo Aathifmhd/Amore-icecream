@@ -1,36 +1,34 @@
 import React, { useState } from 'react';
 import { AmoreLogo } from '../AmoreLogo';
-import { verifyAdminCredentials, setAdminSession, ADMIN_EMAIL } from '../../utils/adminAuth';
-import { Lock, Mail, Eye, EyeOff, ShieldCheck, ArrowLeft, AlertCircle } from 'lucide-react';
+import { auth, googleProvider, signInWithPopup, signOut, type User } from '../../firebase';
+import { ShieldCheck, ArrowLeft, AlertCircle, LogOut } from 'lucide-react';
 
 interface AdminLoginProps {
-  onLoginSuccess: () => void;
+  currentUser: User | null;
   onBackToStore: () => void;
 }
 
-export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackToStore }) => {
-  const [identifier, setIdentifier] = useState(ADMIN_EMAIL);
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
+export const AdminLogin: React.FC<AdminLoginProps> = ({ currentUser, onBackToStore }) => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleGoogleSignIn = async () => {
     setErrorMsg(null);
     setIsLoading(true);
-
-    setTimeout(() => {
-      if (verifyAdminCredentials(identifier, password)) {
-        setAdminSession(rememberMe);
-        setIsLoading(false);
-        onLoginSuccess();
-      } else {
-        setIsLoading(false);
-        setErrorMsg('Invalid credentials. Please use admin@email.com and your password.');
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error: any) {
+      if (error?.code !== 'auth/cancelled-popup-request' && error?.code !== 'auth/popup-closed-by-user') {
+        setErrorMsg('Google sign-in failed. Please try again.');
       }
-    }, 400);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSwitchAccount = async () => {
+    await signOut(auth);
+    handleGoogleSignIn();
   };
 
   return (
@@ -65,11 +63,20 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
               Amore Admin Console
             </h1>
             <p className="text-xs text-[#7A6458] mt-1.5">
-              Sign in to manage live orders, menu catalog, and branch operations.
+              Sign in with your staff Google account to manage orders and the menu.
             </p>
           </div>
 
-          {/* Error Banner */}
+          {/* Signed in with an account that isn't an admin */}
+          {currentUser && (
+            <div className="mb-6 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 shrink-0 text-amber-700 mt-0.5" />
+              <span className="font-medium">
+                <strong>{currentUser.email}</strong> doesn't have admin access. Sign in with an approved staff account.
+              </span>
+            </div>
+          )}
+
           {errorMsg && (
             <div className="mb-6 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2.5 animate-shake">
               <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
@@ -77,87 +84,31 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
             </div>
           )}
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email / Username Input */}
-            <div>
-              <label className="block text-xs font-bold text-[#3D2C24] uppercase tracking-wider mb-1.5">
-                Admin Email / Username
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-[#8C102A] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  required
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="admin@email.com"
-                  autoComplete="username email"
-                  className="w-full pl-10 pr-4 py-3 rounded-xl border border-[#D9CBB7] bg-[#FAF7F2]/50 text-sm font-semibold text-[#241A18] focus:bg-white focus:outline-hidden focus:border-[#8C102A] focus:ring-2 focus:ring-[#8C102A]/20 transition-all"
-                />
-              </div>
-              <span className="text-[10px] text-[#7A6458] mt-1 block">
-                Default: <strong>admin@email.com</strong>
-              </span>
-            </div>
-
-            {/* Password Input */}
-            <div>
-              <label className="block text-xs font-bold text-[#3D2C24] uppercase tracking-wider mb-1.5">
-                Security Password
-              </label>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-[#8C102A] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full pl-10 pr-10 py-3 rounded-xl border border-[#D9CBB7] bg-[#FAF7F2]/50 text-sm font-semibold text-[#241A18] focus:bg-white focus:outline-hidden focus:border-[#8C102A] focus:ring-2 focus:ring-[#8C102A]/20 transition-all"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#7A6458] hover:text-[#241A18] transition-colors p-1"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            {/* Remember Me Checkbox */}
-            <div className="flex items-center justify-between pt-1">
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-[#5D4E46]">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="rounded text-[#8C102A] focus:ring-[#8C102A] w-4 h-4 border-[#D9CBB7]"
-                />
-                <span>Remember session</span>
-              </label>
-            </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full mt-2 py-3.5 px-4 rounded-xl bg-[#8C102A] hover:bg-[#A31634] text-white font-bold text-sm tracking-wide shadow-md hover:shadow-lg active:scale-98 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-70"
-            >
-              {isLoading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Authenticating...</span>
-                </>
-              ) : (
-                <>
-                  <Lock className="w-4 h-4 text-amber-300" />
-                  <span>Enter Dashboard</span>
-                </>
-              )}
-            </button>
-          </form>
+          <button
+            type="button"
+            onClick={currentUser ? handleSwitchAccount : handleGoogleSignIn}
+            disabled={isLoading}
+            className="w-full py-3.5 px-4 rounded-xl bg-[#8C102A] hover:bg-[#A31634] text-white font-bold text-sm tracking-wide shadow-md hover:shadow-lg active:scale-98 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-70"
+          >
+            {isLoading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Signing in...</span>
+              </>
+            ) : currentUser ? (
+              <>
+                <LogOut className="w-4 h-4 text-amber-300" />
+                <span>Switch Google account</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="#FFC107" d="M21.8 10.2H12v3.9h5.6c-.5 2.5-2.7 4.3-5.6 4.3a6.4 6.4 0 1 1 4.2-11.2l2.8-2.8A10.4 10.4 0 1 0 22 12c0-.6-.1-1.2-.2-1.8z" />
+                </svg>
+                <span>Sign in with Google</span>
+              </>
+            )}
+          </button>
 
           {/* Footer Notice */}
           <div className="mt-8 pt-6 border-t border-[#E8DFC8] text-center">
@@ -170,4 +121,3 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
     </div>
   );
 };
-

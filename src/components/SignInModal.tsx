@@ -24,7 +24,6 @@ import {
   ArrowLeft,
   Sparkles,
 } from 'lucide-react';
-import { verifyAdminCredentials, setAdminSession } from '../utils/adminAuth';
 
 interface SignInModalProps {
   isOpen: boolean;
@@ -157,22 +156,6 @@ export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose, curre
 
     setIsLoading(true);
 
-    // Check if admin credentials were entered into this modal!
-    if (verifyAdminCredentials(email.trim(), password)) {
-      setAdminSession(rememberMe);
-      setIsLoading(false);
-      setSuccessMessage('Admin credentials verified! Entering Operations Console...');
-      setTimeout(() => {
-        onClose();
-        const url = new URL(window.location.href);
-        url.searchParams.set('page', 'admin');
-        window.history.pushState({}, '', url.toString());
-        window.dispatchEvent(new PopStateEvent('popstate'));
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }, 500);
-      return;
-    }
-
     try {
       if (mode === 'signup') {
         // Create new account
@@ -303,7 +286,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose, curre
           <div className="flex flex-col items-center">
             <div className="w-full bg-[#FAF7F2] rounded-2xl p-4 border border-[#E8DFC8] shadow-2xs mb-6 flex items-center gap-3.5">
               {currentUser.photoURL ? (
-                <img
+                <img loading="lazy" decoding="async"
                   src={currentUser.photoURL}
                   alt={currentUser.displayName || 'User Profile'}
                   referrerPolicy="no-referrer"

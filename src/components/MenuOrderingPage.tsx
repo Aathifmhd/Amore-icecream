@@ -252,7 +252,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                 title={`Signed in as ${currentUser.displayName || currentUser.email}`}
               >
                 {currentUser.photoURL ? (
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={currentUser.photoURL}
                     alt="Profile"
                     referrerPolicy="no-referrer"
@@ -594,13 +594,12 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                     <div>
                       {/* Scoop Image & Badges */}
                       <div className="relative w-full h-44 rounded-xl overflow-hidden bg-[#FAF7F2] mb-3 group">
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={scoop.image}
                           alt={scoop.name}
                           className={`w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300 ${
                             isSoldOut ? 'grayscale-[30%] opacity-85' : ''
                           }`}
-                          loading="lazy"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
@@ -934,13 +933,12 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                     <div>
                       {/* Big Picture & Badges */}
                       <div className="relative w-full h-44 rounded-xl overflow-hidden bg-[#FAF7F2] mb-3 group">
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={coffee.image}
                           alt={coffee.name}
                           className={`w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300 ${
                             isSoldOut ? 'grayscale-[30%] opacity-85' : ''
                           }`}
-                          loading="lazy"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
@@ -1143,13 +1141,12 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                     <div>
                       {/* Big Picture & Badges */}
                       <div className="relative w-full h-44 rounded-xl overflow-hidden bg-[#FAF7F2] mb-3 group">
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={cake.image}
                           alt={cake.name}
                           className={`w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300 ${
                             isSoldOut ? 'grayscale-[30%] opacity-85' : ''
                           }`}
-                          loading="lazy"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 

@@ -69,7 +69,7 @@ export const BranchShowcase: React.FC<BranchShowcaseProps> = ({
         <div className="bg-white rounded-3xl overflow-hidden shadow-xl border border-[#E8DFC8] grid grid-cols-1 lg:grid-cols-12 transition-all">
           {/* Visual Column */}
           <div className="lg:col-span-6 relative min-h-[300px] lg:min-h-[460px] bg-[#FAF7F2] overflow-hidden">
-            <img
+            <img loading="lazy" decoding="async"
               src={currentBranch.image}
               alt={currentBranch.name}
               className="w-full h-full object-cover"

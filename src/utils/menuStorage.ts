@@ -1,5 +1,10 @@
 import { ScoopItem, MenuItem } from '../types';
-import { ALL_20_FLAVOURS, SPECIALTY_COFFEE_ITEMS, ARTISAN_CAKES_ITEMS } from '../data/iceCreamData';
+import {
+  ALL_20_FLAVOURS,
+  SPECIALTY_COFFEE_ITEMS,
+  ARTISAN_CAKES_ITEMS,
+  resolveBundledImage,
+} from '../data/iceCreamData';
 import { db, getAllMenuItemsFromFirestore, subscribeToMenuItems } from '../firebase';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 
@@ -8,6 +13,12 @@ const COFFEE_STORAGE_KEY = 'amore_menu_coffee_v1';
 const CAKES_STORAGE_KEY = 'amore_menu_cakes_v1';
 
 export const MENU_UPDATED_EVENT = 'amore_menu_updated';
+
+// Fix photo links saved against an older build (see resolveBundledImage)
+function withCurrentImage<T extends { image?: string }>(item: T): T {
+  const image = resolveBundledImage(item.image);
+  return image === item.image ? item : { ...item, image };
+}
 
 function notifyMenuUpdated() {
   if (typeof window !== 'undefined') {
@@ -31,7 +42,7 @@ export function getAllGelatoFlavours(): ScoopItem[] {
       return ALL_20_FLAVOURS;
     }
     const parsed: ScoopItem[] = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : ALL_20_FLAVOURS;
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed.map(withCurrentImage) : ALL_20_FLAVOURS;
   } catch (err) {
     console.error('Failed to load scoops from storage:', err);
     return ALL_20_FLAVOURS;
@@ -110,7 +121,7 @@ export function getAllCoffeeItems(): MenuItem[] {
       return SPECIALTY_COFFEE_ITEMS;
     }
     const parsed: MenuItem[] = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : SPECIALTY_COFFEE_ITEMS;
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed.map(withCurrentImage) : SPECIALTY_COFFEE_ITEMS;
   } catch (err) {
     console.error('Failed to load coffee items:', err);
     return SPECIALTY_COFFEE_ITEMS;
@@ -186,7 +197,7 @@ export function getAllCakeItems(): MenuItem[] {
       return ARTISAN_CAKES_ITEMS;
     }
     const parsed: MenuItem[] = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : ARTISAN_CAKES_ITEMS;
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed.map(withCurrentImage) : ARTISAN_CAKES_ITEMS;
   } catch (err) {
     console.error('Failed to load cake items:', err);
     return ARTISAN_CAKES_ITEMS;

@@ -342,7 +342,7 @@ export const FullMenu: React.FC<FullMenuProps> = ({
                   >
                     {/* Top image or visual accent */}
                     <div className="relative h-44 bg-[#FAF7F2] overflow-hidden">
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={scoop.image}
                         alt={scoop.name}
                         className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${
@@ -714,14 +714,13 @@ export const FullMenu: React.FC<FullMenuProps> = ({
                     {/* Top Image */}
                     <div className="relative h-44 bg-[#FAF7F2] overflow-hidden">
                       {coffee.image ? (
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={coffee.image}
                           alt={coffee.name}
                           className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${
                             isSoldOut ? 'grayscale-[30%] opacity-85' : ''
                           }`}
                           referrerPolicy="no-referrer"
-                          loading="lazy"
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-[#FAF7F2] text-[#8C102A]">
@@ -901,14 +900,13 @@ export const FullMenu: React.FC<FullMenuProps> = ({
                     {/* Top Image */}
                     <div className="relative h-44 bg-[#FAF7F2] overflow-hidden">
                       {cake.image ? (
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={cake.image}
                           alt={cake.name}
                           className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${
                             isSoldOut ? 'grayscale-[30%] opacity-85' : ''
                           }`}
                           referrerPolicy="no-referrer"
-                          loading="lazy"
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-[#FAF7F2] text-[#8C102A]">

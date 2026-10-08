@@ -14,8 +14,8 @@ import {
 import {
   getFirestore,
   doc,
-  getDocFromServer,
   setDoc,
+  deleteField,
   getDoc,
   updateDoc,
   collection,
@@ -25,22 +25,14 @@ import {
   onSnapshot,
   deleteDoc,
 } from 'firebase/firestore';
-import {
-  getStorage,
-  ref as storageRef,
-  uploadBytes,
-  getDownloadURL,
-  deleteObject,
-} from 'firebase/storage';
 import firebaseConfig from '../firebase-applet-config.json';
 import { OrderRecord } from './types';
 
 // Initialize Firebase App
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 
 // CRITICAL: Connect directly to the specific Firestore Database ID
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const storage = getStorage(app);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
@@ -104,21 +96,40 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
-// Test Connection on Boot as mandated by Skill
-export async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('Please check your Firebase configuration.');
-    }
-  }
-}
-testConnection();
-
 // ==========================================
 // FIRESTORE REPOSITORY HELPERS FOR AMORE
 // ==========================================
+
+// Every field an order document may hold (mirrors OrderRecord).
+const ORDER_FIELDS: (keyof OrderRecord)[] = [
+  'orderReference', 'createdAt', 'customerName', 'contactNumber', 'orderType',
+  'deliveryAddress', 'city', 'deliveryCoordinates', 'specialNote', 'whatsappNumber',
+  'emailAddress', 'branchId', 'branchName', 'branchCity', 'items', 'subtotalLKR',
+  'deliveryFeeLKR', 'grandTotalLKR', 'currency', 'status', 'paymentMethod', 'paidAt',
+  'cardLast4', 'cardBrand', 'userId', 'cancelledAt', 'updatedAt', 'cancelledBy',
+  'cancellationReason', 'inconvenienceEmailContent', 'confirmedAt', 'preparingAt',
+  'onTheWayAt', 'deliveredAt', 'isGracePeriodPaused', 'gracePeriodRemainingSeconds',
+  'gracePeriodPausedAt', 'refundStatus', 'refundedAt', 'refundAmountLKR',
+  'customerDeletedHistory',
+];
+
+// Fields that callers clear by passing `undefined` (e.g. a refund that no longer applies).
+const CLEARABLE_ORDER_FIELDS = new Set<keyof OrderRecord>(['refundStatus', 'refundAmountLKR', 'paidAt']);
+
+// Firestore rejects `undefined`, so drop it (or turn it into a delete when clearing is intended).
+function toOrderPayload(data: Partial<OrderRecord>, forUpdate: boolean): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+  for (const key of ORDER_FIELDS) {
+    if (!(key in data)) continue;
+    const value = data[key];
+    if (value === undefined) {
+      if (forUpdate && CLEARABLE_ORDER_FIELDS.has(key)) payload[key] = deleteField();
+      continue;
+    }
+    payload[key] = value;
+  }
+  return payload;
+}
 
 /**
  * Save an order directly to Cloud Firestore with fallbacks
@@ -127,40 +138,11 @@ export async function saveOrderToFirestore(order: OrderRecord, userId?: string):
   const path = `orders/${order.orderReference}`;
   try {
     const effectiveUid = userId || order.userId || auth.currentUser?.uid;
-    const payload: Record<string, unknown> = {
-      orderReference: order.orderReference,
-      createdAt: order.createdAt || new Date().toISOString(),
-      customerName: order.customerName,
-      contactNumber: order.contactNumber,
-      orderType: order.orderType,
-      branchId: order.branchId,
-      branchName: order.branchName,
-      branchCity: order.branchCity,
-      items: order.items,
-      subtotalLKR: order.subtotalLKR,
-      deliveryFeeLKR: order.deliveryFeeLKR,
-      grandTotalLKR: order.grandTotalLKR,
-      currency: order.currency,
-      status: order.status,
-    };
-
-    if (order.whatsappNumber) payload.whatsappNumber = order.whatsappNumber;
-    if (order.emailAddress) payload.emailAddress = order.emailAddress;
-    if (order.deliveryAddress) payload.deliveryAddress = order.deliveryAddress;
-    if (order.city) payload.city = order.city;
-    if (order.specialNote) payload.specialNote = order.specialNote;
-    if (order.paymentMethod) payload.paymentMethod = order.paymentMethod;
-    if (order.paidAt) payload.paidAt = order.paidAt;
-    if (order.cardLast4) payload.cardLast4 = order.cardLast4;
-    if (order.cardBrand) payload.cardBrand = order.cardBrand;
+    const payload = toOrderPayload(
+      { ...order, createdAt: order.createdAt || new Date().toISOString() },
+      false
+    );
     if (effectiveUid) payload.userId = effectiveUid;
-    if (order.cancelledBy) payload.cancelledBy = order.cancelledBy;
-    if (order.cancellationReason) payload.cancellationReason = order.cancellationReason;
-    if (order.inconvenienceEmailContent) payload.inconvenienceEmailContent = order.inconvenienceEmailContent;
-    if (order.confirmedAt) payload.confirmedAt = order.confirmedAt;
-    if (order.preparingAt) payload.preparingAt = order.preparingAt;
-    if (order.deliveredAt) payload.deliveredAt = order.deliveredAt;
-    if (order.cancelledAt) payload.cancelledAt = order.cancelledAt;
 
     await setDoc(doc(db, 'orders', order.orderReference), payload);
     return true;
@@ -206,30 +188,9 @@ export async function updateOrderInFirestore(
 ): Promise<boolean> {
   const path = `orders/${orderReference}`;
   try {
-    const allowedUpdates: Record<string, unknown> = {};
-    if (updates.status !== undefined) allowedUpdates.status = updates.status;
-    if (updates.paidAt !== undefined) allowedUpdates.paidAt = updates.paidAt;
-    if (updates.paymentMethod !== undefined) allowedUpdates.paymentMethod = updates.paymentMethod;
-    if (updates.specialNote !== undefined) allowedUpdates.specialNote = updates.specialNote;
-    if (updates.cardLast4 !== undefined) allowedUpdates.cardLast4 = updates.cardLast4;
-    if (updates.cardBrand !== undefined) allowedUpdates.cardBrand = updates.cardBrand;
-    if (updates.cancelledBy !== undefined) allowedUpdates.cancelledBy = updates.cancelledBy;
-    if (updates.cancellationReason !== undefined) allowedUpdates.cancellationReason = updates.cancellationReason;
-    if (updates.inconvenienceEmailContent !== undefined) allowedUpdates.inconvenienceEmailContent = updates.inconvenienceEmailContent;
-    if (updates.confirmedAt !== undefined) allowedUpdates.confirmedAt = updates.confirmedAt;
-    if (updates.preparingAt !== undefined) allowedUpdates.preparingAt = updates.preparingAt;
-    if (updates.onTheWayAt !== undefined) allowedUpdates.onTheWayAt = updates.onTheWayAt;
-    if (updates.deliveredAt !== undefined) allowedUpdates.deliveredAt = updates.deliveredAt;
-    if (updates.cancelledAt !== undefined) allowedUpdates.cancelledAt = updates.cancelledAt;
-    if (updates.deliveryAddress !== undefined) allowedUpdates.deliveryAddress = updates.deliveryAddress;
-    if (updates.city !== undefined) allowedUpdates.city = updates.city;
-    if (updates.contactNumber !== undefined) allowedUpdates.contactNumber = updates.contactNumber;
-    if (updates.deliveryCoordinates !== undefined) allowedUpdates.deliveryCoordinates = updates.deliveryCoordinates;
-    if (updates.createdAt !== undefined) allowedUpdates.createdAt = updates.createdAt;
-    if (updates.isGracePeriodPaused !== undefined) allowedUpdates.isGracePeriodPaused = updates.isGracePeriodPaused;
-    if (updates.gracePeriodRemainingSeconds !== undefined) allowedUpdates.gracePeriodRemainingSeconds = updates.gracePeriodRemainingSeconds;
-    if (updates.gracePeriodPausedAt !== undefined) allowedUpdates.gracePeriodPausedAt = updates.gracePeriodPausedAt;
-    if (updates.updatedAt !== undefined) allowedUpdates.updatedAt = updates.updatedAt;
+    const { orderReference: _ref, userId: _uid, ...rest } = updates;
+    const allowedUpdates = toOrderPayload(rest, true);
+    if (Object.keys(allowedUpdates).length === 0) return true;
 
     await updateDoc(doc(db, 'orders', orderReference), allowedUpdates);
     return true;
@@ -240,6 +201,7 @@ export async function updateOrderInFirestore(
     } catch {
       // Ignore
     }
+    return false;
   }
 }
 
@@ -262,8 +224,8 @@ export function subscribeToOrder(
         }
       },
       (error) => {
-        console.warn('Order subscription error:', error);
-        handleFirestoreError(error, OperationType.GET, path);
+        // Expected when viewing someone else's order link: the page falls back to the link's data
+        console.warn(`Order subscription error (${path}):`, error);
       }
     );
     return unsubscribe;
@@ -422,126 +384,5 @@ export function subscribeToMenuItems(callback: (items: any[]) => void): () => vo
   } catch (err) {
     console.warn('Failed to subscribe to menu items:', err);
     return () => {};
-  }
-}
-
-/**
- * Optimizes/compresses an image client-side before uploading.
- * Max dimensions: 1200x1200px, JPEG/WebP quality 0.85
- */
-export async function compressImageClientSide(
-  file: File | Blob,
-  maxDimension = 1200,
-  quality = 0.85
-): Promise<Blob> {
-  if (typeof window === 'undefined' || !window.createImageBitmap) {
-    return file;
-  }
-  try {
-    const bitmap = await createImageBitmap(file);
-    let width = bitmap.width;
-    let height = bitmap.height;
-
-    if (width > maxDimension || height > maxDimension) {
-      if (width > height) {
-        height = Math.round((height * maxDimension) / width);
-        width = maxDimension;
-      } else {
-        width = Math.round((width * maxDimension) / height);
-        height = maxDimension;
-      }
-    }
-
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return file;
-
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(bitmap, 0, 0, width, height);
-
-    return new Promise<Blob>((resolve) => {
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            resolve(blob);
-          } else {
-            resolve(file);
-          }
-        },
-        'image/jpeg',
-        quality
-      );
-    });
-  } catch (e) {
-    console.warn('Client-side compression fallback to original:', e);
-    return file;
-  }
-}
-
-/**
- * Uploads a product image to Firebase Cloud Storage.
- * Generates an optimized image and returns the public download URL.
- * Resilient fallback: Converts to base64 Data URL if storage bucket fails/rules deny.
- */
-export async function uploadProductImageToFirebase(
-  file: File,
-  folder = 'menu_catalog'
-): Promise<{ url: string; storageType: 'firebase_storage' | 'base64_fallback' }> {
-  const compressedBlob = await compressImageClientSide(file);
-  const cleanFilename = file.name
-    ? file.name.replace(/[^a-zA-Z0-9._-]/g, '_').toLowerCase()
-    : 'product.jpg';
-  const storagePath = `${folder}/${Date.now()}_${cleanFilename}`;
-
-  try {
-    const imageRef = storageRef(storage, storagePath);
-    const snapshot = await uploadBytes(imageRef, compressedBlob, {
-      contentType: 'image/jpeg',
-      customMetadata: {
-        originalName: file.name,
-        uploadedAt: new Date().toISOString(),
-      },
-    });
-    const downloadURL = await getDownloadURL(snapshot.ref);
-    return { url: downloadURL, storageType: 'firebase_storage' };
-  } catch (storageError) {
-    console.warn('Firebase Storage upload failed, falling back to base64 Data URL:', storageError);
-    // Fallback to data URL so the admin is never blocked
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        resolve({
-          url: reader.result as string,
-          storageType: 'base64_fallback',
-        });
-      };
-      reader.onerror = () => {
-        resolve({
-          url: 'https://images.unsplash.com/photo-1560008581-09826d1de69e?auto=format&fit=crop&w=600&q=80',
-          storageType: 'base64_fallback',
-        });
-      };
-      reader.readAsDataURL(compressedBlob);
-    });
-  }
-}
-
-/**
- * Safely deletes a file from Firebase Storage if it's hosted there
- */
-export async function deleteProductImageFromFirebase(imageUrl: string): Promise<boolean> {
-  if (!imageUrl || (!imageUrl.includes('firebasestorage.googleapis.com') && !imageUrl.includes('firebasestorage.app'))) {
-    return false;
-  }
-  try {
-    const imageRef = storageRef(storage, imageUrl);
-    await deleteObject(imageRef);
-    return true;
-  } catch (e) {
-    console.warn('Could not delete image from Firebase Storage:', e);
-    return false;
   }
 }

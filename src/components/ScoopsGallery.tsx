@@ -114,7 +114,7 @@ export const ScoopsGallery: React.FC<ScoopsGalleryProps> = ({
               >
                 {/* Image Container with Badges */}
                 <div className="relative aspect-4/3 overflow-hidden bg-[#F3EDE3]">
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={scoop.image}
                     alt={scoop.name}
                     className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-500"
@@ -249,7 +249,7 @@ export const ScoopsGallery: React.FC<ScoopsGalleryProps> = ({
 
               {/* Modal Image */}
               <div className="relative h-60 w-full bg-[#EFE8DD]">
-                <img
+                <img loading="lazy" decoding="async"
                   src={activeModalScoop.image}
                   alt={activeModalScoop.name}
                   className="w-full h-full object-cover"

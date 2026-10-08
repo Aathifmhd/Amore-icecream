@@ -2,65 +2,110 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
-    function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
-    function incoming() {
-      return request.resource.data;
-    }
-
-    function existing() {
-      return resource.data;
-    }
+    // ---- Who is who -------------------------------------------------------
 
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+    // Keep in sync with ADMIN_EMAILS in src/config.ts and isAdmin() in storage.rules.
+    function isAdmin() {
+      return isSignedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in ['aathifmhd2000@gmail.com'];
     }
 
-    // Default deny all
+    function ownsExisting() {
+      return isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // ---- Order validation -------------------------------------------------
+
+    function isShortString(v, max) {
+      return v is string && v.size() <= max;
+    }
+
+    // Fields a customer may set when placing an order.
+    function isValidNewOrder(orderId) {
+      let d = request.resource.data;
+      return d.keys().hasOnly([
+          'orderReference', 'createdAt', 'customerName', 'contactNumber', 'orderType',
+          'deliveryAddress', 'city', 'deliveryCoordinates', 'specialNote', 'whatsappNumber',
+          'emailAddress', 'branchId', 'branchName', 'branchCity', 'items', 'subtotalLKR',
+          'deliveryFeeLKR', 'grandTotalLKR', 'currency', 'status', 'paymentMethod', 'userId'
+        ])
+        && d.orderReference == orderId
+        && orderId.matches('^AMO-[A-Z0-9]{4,10}$')
+        && d.userId == request.auth.uid
+        && d.status == 'pending_confirmation'
+        && isShortString(d.customerName, 100) && d.customerName.size() > 0
+        && isShortString(d.contactNumber, 30) && d.contactNumber.size() > 0
+        && d.orderType in ['delivery', 'pickup']
+        && d.branchId in ['akurana', 'colombo', 'arugambay']
+        && d.items is list && d.items.size() > 0 && d.items.size() <= 50
+        && d.subtotalLKR is number && d.subtotalLKR >= 0
+        && d.deliveryFeeLKR is number && d.deliveryFeeLKR >= 0
+        && d.grandTotalLKR is number && d.grandTotalLKR >= 0
+        && d.currency in ['LKR', 'USD']
+        // No online card gateway is connected yet (see ONLINE_CARD_PAYMENTS_ENABLED)
+        && (!('paymentMethod' in d) || d.paymentMethod in ['cod', 'cash', 'pay_at_parlour'])
+        && (!('deliveryAddress' in d) || isShortString(d.deliveryAddress, 300))
+        && (!('city' in d) || isShortString(d.city, 100))
+        && (!('specialNote' in d) || isShortString(d.specialNote, 500))
+        && (!('emailAddress' in d) || isShortString(d.emailAddress, 120))
+        && (!('whatsappNumber' in d) || isShortString(d.whatsappNumber, 30));
+    }
+
+    // While an order awaits confirmation, its owner may edit delivery details,
+    // pause/resume the 2-minute grace timer, change how they pay, or cancel it.
+    function isValidCustomerEdit() {
+      let d = request.resource.data;
+      let changed = d.diff(resource.data).affectedKeys();
+      return resource.data.status == 'pending_confirmation'
+        && changed.hasOnly([
+          'status', 'cancelledAt', 'cancelledBy', 'cancellationReason', 'updatedAt',
+          'deliveryAddress', 'city', 'contactNumber', 'deliveryCoordinates', 'specialNote',
+          'isGracePeriodPaused', 'gracePeriodRemainingSeconds', 'gracePeriodPausedAt',
+          'createdAt', 'paymentMethod', 'customerDeletedHistory'
+        ])
+        && d.status in ['pending_confirmation', 'cancelled']
+        && (d.status == 'pending_confirmation' || d.cancelledBy == 'customer')
+        && (!changed.hasAny(['paymentMethod']) || d.paymentMethod in ['cod', 'cash', 'pay_at_parlour'])
+        && (!('deliveryAddress' in d) || isShortString(d.deliveryAddress, 300))
+        && (!('contactNumber' in d) || isShortString(d.contactNumber, 30))
+        && (!('specialNote' in d) || isShortString(d.specialNote, 500));
+    }
+
+    // After an order is finished, its owner may only hide it from their history.
+    function isHistoryHide() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['customerDeletedHistory', 'updatedAt']);
+    }
+
+    // ---- Collections ------------------------------------------------------
+
+    // Default deny
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Validation for Orders
-    function isValidOrder(data) {
-      return data.orderReference is string && data.orderReference.size() <= 64 &&
-             data.customerName is string && data.customerName.size() > 0 && data.customerName.size() <= 100 &&
-             data.contactNumber is string && data.contactNumber.size() > 0 && data.contactNumber.size() <= 30 &&
-             data.orderType in ['delivery', 'pickup'] &&
-             data.branchId in ['akurana', 'colombo', 'arugambay'] &&
-             data.items is list && data.items.size() > 0 && data.items.size() <= 50 &&
-             data.grandTotalLKR is number && data.grandTotalLKR >= 0 &&
-             data.status in ['pending_confirmation', 'paid', 'confirmed', 'completed', 'cancelled'] &&
-             (!('emailAddress' in data) || (data.emailAddress is string && data.emailAddress.size() <= 120)) &&
-             (!('whatsappNumber' in data) || (data.whatsappNumber is string && data.whatsappNumber.size() <= 30)) &&
-             (!('deliveryAddress' in data) || (data.deliveryAddress is string && data.deliveryAddress.size() <= 300)) &&
-             (!('city' in data) || (data.city is string && data.city.size() <= 100)) &&
-             (!('specialNote' in data) || (data.specialNote is string && data.specialNote.size() <= 500)) &&
-             (!('userId' in data) || (data.userId is string && data.userId.size() <= 128));
-    }
-
-    // Orders Collection
     match /orders/{orderId} {
-      allow read: if true;
-      allow write: if true;
+      allow read: if isAdmin() || ownsExisting();
+      allow create: if isAdmin() || (isSignedIn() && isValidNewOrder(orderId));
+      allow update: if isAdmin()
+        || (ownsExisting()
+            && request.resource.data.userId == resource.data.userId
+            && (isValidCustomerEdit() || isHistoryHide()));
+      // Customers may clear their own cancelled orders, but never refund records.
+      allow delete: if isAdmin()
+        || (ownsExisting()
+            && resource.data.status == 'cancelled'
+            && !('refundStatus' in resource.data));
     }
 
-    // Menu Catalog Collection
     match /menu_items/{itemId} {
       allow read: if true;
-      allow write: if true;
-    }
-
-    // Test connection doc for initial boot validation
-    match /test/connection {
-      allow read: if true;
+      allow write: if isAdmin();
     }
   }
 }

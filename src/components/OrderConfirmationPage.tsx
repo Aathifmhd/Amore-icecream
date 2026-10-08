@@ -3,6 +3,7 @@ import { Currency, OrderRecord } from '../types';
 import { recoverOrderByReference, updateOrder } from '../utils/orderStorage';
 import { subscribeToOrder, getOrderFromFirestore } from '../firebase';
 import { formatPrice } from '../utils/currency';
+import { ONLINE_CARD_PAYMENTS_ENABLED } from '../config';
 import { CurrencyToggle } from './CurrencyToggle';
 import {
   CheckCircle2,
@@ -45,7 +46,9 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
   const [isReturnPolicyOpen, setIsReturnPolicyOpen] = useState(false);
 
   // Payment form state
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'card' | 'cash' | 'pay_at_parlour'>('card');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'card' | 'cash' | 'pay_at_parlour'>(
+    ONLINE_CARD_PAYMENTS_ENABLED ? 'card' : 'cash'
+  );
   const [cardHolder, setCardHolder] = useState('');
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
@@ -139,7 +142,7 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
     const isPickup = order.orderType === 'pickup';
     const effectivePaymentMethod = isPickup ? 'pay_at_parlour' : selectedPaymentMethod;
 
-    if (!isPickup && selectedPaymentMethod === 'card') {
+    if (ONLINE_CARD_PAYMENTS_ENABLED && !isPickup && selectedPaymentMethod === 'card') {
       const cleanCard = cardNumber.replace(/\s/g, '');
       if (cleanCard.length < 15) {
         alert('Please enter a valid 16-digit card number.');
@@ -426,7 +429,7 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
                   <div key={idx} className="pt-3 first:pt-0 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       {item.image ? (
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={item.image}
                           alt={item.name}
                           className="w-12 h-12 rounded-xl object-cover border border-[#E0D5C3] shrink-0"
@@ -565,6 +568,7 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
                   ) : (
                     <>
                       {/* Payment Method Tabs */}
+                      {ONLINE_CARD_PAYMENTS_ENABLED && (
                       <div className="grid grid-cols-2 gap-2 p-1 bg-[#F2ECE4] rounded-2xl border border-[#D9CBB7]">
                         <button
                           type="button"
@@ -592,9 +596,10 @@ export const OrderConfirmationPage: React.FC<OrderConfirmationPageProps> = ({
                           <span>Cash on Delivery</span>
                         </button>
                       </div>
+                      )}
 
                       {/* Card Payment Form Fields */}
-                      {selectedPaymentMethod === 'card' ? (
+                      {ONLINE_CARD_PAYMENTS_ENABLED && selectedPaymentMethod === 'card' ? (
                         <div className="space-y-3 pt-1">
                           <div className="flex items-center justify-between text-[11px] font-bold text-[#5C4D44]">
                             <span className="flex items-center gap-1 text-emerald-800">

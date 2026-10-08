@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AmoreLogo } from '../AmoreLogo';
-import { clearAdminSession } from '../../utils/adminAuth';
 import {
   getAllOrdersAdmin,
   deleteOrder,
@@ -21,7 +20,8 @@ import {
   syncOrdersFromFirestore,
   mergeOrdersIntoStorage,
 } from '../../utils/orderStorage';
-import { subscribeToAllOrders, uploadProductImageToFirebase } from '../../firebase';
+import { auth, signOut, subscribeToAllOrders } from '../../firebase';
+import { uploadProductImageToFirebase } from '../../firebaseStorage';
 import {
   getAllGelatoFlavours,
   getAllCoffeeItems,
@@ -454,7 +454,7 @@ const ProductImagePicker: React.FC<ProductImagePickerProps> = ({
       {value ? (
         <div className="flex items-center gap-3 p-2.5 bg-[#FAF7F2] rounded-xl border border-[#E8DFC8]">
           <div className="w-14 h-14 rounded-lg overflow-hidden bg-white border border-[#D9CBB7] shrink-0">
-            <img
+            <img loading="lazy" decoding="async"
               src={value}
               alt="Active selection preview"
               className="w-full h-full object-cover"
@@ -1133,8 +1133,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <button
               type="button"
               onClick={() => {
-                clearAdminSession();
-                onSignOut();
+                signOut(auth).finally(onSignOut);
               }}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold transition-all cursor-pointer active:scale-95"
               title="Sign Out of Admin Console"
@@ -2415,7 +2414,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <div>
                       {/* Image & Badges */}
                       <div className="relative h-44 rounded-xl overflow-hidden mb-3 bg-[#FAF7F2]">
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={scoop.image}
                           alt={scoop.name}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
@@ -2518,7 +2517,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   >
                     <div>
                       <div className="relative h-44 rounded-xl overflow-hidden mb-3 bg-[#FAF7F2]">
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={coffee.image || 'https://images.unsplash.com/photo-1541167760496-1628856ab772?auto=format&fit=crop&w=600&q=80'}
                           alt={coffee.name}
                           className="w-full h-full object-cover"
@@ -2588,7 +2587,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   >
                     <div>
                       <div className="relative h-44 rounded-xl overflow-hidden mb-3 bg-[#FAF7F2]">
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={cake.image || 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80'}
                           alt={cake.name}
                           className="w-full h-full object-cover"

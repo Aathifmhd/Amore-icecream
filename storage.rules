@@ -1,15 +1,27 @@
 rules_version = '2';
 
-// Craft rules based on data in your Firestore database
-// allow write: if firestore.get(
-//    /databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin;
 service firebase.storage {
   match /b/{bucket}/o {
-    match /{allPaths=**} {
-      // Allow public read for menu and catalog assets
+
+    // Keep in sync with ADMIN_EMAILS in src/config.ts and isAdmin() in firestore.rules.
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in ['aathifmhd2000@gmail.com'];
+    }
+
+    // Menu photos: anyone can view, only admins can upload (images under 5 MB) or delete.
+    match /menu_catalog/{fileName} {
       allow read: if true;
-      // Allow writes for authenticated or client uploads
-      allow write: if true;
+      allow create, update: if isAdmin()
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isAdmin();
+    }
+
+    // Everything else is closed.
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }

@@ -129,7 +129,7 @@ export const DurianSpecialSpotlight: React.FC<DurianSpecialSpotlightProps> = ({
                         key={slide.id}
                         className={`absolute inset-0 w-full h-full overflow-hidden ${animClass}`}
                       >
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={slide.image}
                           alt={slide.alt}
                           className={`w-full h-full object-cover object-center transform transition-transform duration-700 ease-out will-change-transform ${

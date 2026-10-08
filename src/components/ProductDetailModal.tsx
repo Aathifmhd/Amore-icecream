@@ -76,7 +76,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         {/* Top Image */}
         {item.image && (
           <div className="relative h-44 sm:h-48 w-full bg-[#FAF7F2] overflow-hidden">
-            <img
+            <img loading="lazy" decoding="async"
               src={item.image}
               alt={item.name}
               className={`w-full h-full object-cover ${isSoldOut ? 'grayscale-[30%] opacity-85' : ''}`}

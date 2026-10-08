@@ -1,15 +1,15 @@
 import { ScoopItem, MenuItem, BranchInfo, BranchId } from '../types';
 
-import heroBannerImg from '../assets/images/amore_hero_banner_1788549248456.jpg';
-import heroAestheticBgImg from '../assets/images/amore_hero_aesthetic_bg_1788549988783.jpg';
-import lightHeroImg from '../assets/images/amore_light_hero_1788590242684.jpg';
-import realFlavoursHeroImg from '../assets/images/amore_real_flavours_hero_1789123411620.jpg';
-import durianScoopImg from '../assets/images/durian_biscuit_macro_1789128378561.jpg';
-import durianConeImg from '../assets/images/durian_cone_macro_1789128785535.jpg';
-import cheesecakeImg from '../assets/images/amore_cheesecake_coffee_1788549282427.jpg';
-import cafeInteriorImg from '../assets/images/amore_cafe_parlour_1788549300314.jpg';
-import pistachioScoopImg from '../assets/images/amore_pistachio_scoop_1788549364846.jpg';
-import chocolateScoopImg from '../assets/images/amore_chocolate_scoop_1788549390724.jpg';
+import heroBannerImg from '../assets/images/amore_hero_banner_1788549248456.webp';
+import heroAestheticBgImg from '../assets/images/amore_hero_aesthetic_bg_1788549988783.webp';
+import lightHeroImg from '../assets/images/amore_light_hero_1788590242684.webp';
+import realFlavoursHeroImg from '../assets/images/amore_real_flavours_hero_1789123411620.webp';
+import durianScoopImg from '../assets/images/durian_biscuit_macro_1789128378561.webp';
+import durianConeImg from '../assets/images/durian_cone_macro_1789128785535.webp';
+import cheesecakeImg from '../assets/images/amore_cheesecake_coffee_1788549282427.webp';
+import cafeInteriorImg from '../assets/images/amore_cafe_parlour_1788549300314.webp';
+import pistachioScoopImg from '../assets/images/amore_pistachio_scoop_1788549364846.webp';
+import chocolateScoopImg from '../assets/images/amore_chocolate_scoop_1788549390724.webp';
 import officialLogoSvg from '../assets/images/amore_official_logo.svg';
 
 export const ASSET_IMAGES = {
@@ -26,6 +26,27 @@ export const ASSET_IMAGES = {
   pistachioScoop: pistachioScoopImg,
   chocolateScoop: chocolateScoopImg,
 };
+
+// Base file name (e.g. "durian_cone_macro_1789128785535") of an image path, ignoring
+// folders, the build hash suffix and the extension.
+const IMAGE_BASE_NAME = /\/([a-z_]+_\d{10,})(?:-[A-Za-z0-9_-]{8})?\.(?:jpe?g|webp|png)$/;
+
+const BUNDLED_IMAGES_BY_NAME: Record<string, string> = Object.fromEntries(
+  Object.values(ASSET_IMAGES)
+    .map((url) => [url.match(IMAGE_BASE_NAME)?.[1], url] as const)
+    .filter((entry): entry is readonly [string, string] => Boolean(entry[0]))
+);
+
+/**
+ * Menu items saved in Firestore can hold a bundled photo's URL from an older build
+ * (e.g. /assets/durian_cone_macro_1789128785535-CeQ9DM-y.jpg). Those files vanish on
+ * the next deploy, so point them at the current build's copy of the same photo.
+ */
+export function resolveBundledImage<T extends string | undefined>(url: T): T {
+  if (!url || url.startsWith('data:') || url.includes('firebasestorage')) return url;
+  const name = url.match(IMAGE_BASE_NAME)?.[1];
+  return ((name && BUNDLED_IMAGES_BY_NAME[name]) || url) as T;
+}
 
 export interface CatalogPresetImage {
   id: string;

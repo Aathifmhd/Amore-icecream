@@ -405,11 +405,10 @@ export const MobileFullMenuPage: React.FC<MobileFullMenuPageProps> = ({
                         className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden bg-[#FAF7F2] shrink-0 text-left group cursor-pointer"
                         title="View Scoop Details"
                       >
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={scoop.image}
                           alt={scoop.name}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          loading="lazy"
                         />
                         {isSoldOut ? (
                           <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center z-20">
@@ -566,11 +565,10 @@ export const MobileFullMenuPage: React.FC<MobileFullMenuPageProps> = ({
                     <div>
                       {/* Big Picture & Badges */}
                       <div className="relative w-full h-40 rounded-xl overflow-hidden bg-[#FAF7F2] mb-2.5 group">
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={item.image}
                           alt={item.name}
                           className="w-full h-full object-cover"
-                          loading="lazy"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
@@ -731,11 +729,10 @@ export const MobileFullMenuPage: React.FC<MobileFullMenuPageProps> = ({
                     <div>
                       {/* Big Picture & Badges */}
                       <div className="relative w-full h-40 rounded-xl overflow-hidden bg-[#FAF7F2] mb-2.5 group">
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={cake.image}
                           alt={cake.name}
                           className="w-full h-full object-cover"
-                          loading="lazy"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 

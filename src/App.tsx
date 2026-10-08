@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { DurianSpecialSpotlight } from './components/DurianSpecialSpotlight';
@@ -11,15 +11,7 @@ import { EdibleBiscuitCupSpotlight } from './components/EdibleBiscuitCupSpotligh
 import { BranchShowcase } from './components/BranchShowcase';
 import { ParlourExperience } from './components/ParlourExperience';
 import { Footer } from './components/Footer';
-import { ProductDetailModal } from './components/ProductDetailModal';
-import { QuickOrderModal } from './components/QuickOrderModal';
-import { MenuOrderingPage } from './components/MenuOrderingPage';
-import { OrderConfirmationPage } from './components/OrderConfirmationPage';
-import { SignInModal } from './components/SignInModal';
-import { YourOrdersModal } from './components/YourOrdersModal';
-import { AdminLogin } from './components/admin/AdminLogin';
-import { AdminDashboard } from './components/admin/AdminDashboard';
-import { isAdminAuthenticated } from './utils/adminAuth';
+import { isAdminUser } from './utils/adminAuth';
 import { auth, onAuthStateChanged, type User } from './firebase';
 import { Currency, BranchId, ScoopItem, MenuItem, SelectedOrderItem, ServingFormat } from './types';
 import { ALL_20_FLAVOURS } from './data/iceCreamData';
@@ -31,6 +23,38 @@ import {
   syncMenuFromFirestore,
   subscribeToRealtimeMenu,
 } from './utils/menuStorage';
+
+// Screens and popups that aren't needed for the first paint are split out so the
+// storefront loads faster. The menu chunk is prefetched once the home page is idle.
+const loadMenuPage = () => import('./components/MenuOrderingPage');
+const MenuOrderingPage = lazy(() => loadMenuPage().then((m) => ({ default: m.MenuOrderingPage })));
+const ProductDetailModal = lazy(() =>
+  import('./components/ProductDetailModal').then((m) => ({ default: m.ProductDetailModal }))
+);
+const QuickOrderModal = lazy(() =>
+  import('./components/QuickOrderModal').then((m) => ({ default: m.QuickOrderModal }))
+);
+const SignInModal = lazy(() =>
+  import('./components/SignInModal').then((m) => ({ default: m.SignInModal }))
+);
+const YourOrdersModal = lazy(() =>
+  import('./components/YourOrdersModal').then((m) => ({ default: m.YourOrdersModal }))
+);
+const OrderConfirmationPage = lazy(() =>
+  import('./components/OrderConfirmationPage').then((m) => ({ default: m.OrderConfirmationPage }))
+);
+const AdminLogin = lazy(() =>
+  import('./components/admin/AdminLogin').then((m) => ({ default: m.AdminLogin }))
+);
+const AdminDashboard = lazy(() =>
+  import('./components/admin/AdminDashboard').then((m) => ({ default: m.AdminDashboard }))
+);
+
+const PageLoader = () => (
+  <div className="min-h-screen bg-[#FAF7F2] flex items-center justify-center">
+    <div className="w-8 h-8 border-[3px] border-[#8C102A]/20 border-t-[#8C102A] rounded-full animate-spin" />
+  </div>
+);
 
 export default function App() {
   // Global State
@@ -51,13 +75,23 @@ export default function App() {
 
   // Authentication State & Sign-In Modal
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
+      setIsAuthReady(true);
     });
     return () => unsubscribe();
+  }, []);
+
+  // Warm up the menu page in the background so "View Full Menu" opens instantly
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      loadMenuPage().catch(() => {});
+    }, 2500);
+    return () => window.clearTimeout(timer);
   }, []);
 
   // Initial real-time menu sync across cloud and tabs
@@ -88,8 +122,8 @@ export default function App() {
     (o) => o.status !== 'cancelled' && o.status !== 'delivered'
   ).length;
 
-  // Admin Session State
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => isAdminAuthenticated());
+  // Admin access comes from the signed-in Google account (enforced again by Firestore rules)
+  const isAdminLoggedIn = isAdminUser(currentUser);
 
   // Mobile / Dedicated Page State (reads ?page=admin, ?tab=returns, etc.)
   const [currentPage, setCurrentPage] = useState<'home' | 'menu' | 'admin'>(() => {
@@ -120,7 +154,6 @@ export default function App() {
           ? 'menu'
           : 'home'
       );
-      setIsAdminLoggedIn(isAdminAuthenticated());
     };
 
     window.addEventListener('popstate', handleLocationChange);
@@ -314,35 +347,33 @@ export default function App() {
   // render the dedicated, separate Order Confirmation UI!
   if (confirmOrderRef) {
     return (
-      <OrderConfirmationPage
-        orderReference={confirmOrderRef}
-        currency={currency}
-        onToggleCurrency={setCurrency}
-        onBackToHome={handleBackFromConfirmation}
-      />
+      <Suspense fallback={<PageLoader />}>
+        <OrderConfirmationPage
+          orderReference={confirmOrderRef}
+          currency={currency}
+          onToggleCurrency={setCurrency}
+          onBackToHome={handleBackFromConfirmation}
+        />
+      </Suspense>
     );
   }
 
   // Dedicated Amore Operations & Admin Console (?page=admin)
   if (currentPage === 'admin') {
-    if (!isAdminLoggedIn) {
-      return (
-        <AdminLogin
-          onLoginSuccess={() => setIsAdminLoggedIn(true)}
-          onBackToStore={handleNavigateToHome}
-        />
-      );
-    }
+    if (!isAuthReady) return <PageLoader />;
     return (
-      <AdminDashboard
-        onSignOut={() => {
-          setIsAdminLoggedIn(false);
-          handleNavigateToHome();
-        }}
-        onBackToStore={handleNavigateToHome}
-        currency={currency}
-        onToggleCurrency={setCurrency}
-      />
+      <Suspense fallback={<PageLoader />}>
+        {isAdminLoggedIn ? (
+          <AdminDashboard
+            onSignOut={handleNavigateToHome}
+            onBackToStore={handleNavigateToHome}
+            currency={currency}
+            onToggleCurrency={setCurrency}
+          />
+        ) : (
+          <AdminLogin currentUser={currentUser} onBackToStore={handleNavigateToHome} />
+        )}
+      </Suspense>
     );
   }
 
@@ -350,6 +381,7 @@ export default function App() {
   if (currentPage === 'menu') {
     return (
       <div className="min-h-screen bg-[#FAF7F2] text-[#241A18] selection:bg-[#8C102A] selection:text-white font-sans">
+        <Suspense fallback={<PageLoader />}>
         <MenuOrderingPage
           currency={currency}
           onToggleCurrency={setCurrency}
@@ -399,28 +431,37 @@ export default function App() {
             }}
           />
         )}
+        </Suspense>
 
         {/* Sign In & Account Popup Modal */}
-        <SignInModal
-          isOpen={isSignInModalOpen}
-          onClose={() => setIsSignInModalOpen(false)}
-          currentUser={currentUser}
-        />
+        {isSignInModalOpen && (
+          <Suspense fallback={null}>
+            <SignInModal
+              isOpen={isSignInModalOpen}
+              onClose={() => setIsSignInModalOpen(false)}
+              currentUser={currentUser}
+            />
+          </Suspense>
+        )}
 
         {/* Your Orders & Live 2-Minute Grace Period Tracking Modal */}
-        <YourOrdersModal
-          isOpen={isOrdersModalOpen}
-          onClose={() => {
-            setIsOrdersModalOpen(false);
-            setHighlightOrderRef(null);
-          }}
-          currentUser={currentUser}
-          currency={currency}
-          highlightOrderRef={highlightOrderRef}
-          onBrowseMenu={() => {
-            setIsOrdersModalOpen(false);
-          }}
-        />
+        {isOrdersModalOpen && (
+          <Suspense fallback={null}>
+            <YourOrdersModal
+              isOpen={isOrdersModalOpen}
+              onClose={() => {
+                setIsOrdersModalOpen(false);
+                setHighlightOrderRef(null);
+              }}
+              currentUser={currentUser}
+              currency={currency}
+              highlightOrderRef={highlightOrderRef}
+              onBrowseMenu={() => {
+                setIsOrdersModalOpen(false);
+              }}
+            />
+          </Suspense>
+        )}
       </div>
     );
   }
@@ -513,14 +554,16 @@ export default function App() {
 
       {/* Product Detail Modal */}
       {detailItem && (
-        <ProductDetailModal
-          item={detailItem}
-          onClose={() => setDetailItem(null)}
-          currency={currency}
-          onOrderNow={(orderItem, openTray) => handleAddItemToOrder(orderItem, openTray ?? false)}
-          onOpenTray={() => setIsOrderModalOpen(true)}
-          isAlreadyInTray={orderItems.some((i) => i.itemId === detailItem.id)}
-        />
+        <Suspense fallback={null}>
+          <ProductDetailModal
+            item={detailItem}
+            onClose={() => setDetailItem(null)}
+            currency={currency}
+            onOrderNow={(orderItem, openTray) => handleAddItemToOrder(orderItem, openTray ?? false)}
+            onOpenTray={() => setIsOrderModalOpen(true)}
+            isAlreadyInTray={orderItems.some((i) => i.itemId === detailItem.id)}
+          />
+        </Suspense>
       )}
 
       {/* Floating 'Your Tray' Button (Mobile & Desktop) */}
@@ -551,44 +594,54 @@ export default function App() {
 
       {/* Quick Order Modal with Easy Mobile Form */}
       {isOrderModalOpen && (
-        <QuickOrderModal
-          isOpen={isOrderModalOpen}
-          onClose={() => setIsOrderModalOpen(false)}
-          items={orderItems}
-          onRemoveItem={handleRemoveOrderItem}
-          onUpdateQuantity={handleUpdateQuantity}
-          currency={currency}
-          initialBranch={selectedBranch}
-          onClearOrder={handleClearOrder}
-          onBrowseMenu={scrollToMenu}
-          currentUser={currentUser}
-          onOpenSignInModal={() => setIsSignInModalOpen(true)}
-          onViewOrderInOrders={(orderRef) => {
-            setHighlightOrderRef(orderRef);
-            setIsOrdersModalOpen(true);
-          }}
-        />
+        <Suspense fallback={null}>
+          <QuickOrderModal
+            isOpen={isOrderModalOpen}
+            onClose={() => setIsOrderModalOpen(false)}
+            items={orderItems}
+            onRemoveItem={handleRemoveOrderItem}
+            onUpdateQuantity={handleUpdateQuantity}
+            currency={currency}
+            initialBranch={selectedBranch}
+            onClearOrder={handleClearOrder}
+            onBrowseMenu={scrollToMenu}
+            currentUser={currentUser}
+            onOpenSignInModal={() => setIsSignInModalOpen(true)}
+            onViewOrderInOrders={(orderRef) => {
+              setHighlightOrderRef(orderRef);
+              setIsOrdersModalOpen(true);
+            }}
+          />
+        </Suspense>
       )}
 
       {/* Sign In & Account Popup Modal */}
-      <SignInModal
-        isOpen={isSignInModalOpen}
-        onClose={() => setIsSignInModalOpen(false)}
-        currentUser={currentUser}
-      />
+      {isSignInModalOpen && (
+        <Suspense fallback={null}>
+          <SignInModal
+            isOpen={isSignInModalOpen}
+            onClose={() => setIsSignInModalOpen(false)}
+            currentUser={currentUser}
+          />
+        </Suspense>
+      )}
 
       {/* Your Orders & Live 2-Minute Grace Period Tracking Modal */}
-      <YourOrdersModal
-        isOpen={isOrdersModalOpen}
-        onClose={() => {
-          setIsOrdersModalOpen(false);
-          setHighlightOrderRef(null);
-        }}
-        currentUser={currentUser}
-        currency={currency}
-        highlightOrderRef={highlightOrderRef}
-        onBrowseMenu={scrollToMenu}
-      />
+      {isOrdersModalOpen && (
+        <Suspense fallback={null}>
+          <YourOrdersModal
+            isOpen={isOrdersModalOpen}
+            onClose={() => {
+              setIsOrdersModalOpen(false);
+              setHighlightOrderRef(null);
+            }}
+            currentUser={currentUser}
+            currency={currency}
+            highlightOrderRef={highlightOrderRef}
+            onBrowseMenu={scrollToMenu}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

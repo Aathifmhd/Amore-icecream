@@ -48,7 +48,7 @@ export const ParlourExperience: React.FC = () => {
             
             {/* Main Interior Photo */}
             <div className="col-span-2 relative rounded-3xl overflow-hidden shadow-lg aspect-16/10 border-2 border-[#EFE8DD] group">
-              <img
+              <img loading="lazy" decoding="async"
                 src={ASSET_IMAGES.cafeInterior}
                 alt="Amore Akurana Cafe Interior with Rattan Lanterns and Cane Seating"
                 className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-500"
@@ -67,7 +67,7 @@ export const ParlourExperience: React.FC = () => {
 
             {/* Coffee & Cheesecake */}
             <div className="relative rounded-2xl overflow-hidden shadow-md aspect-4/3 border border-[#E8DFC8] group">
-              <img
+              <img loading="lazy" decoding="async"
                 src={ASSET_IMAGES.cheesecakeCoffee}
                 alt="Blueberry Cheesecake and Specialty Coffee"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
@@ -80,7 +80,7 @@ export const ParlourExperience: React.FC = () => {
 
             {/* Durian Scoop Delight */}
             <div className="relative rounded-2xl overflow-hidden shadow-md aspect-4/3 border border-[#E8DFC8] group">
-              <img
+              <img loading="lazy" decoding="async"
                 src={ASSET_IMAGES.durianScoop}
                 alt="Signature Durian Scoop in parlour bowl"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
