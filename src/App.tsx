@@ -13,7 +13,8 @@ import { ParlourExperience } from './components/ParlourExperience';
 import { Footer } from './components/Footer';
 import { isAdminUser } from './utils/adminAuth';
 import { auth, onAuthStateChanged, type User } from './firebase';
-import { Currency, BranchId, ScoopItem, MenuItem, SelectedOrderItem, ServingFormat } from './types';
+import { Currency, BranchId, ScoopItem, MenuItem, SelectedOrderItem, ServingFormat, MenuTab } from './types';
+import { useIsMobile } from './components/mobile/mobileHooks';
 import { ALL_20_FLAVOURS } from './data/iceCreamData';
 import { formatPrice } from './utils/currency';
 import { ShoppingBag } from 'lucide-react';
@@ -40,6 +41,9 @@ const SignInModal = lazy(() =>
 const YourOrdersModal = lazy(() =>
   import('./components/YourOrdersModal').then((m) => ({ default: m.YourOrdersModal }))
 );
+const MobileShell = lazy(() =>
+  import('./components/mobile/MobileShell').then((m) => ({ default: m.MobileShell }))
+);
 const OrderConfirmationPage = lazy(() =>
   import('./components/OrderConfirmationPage').then((m) => ({ default: m.OrderConfirmationPage }))
 );
@@ -58,6 +62,8 @@ const PageLoader = () => (
 
 export default function App() {
   // Global State
+  const isMobile = useIsMobile();
+  const [menuTab, setMenuTab] = useState<MenuTab>('all');
   const [currency, setCurrency] = useState<Currency>('LKR');
   const [selectedBranch, setSelectedBranch] = useState<BranchId>('akurana');
 
@@ -88,11 +94,12 @@ export default function App() {
 
   // Warm up the menu page in the background so "View Full Menu" opens instantly
   useEffect(() => {
+    if (isMobile) return; // phones use the mobile menu, which loads with the mobile layout
     const timer = window.setTimeout(() => {
       loadMenuPage().catch(() => {});
     }, 2500);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [isMobile]);
 
   // Initial real-time menu sync across cloud and tabs
   useEffect(() => {
@@ -374,6 +381,92 @@ export default function App() {
           <AdminLogin currentUser={currentUser} onBackToStore={handleNavigateToHome} />
         )}
       </Suspense>
+    );
+  }
+
+  // Phones get their own customer layout (bottom tabs, compact menu, bottom sheets).
+  // Desktop and the admin console keep the layouts below.
+  if (isMobile) {
+    return (
+      <div className="min-h-screen bg-[#FAF7F2] text-[#241A18] font-sans">
+        <Suspense fallback={<PageLoader />}>
+          <MobileShell
+            page={currentPage === 'menu' ? 'menu' : 'home'}
+            menuTab={menuTab}
+            currency={currency}
+            onToggleCurrency={setCurrency}
+            selectedBranch={selectedBranch}
+            onSelectBranch={setSelectedBranch}
+            orderItems={orderItems}
+            ordersCount={ongoingOrdersCount}
+            currentUser={currentUser}
+            onAddToTray={(item) => handleAddItemToOrder(item, false)}
+            onGoHome={handleNavigateToHome}
+            onGoMenu={(tab = 'all') => {
+              setMenuTab(tab);
+              handleNavigateToMenu();
+            }}
+            onOpenTray={() => setIsOrderModalOpen(true)}
+            onOpenOrders={() => (currentUser ? setIsOrdersModalOpen(true) : setIsSignInModalOpen(true))}
+            onOpenAccount={() => setIsSignInModalOpen(true)}
+          />
+        </Suspense>
+
+        {isOrderModalOpen && (
+          <Suspense fallback={null}>
+            <QuickOrderModal
+              isOpen={isOrderModalOpen}
+              onClose={() => setIsOrderModalOpen(false)}
+              items={orderItems}
+              onRemoveItem={handleRemoveOrderItem}
+              onUpdateQuantity={handleUpdateQuantity}
+              currency={currency}
+              initialBranch={selectedBranch}
+              onClearOrder={handleClearOrder}
+              onBrowseMenu={() => {
+                setIsOrderModalOpen(false);
+                setMenuTab('all');
+                handleNavigateToMenu();
+              }}
+              currentUser={currentUser}
+              onOpenSignInModal={() => setIsSignInModalOpen(true)}
+              onViewOrderInOrders={(orderRef) => {
+                setHighlightOrderRef(orderRef);
+                setIsOrdersModalOpen(true);
+              }}
+            />
+          </Suspense>
+        )}
+
+        {isSignInModalOpen && (
+          <Suspense fallback={null}>
+            <SignInModal
+              isOpen={isSignInModalOpen}
+              onClose={() => setIsSignInModalOpen(false)}
+              currentUser={currentUser}
+            />
+          </Suspense>
+        )}
+
+        {isOrdersModalOpen && (
+          <Suspense fallback={null}>
+            <YourOrdersModal
+              isOpen={isOrdersModalOpen}
+              onClose={() => {
+                setIsOrdersModalOpen(false);
+                setHighlightOrderRef(null);
+              }}
+              currentUser={currentUser}
+              currency={currency}
+              highlightOrderRef={highlightOrderRef}
+              onBrowseMenu={() => {
+                setIsOrdersModalOpen(false);
+                handleNavigateToMenu();
+              }}
+            />
+          </Suspense>
+        )}
+      </div>
     );
   }
 

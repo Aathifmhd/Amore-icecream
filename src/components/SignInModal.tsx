@@ -196,14 +196,14 @@ export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose, curre
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-fadeIn"
+      className="mobile-sheet-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-fadeIn"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-labelledby="auth-modal-title"
     >
       <div
-        className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-[#E8DFC8]/70 overflow-hidden p-6 sm:p-8"
+        className="mobile-sheet-panel relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-[#E8DFC8]/70 overflow-hidden p-6 sm:p-8"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}

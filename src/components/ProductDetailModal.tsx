@@ -57,11 +57,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-fadeIn"
+      className="mobile-sheet-backdrop fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-fadeIn"
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-md bg-white rounded-3xl overflow-hidden shadow-2xl border border-[#E8DFC8] my-4 transition-all"
+        className="mobile-sheet-panel relative w-full max-w-md bg-white rounded-3xl overflow-hidden shadow-2xl border border-[#E8DFC8] my-4 transition-all"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}

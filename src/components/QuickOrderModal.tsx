@@ -367,11 +367,11 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="order-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/65 backdrop-blur-xs overflow-y-auto animate-fadeIn"
+      className="mobile-sheet-backdrop fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/65 backdrop-blur-xs overflow-y-auto animate-fadeIn"
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-[500px] bg-white rounded-3xl overflow-hidden shadow-2xl border border-[#E8DFC8] my-auto max-h-[92vh] flex flex-col transition-all"
+        className="mobile-sheet-panel relative w-full max-w-[500px] bg-white rounded-3xl overflow-hidden shadow-2xl border border-[#E8DFC8] my-auto max-h-[92vh] flex flex-col transition-all"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -649,7 +649,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
             )}
 
             {/* CONTACT & DELIVERY DETAILS (ENABLED ONLY WHEN SIGNED IN) */}
-            <div className={`space-y-3 pt-2 border-t border-[#E8DFC8] ${!currentUser ? 'opacity-40 pointer-events-none' : ''}`}>
+            <div className={`space-y-3 pt-2 border-t border-[#E8DFC8] ${!currentUser ? 'hidden sm:block sm:opacity-40 sm:pointer-events-none' : ''}`}>
               <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#3D2C24]">
                 <MapPin className="w-4 h-4 text-[#8C102A]" />
                 <span>Contact & Delivery Details</span>
@@ -808,7 +808,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
             </div>
 
             {/* PAYMENT METHOD SELECTION & PARLOUR PICKUP HANDLING */}
-            <div className={`space-y-3 pt-2 border-t border-[#E8DFC8] ${!currentUser ? 'opacity-40 pointer-events-none' : ''}`}>
+            <div className={`space-y-3 pt-2 border-t border-[#E8DFC8] ${!currentUser ? 'hidden sm:block sm:opacity-40 sm:pointer-events-none' : ''}`}>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider text-[#3D2C24] flex items-center gap-1.5">
                   {orderType === 'pickup' ? (

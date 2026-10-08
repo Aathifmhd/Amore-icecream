@@ -154,3 +154,66 @@ html {
   animation: breatheGreen 2.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+
+/* ---- Shared helpers used across components ---- */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out both;
+}
+
+@keyframes scaleUp {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-scaleUp {
+  animation: scaleUp 0.2s ease-out both;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---- Mobile ---- */
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.animate-sheet-up {
+  animation: sheetUp 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-toast-in {
+  animation: toastIn 0.22s ease-out both;
+}
+
+/* Popups slide up from the bottom on phones instead of floating mid-screen */
+@media (max-width: 639px) {
+  .mobile-sheet-backdrop {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+  .mobile-sheet-panel {
+    margin: 0 !important;
+    max-width: 100% !important;
+    max-height: 92dvh !important;
+    border-radius: 1.5rem 1.5rem 0 0 !important;
+    border-bottom: 0 !important;
+    overflow-y: auto;
+    padding-bottom: env(safe-area-inset-bottom);
+    animation: sheetUp 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
