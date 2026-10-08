@@ -179,8 +179,8 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
               {section.note && <span className="text-[11px] text-[#7A6458]">{section.note}</span>}
             </div>
 
-            <ul className="bg-white rounded-3xl border border-[#E8DFC8] divide-y divide-[#F0E8DC] overflow-hidden">
-              {section.items.map((item) => {
+            <ul key={tab} className="bg-white rounded-3xl border border-[#E8DFC8] divide-y divide-[#F0E8DC] overflow-hidden">
+              {section.items.map((item, idx) => {
                 const scoop = isScoop(item) ? item : null;
                 const soldOut = isSoldOut(item);
                 const inTray = qtyInTray[item.id] || 0;
@@ -192,12 +192,12 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
                   ? 'Arugam Bay pick'
                   : null;
                 return (
-                  <li key={item.id} className={soldOut ? 'opacity-60' : ''}>
-                    <div className="flex items-center gap-3 p-3">
+                  <li key={item.id} className="rise-in" style={{ animationDelay: `${Math.min(idx, 8) * 45}ms` }}>
+                    <div className={`flex items-center gap-3 p-3 ${soldOut ? 'opacity-60' : ''}`}>
                       <button
                         type="button"
                         onClick={() => onOpenItem(item)}
-                        className="flex-1 min-w-0 flex items-center gap-3 text-left"
+                        className="group flex-1 min-w-0 flex items-center gap-3 text-left"
                       >
                         <span className="relative w-20 h-20 rounded-2xl overflow-hidden bg-[#F3EDE3] shrink-0">
                           {item.image && (
@@ -207,11 +207,11 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
                               loading="lazy"
                               decoding="async"
                               referrerPolicy="no-referrer"
-                              className={`w-full h-full object-cover ${soldOut ? 'grayscale' : ''}`}
+                              className={`w-full h-full object-cover transition-transform duration-500 group-active:scale-110 ${soldOut ? 'grayscale' : ''}`}
                             />
                           )}
                           {inTray > 0 && (
-                            <span className="absolute top-1 left-1 min-w-5 h-5 px-1 rounded-full bg-[#8C102A] text-white text-[11px] font-black flex items-center justify-center">
+                            <span key={inTray} className="pop-in absolute top-1 left-1 min-w-5 h-5 px-1 rounded-full bg-[#8C102A] text-white text-[11px] font-black flex items-center justify-center">
                               {inTray}
                             </span>
                           )}
@@ -238,7 +238,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
                           type="button"
                           onClick={() => (scoop ? onOpenItem(item) : onQuickAdd(item as MenuItem))}
                           aria-label={`Add ${item.name}`}
-                          className="w-10 h-10 rounded-full bg-[#8C102A] active:bg-[#730D22] text-white flex items-center justify-center shadow-md shrink-0"
+                          className="press w-10 h-10 rounded-full bg-[#8C102A] active:bg-[#730D22] text-white flex items-center justify-center shadow-md shrink-0"
                         >
                           <Plus className="w-5 h-5" />
                         </button>

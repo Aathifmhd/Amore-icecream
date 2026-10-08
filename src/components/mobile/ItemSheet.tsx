@@ -79,9 +79,9 @@ export const ItemSheet: React.FC<ItemSheetProps> = ({ item, currency, onClose, o
 
       <div className="relative w-full max-h-[90dvh] overflow-y-auto bg-white rounded-t-3xl shadow-2xl animate-sheet-up pb-safe">
         {/* Photo header */}
-        <div className="relative h-48 bg-[#F3EDE3]">
+        <div className="relative h-52 bg-[#F3EDE3] overflow-hidden">
           {item.image && (
-            <img src={item.image} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            <img src={item.image} alt={item.name} className="w-full h-full object-cover animate-[heroZoom_6s_ease-out_both]" referrerPolicy="no-referrer" />
           )}
           <div className="absolute inset-x-0 top-0 flex justify-center pt-2">
             <span className="w-10 h-1.5 rounded-full bg-white/80" />
@@ -125,8 +125,8 @@ export const ItemSheet: React.FC<ItemSheetProps> = ({ item, currency, onClose, o
                       type="button"
                       onClick={() => setFormat(f.id)}
                       aria-pressed={selected}
-                      className={`text-left p-3 rounded-2xl border-2 transition-colors ${
-                        selected ? 'border-[#8C102A] bg-[#8C102A]/5' : 'border-[#E8DFC8] bg-white'
+                      className={`press text-left p-3 rounded-2xl border-2 transition-all duration-200 ${
+                        selected ? 'border-[#8C102A] bg-[#8C102A]/5 shadow-md' : 'border-[#E8DFC8] bg-white'
                       }`}
                     >
                       <span className={selected ? 'text-[#8C102A]' : 'text-[#7A6458]'}>{f.icon}</span>
@@ -169,7 +169,7 @@ export const ItemSheet: React.FC<ItemSheetProps> = ({ item, currency, onClose, o
               type="button"
               onClick={handleAdd}
               disabled={soldOut}
-              className="flex-1 h-12 rounded-full bg-[#8C102A] active:bg-[#730D22] text-white font-bold text-sm shadow-md disabled:bg-[#BFB3A8] disabled:shadow-none"
+              className="press btn-shimmer flex-1 h-12 rounded-full bg-[#8C102A] active:bg-[#730D22] text-white font-bold text-sm shadow-md disabled:bg-[#BFB3A8] disabled:shadow-none"
             >
               {soldOut ? 'Sold out today' : `Add to tray · ${formatPrice(unitPrice * qty, currency)}`}
             </button>

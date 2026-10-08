@@ -1,11 +1,17 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowRight, Phone, Navigation, MessageCircle, Clock, Plus, Leaf, Cookie, Star } from 'lucide-react';
 import { BranchId, Currency, MenuItem, MenuTab, ScoopItem } from '../../types';
 import { AMORE_BRANCHES, ASSET_IMAGES } from '../../data/iceCreamData';
 import { formatPrice } from '../../utils/currency';
 import { AmoreLogo } from '../AmoreLogo';
 import { CurrencyToggle } from '../CurrencyToggle';
-import { isSoldOut, startingPriceLKR, useMenuItems } from './mobileHooks';
+import { isSoldOut, startingPriceLKR, useMenuItems, Reveal } from './mobileHooks';
+
+const HERO_SLIDES = [
+  { src: ASSET_IMAGES.durianScoop, alt: 'Durian gelato in an edible biscuit cup', caption: 'Our iconic Durian', position: 'center 40%' },
+  { src: ASSET_IMAGES.realFlavoursHero, alt: 'Pistachio, mango and cardamom gelato in waffle cones', caption: 'Made with real fruit', position: '50% center' },
+  { src: ASSET_IMAGES.chocolateScoop, alt: 'Rich chocolate gelato with a waffle crisp', caption: 'Rich Belgian chocolate', position: 'center' },
+];
 
 interface MobileHomeProps {
   currency: Currency;
@@ -26,6 +32,15 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
   onOpenItem,
 }) => {
   const { scoops, coffee, cakes } = useMenuItems();
+  const [slideIndex, setSlideIndex] = useState(0);
+
+  // Advance the hero slideshow (paused for people who prefer reduced motion)
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const timer = window.setInterval(() => setSlideIndex((i) => (i + 1) % HERO_SLIDES.length), 5500);
+    return () => window.clearInterval(timer);
+  }, [slideIndex]);
+
   const branch = AMORE_BRANCHES.find((b) => b.id === selectedBranch) || AMORE_BRANCHES[0];
   const favourites = scoops.filter((s) => (s.isPopular || s.isIconic) && !isSoldOut(s)).slice(0, 8);
   const durian = scoops.find((s) => s.id === 'durian-best');
@@ -49,38 +64,72 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
         </div>
       </header>
 
-      {/* Hero */}
+      {/* Hero: slow crossfading product slideshow */}
       <section className="px-4 pt-4">
-        <div className="relative h-[22rem] rounded-[1.75rem] overflow-hidden shadow-lg">
-          <img
-            src={ASSET_IMAGES.heroBanner}
-            alt="Amore gelato in waffle cones and biscuit cups"
-            fetchPriority="high"
-            className="absolute inset-0 w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#241A18]/90 via-[#241A18]/40 to-transparent" />
+        <div className="relative h-[26rem] rounded-[1.75rem] overflow-hidden shadow-xl bg-[#241A18]">
+          {HERO_SLIDES.map((slide, i) => (
+            <div key={slide.src} className={`hero-slide absolute inset-0 ${i === slideIndex ? 'is-active' : ''}`} aria-hidden={i !== slideIndex}>
+              <img
+                src={slide.src}
+                alt={slide.alt}
+                fetchPriority={i === 0 ? 'high' : 'low'}
+                loading={i === 0 ? 'eager' : 'lazy'}
+                className="absolute inset-0 w-full h-full object-cover"
+                style={{ objectPosition: slide.position }}
+              />
+            </div>
+          ))}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#241A18]/95 via-[#241A18]/35 to-[#241A18]/10" />
+
+          {/* Slide caption chip */}
+          <div className="absolute top-4 left-4">
+            <span key={slideIndex} className="rise-in inline-flex items-center gap-1.5 rounded-full bg-white/90 backdrop-blur px-3 py-1 text-[11px] font-bold text-[#8C102A] shadow">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#8C102A] animate-pulse" />
+              {HERO_SLIDES[slideIndex].caption}
+            </span>
+          </div>
+
           <div className="absolute inset-x-0 bottom-0 p-5 text-white">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-200">Speciality ice cream · coffee · cakes</p>
-            <h1 className="font-serif-title text-[2rem] leading-[1.1] font-bold mt-1.5">
-              Real flavours.
-              <br />
-              <em className="text-amber-200">Handcrafted</em> happiness.
+            <p className="rise-in text-[11px] font-bold uppercase tracking-[0.18em] text-amber-200" style={{ animationDelay: '0.1s' }}>
+              Speciality ice cream · coffee · cakes
+            </p>
+            <h1 className="font-serif-title text-[2.1rem] leading-[1.08] font-bold mt-1.5">
+              <span className="rise-in block" style={{ animationDelay: '0.25s' }}>Real flavours.</span>
+              <span className="rise-in block" style={{ animationDelay: '0.4s' }}>
+                <em className="text-amber-200">Handcrafted</em> happiness.
+              </span>
             </h1>
-            <p className="text-sm text-white/85 mt-2">20 small-batch flavours from LKR 650</p>
+            <p className="rise-in text-sm text-white/85 mt-2" style={{ animationDelay: '0.55s' }}>
+              20 small-batch flavours from {formatPrice(650, currency)}
+            </p>
             <button
               type="button"
               onClick={() => onOpenMenu('all')}
-              className="mt-4 w-full h-12 rounded-full bg-[#8C102A] active:bg-[#730D22] text-white font-bold text-base flex items-center justify-center gap-2 shadow-lg"
+              className="rise-in btn-shimmer press mt-4 w-full h-12 rounded-full bg-[#8C102A] active:bg-[#730D22] text-white font-bold text-base flex items-center justify-center gap-2 shadow-lg"
+              style={{ animationDelay: '0.7s' }}
             >
               Order now
               <ArrowRight className="w-5 h-5" />
             </button>
+
+            {/* Slide dots */}
+            <div className="mt-3 flex justify-center gap-1.5">
+              {HERO_SLIDES.map((s, i) => (
+                <button
+                  key={s.src}
+                  type="button"
+                  onClick={() => setSlideIndex(i)}
+                  aria-label={`Show ${s.caption}`}
+                  className={`h-1.5 rounded-full transition-all duration-500 ${i === slideIndex ? 'w-6 bg-amber-200' : 'w-1.5 bg-white/50'}`}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
       {/* Branch picker */}
-      <section className="px-4 pt-6" aria-labelledby="branch-heading">
+      <Reveal as="section" className="px-4 pt-6">
         <h2 id="branch-heading" className="text-xs font-bold uppercase tracking-wider text-[#7A6458] mb-2">
           Your parlour
         </h2>
@@ -94,8 +143,8 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
                 role="radio"
                 aria-checked={selected}
                 onClick={() => onSelectBranch(b.id)}
-                className={`h-12 rounded-2xl border-2 text-sm font-bold transition-colors ${
-                  selected ? 'border-[#8C102A] bg-[#8C102A] text-white' : 'border-[#E8DFC8] bg-white text-[#3D2C24]'
+                className={`press h-12 rounded-2xl border-2 text-sm font-bold transition-all duration-300 ${
+                  selected ? 'border-[#8C102A] bg-[#8C102A] text-white shadow-md scale-[1.03]' : 'border-[#E8DFC8] bg-white text-[#3D2C24]'
                 }`}
               >
                 {b.id === 'akurana' ? 'Akurana' : b.id === 'colombo' ? 'Colombo' : 'Arugam Bay'}
@@ -107,23 +156,23 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
           <Clock className="w-3.5 h-3.5 text-[#8C102A] shrink-0" />
           {branch.hours}
         </p>
-      </section>
+      </Reveal>
 
       {/* Categories */}
-      <section className="px-4 pt-6" aria-labelledby="cat-heading">
+      <Reveal as="section" className="px-4 pt-6">
         <h2 id="cat-heading" className="font-serif-title text-xl font-bold mb-3">
           What are you craving?
         </h2>
         <div className="grid grid-cols-3 gap-2.5">
-          {categories.map((c) => (
+          {categories.map((c, i) => (
+            <Reveal key={c.tab} delay={i * 90}>
             <button
-              key={c.tab}
               type="button"
               onClick={() => onOpenMenu(c.tab)}
-              className="relative h-28 rounded-2xl overflow-hidden text-left shadow-sm"
+              className="press group relative w-full h-28 rounded-2xl overflow-hidden text-left shadow-sm"
             >
               {c.image && (
-                <img src={c.image} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" className="absolute inset-0 w-full h-full object-cover" />
+                <img src={c.image} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-active:scale-110" />
               )}
               <span className="absolute inset-0 bg-gradient-to-t from-black/75 to-black/0" />
               <span className="absolute bottom-2 left-2.5 text-white">
@@ -131,13 +180,14 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
                 <span className="block text-[11px] text-white/80">{c.count} items</span>
               </span>
             </button>
+            </Reveal>
           ))}
         </div>
-      </section>
+      </Reveal>
 
       {/* Favourites carousel */}
       {favourites.length > 0 && (
-        <section className="pt-7" aria-labelledby="fav-heading">
+        <Reveal as="section" className="pt-7">
           <div className="px-4 flex items-baseline justify-between mb-3">
             <h2 id="fav-heading" className="font-serif-title text-xl font-bold">
               Most loved
@@ -147,12 +197,12 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
             </button>
           </div>
           <div className="flex gap-3 overflow-x-auto no-scrollbar px-4 snap-x snap-mandatory pb-1">
-            {favourites.map((s) => (
+            {favourites.map((s, i) => (
+              <Reveal key={s.id} delay={Math.min(i, 3) * 110} className="snap-start shrink-0">
               <button
-                key={s.id}
                 type="button"
                 onClick={() => onOpenItem(s)}
-                className="snap-start shrink-0 w-40 bg-white rounded-3xl border border-[#E8DFC8] overflow-hidden text-left shadow-xs"
+                className="press w-40 bg-white rounded-3xl border border-[#E8DFC8] overflow-hidden text-left shadow-xs"
               >
                 <span className="block relative h-32 bg-[#F3EDE3]">
                   <img src={s.image} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
@@ -172,20 +222,23 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
                   </span>
                 </span>
               </button>
+              </Reveal>
             ))}
           </div>
-        </section>
+        </Reveal>
       )}
 
       {/* Durian spotlight */}
       {durian && (
-        <section className="px-4 pt-7">
+        <Reveal as="section" className="px-4 pt-7">
           <button
             type="button"
             onClick={() => onOpenItem(durian)}
-            className="w-full flex items-stretch rounded-3xl overflow-hidden bg-[#241A18] text-left shadow-md"
+            className="press w-full flex items-stretch rounded-3xl overflow-hidden bg-[#241A18] text-left shadow-md"
           >
-            <img src={ASSET_IMAGES.durianCone} alt="" loading="lazy" decoding="async" className="w-32 object-cover shrink-0" />
+            <span className="w-32 shrink-0 overflow-hidden">
+              <img src={ASSET_IMAGES.durianCone} alt="" loading="lazy" decoding="async" className="float-y w-full h-full object-cover scale-110" />
+            </span>
             <span className="p-4 text-white">
               <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-300">
                 <Star className="w-3 h-3 fill-amber-300" /> Our legend
@@ -197,7 +250,7 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
               </span>
             </span>
           </button>
-        </section>
+        </Reveal>
       )}
 
       {/* Why Amore */}
@@ -207,12 +260,12 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
             { icon: <Cookie className="w-5 h-5" />, title: 'Edible cups', text: 'Eat the cup, zero waste' },
             { icon: <Leaf className="w-5 h-5" />, title: 'Real fruit', text: 'Small-batch, fresh daily' },
             { icon: <Star className="w-5 h-5" />, title: '100% Halal', text: 'Eggless options' },
-          ].map((f) => (
-            <div key={f.title} className="bg-white rounded-2xl border border-[#E8DFC8] p-3">
+          ].map((f, i) => (
+            <Reveal key={f.title} delay={i * 100} className="bg-white rounded-2xl border border-[#E8DFC8] p-3">
               <span className="mx-auto w-9 h-9 rounded-full bg-[#FDE8EC] text-[#8C102A] flex items-center justify-center">{f.icon}</span>
               <span className="block text-xs font-bold mt-1.5">{f.title}</span>
               <span className="block text-[10px] text-[#7A6458] leading-snug mt-0.5">{f.text}</span>
-            </div>
+            </Reveal>
           ))}
         </div>
       </section>
@@ -223,8 +276,9 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
           Visit us
         </h2>
         <div className="space-y-3">
-          {AMORE_BRANCHES.map((b) => (
-            <article key={b.id} className="bg-white rounded-3xl border border-[#E8DFC8] overflow-hidden">
+          {AMORE_BRANCHES.map((b, i) => (
+            <Reveal key={b.id} delay={i * 80}>
+            <article className="bg-white rounded-3xl border border-[#E8DFC8] overflow-hidden">
               <div className="flex gap-3 p-3">
                 <img src={b.image} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" className="w-20 h-20 rounded-2xl object-cover shrink-0" />
                 <div className="min-w-0">
@@ -255,6 +309,7 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
                 </a>
               </div>
             </article>
+            </Reveal>
           ))}
         </div>
       </section>

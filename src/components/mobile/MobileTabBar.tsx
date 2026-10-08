@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Home, UtensilsCrossed, ShoppingBag, Clock, User as UserIcon } from 'lucide-react';
 import { Currency } from '../../types';
 import { formatPrice } from '../../utils/currency';
@@ -32,9 +32,17 @@ export const MobileTabBar: React.FC<MobileTabBarProps> = ({
   onOrders,
   onAccount,
 }) => {
+  // Bounce the tray button whenever something new lands in it
+  const [bump, setBump] = useState(0);
+  const prevCount = useRef(trayCount);
+  useEffect(() => {
+    if (trayCount > prevCount.current) setBump((b) => b + 1);
+    prevCount.current = trayCount;
+  }, [trayCount]);
+
   const tab = (isActive: boolean) =>
-    `flex-1 flex flex-col items-center justify-center gap-0.5 h-full text-[11px] font-semibold transition-colors ${
-      isActive ? 'text-[#8C102A]' : 'text-[#7A6458]'
+    `press flex-1 flex flex-col items-center justify-center gap-0.5 h-full text-[11px] font-semibold transition-colors [&_svg]:transition-transform [&_svg]:duration-300 ${
+      isActive ? 'text-[#8C102A] [&_svg]:-translate-y-0.5 [&_svg]:scale-110' : 'text-[#7A6458]'
     }`;
 
   return (
@@ -61,10 +69,10 @@ export const MobileTabBar: React.FC<MobileTabBarProps> = ({
             aria-label={`Your tray, ${trayCount} item${trayCount === 1 ? '' : 's'}`}
             className="-mt-5 flex flex-col items-center"
           >
-            <span className="relative w-14 h-14 rounded-full bg-[#8C102A] text-white flex items-center justify-center shadow-lg ring-4 ring-white">
+            <span key={bump} className={`${bump ? 'tray-bump' : ''} relative w-14 h-14 rounded-full bg-[#8C102A] text-white flex items-center justify-center shadow-lg ring-4 ring-white`}>
               <ShoppingBag className="w-6 h-6 text-amber-200" />
               {trayCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-amber-400 text-[#8C102A] text-[11px] font-black flex items-center justify-center">
+                <span key={trayCount} className="pop-in absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-amber-400 text-[#8C102A] text-[11px] font-black flex items-center justify-center">
                   {trayCount}
                 </span>
               )}
