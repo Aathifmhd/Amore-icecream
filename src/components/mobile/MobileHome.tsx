@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowRight, Phone, Navigation, MessageCircle, Clock, Plus, Leaf, Cookie, Star } from 'lucide-react';
+import { ArrowRight, Phone, Navigation, MessageCircle, Clock, Plus, Leaf, Cookie, Star, Instagram } from 'lucide-react';
 import { BranchId, Currency, MenuItem, MenuTab, ScoopItem } from '../../types';
 import { AMORE_BRANCHES, ASSET_IMAGES } from '../../data/iceCreamData';
 import { formatPrice } from '../../utils/currency';
 import { AmoreLogo } from '../AmoreLogo';
 import { CurrencyToggle } from '../CurrencyToggle';
+import { DripEdge, FlavourRibbon } from '../BrandFlourish';
 import { isSoldOut, startingPriceLKR, useMenuItems, Reveal } from './mobileHooks';
 
 const HERO_SLIDES = [
@@ -52,13 +53,16 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
   ];
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-[#241A18] pb-28">
+    <div className="min-h-screen bg-[#FAF7F2] text-[#241A18]">
       {/* Slim header */}
       <header className="sticky top-0 z-30 bg-[#FAF7F2]/95 backdrop-blur-md border-b border-[#E8DFC8]/70">
         <div className="h-14 px-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <AmoreLogo size="sm" />
-            <span className="font-serif-title text-xl font-bold">Amore</span>
+            <span className="leading-tight">
+              <span className="block text-[13px] font-bold text-[#241A18]">Speciality Ice Cream</span>
+              <span className="block text-[11px] text-[#7A6458]">Coffee & Cakes</span>
+            </span>
           </div>
           <CurrencyToggle currency={currency} onToggle={onToggleCurrency} />
         </div>
@@ -128,8 +132,14 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
         </div>
       </section>
 
+      {/* Flavour ribbon with drips melting off it */}
+      <div className="mt-6">
+        <FlavourRibbon />
+        <DripEdge className="-mt-px" />
+      </div>
+
       {/* Branch picker */}
-      <Reveal as="section" className="px-4 pt-6">
+      <Reveal as="section" className="px-4 pt-1">
         <h2 id="branch-heading" className="text-xs font-bold uppercase tracking-wider text-[#7A6458] mb-2">
           Your parlour
         </h2>
@@ -314,8 +324,44 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
         </div>
       </section>
 
-      <footer className="px-4 pt-8 pb-4 text-center text-[11px] text-[#A8988B]">
-        © {new Date().getFullYear()} Amore Speciality Ice Cream, Coffee & Cakes
+      <footer className="mt-10 rounded-t-[2rem] bg-[#81001E] text-white text-center px-6 pt-10 pb-28">
+        <Reveal>
+          <AmoreLogo size="xl" showShadow={false} className="mx-auto ring-4 ring-white/15 float-y" />
+          <p className="font-serif-title text-2xl font-bold mt-4">
+            Real flavours. <em className="text-amber-200">Handcrafted</em> happiness.
+          </p>
+          <p className="text-sm text-white/75 mt-1.5">Speciality Ice Cream · Coffee · Cakes</p>
+          <div className="mt-5 flex justify-center gap-3">
+            <a
+              href="https://instagram.com/amoreicecreamsl"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Amore on Instagram"
+              className="press w-11 h-11 rounded-full bg-white/10 flex items-center justify-center"
+            >
+              <Instagram className="w-5 h-5" />
+            </a>
+            <a
+              href={`https://wa.me/${branch.whatsapp.replace(/D/g, '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`WhatsApp Amore ${branch.name}`}
+              className="press w-11 h-11 rounded-full bg-white/10 flex items-center justify-center"
+            >
+              <MessageCircle className="w-5 h-5" />
+            </a>
+            <a
+              href={`tel:${branch.phone.replace(/s/g, '')}`}
+              aria-label={`Call Amore ${branch.name}`}
+              className="press w-11 h-11 rounded-full bg-white/10 flex items-center justify-center"
+            >
+              <Phone className="w-5 h-5" />
+            </a>
+          </div>
+          <p className="mt-6 text-[11px] text-white/55">
+            © {new Date().getFullYear()} Amore Speciality Ice Cream, Coffee & Cakes
+          </p>
+        </Reveal>
       </footer>
     </div>
   );

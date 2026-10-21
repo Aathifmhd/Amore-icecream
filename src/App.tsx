@@ -12,6 +12,8 @@ import { BranchShowcase } from './components/BranchShowcase';
 import { ParlourExperience } from './components/ParlourExperience';
 import { Footer } from './components/Footer';
 import { isAdminUser } from './utils/adminAuth';
+import { AmoreLogo } from './components/AmoreLogo';
+import { DripEdge, FlavourRibbon } from './components/BrandFlourish';
 import { auth, onAuthStateChanged, type User } from './firebase';
 import { Currency, BranchId, ScoopItem, MenuItem, SelectedOrderItem, ServingFormat, MenuTab } from './types';
 import { useIsMobile } from './components/mobile/mobileHooks';
@@ -54,9 +56,11 @@ const AdminDashboard = lazy(() =>
   import('./components/admin/AdminDashboard').then((m) => ({ default: m.AdminDashboard }))
 );
 
+// Matches the logo splash in index.html so loading feels like one continuous screen
 const PageLoader = () => (
-  <div className="min-h-screen bg-[#FAF7F2] flex items-center justify-center">
-    <div className="w-8 h-8 border-[3px] border-[#8C102A]/20 border-t-[#8C102A] rounded-full animate-spin" />
+  <div className="min-h-screen bg-[#FAF7F2] flex flex-col items-center justify-center gap-4" aria-label="Loading">
+    <AmoreLogo size="xl" className="logo-breathe" />
+    <span className="loader-bar" />
   </div>
 );
 
@@ -587,6 +591,12 @@ export default function App() {
           onExploreBranches={scrollToBranches}
           onOpenOrder={() => setIsOrderModalOpen(true)}
         />
+
+        {/* Flavour ribbon with drips melting off it */}
+        <div className="relative z-10">
+          <FlavourRibbon />
+          <DripEdge className="-mt-px -mb-10" />
+        </div>
 
         {/* The Iconic Durian Spotlight */}
         <DurianSpecialSpotlight

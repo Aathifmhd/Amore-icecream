@@ -313,3 +313,48 @@ html {
   }
   .reveal { opacity: 1; transform: none; transition: none; }
 }
+
+/* ---- Logo loading screen (matches the splash in index.html) ---- */
+@keyframes logoBreathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+.logo-breathe {
+  animation: logoBreathe 2s ease-in-out infinite;
+}
+.loader-bar {
+  width: 42px;
+  height: 4px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #81001e 0%, #f3d9a0 50%, #81001e 100%);
+  background-size: 200% 100%;
+  animation: loaderBar 1.2s linear infinite;
+}
+@keyframes loaderBar {
+  to { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .logo-breathe, .loader-bar { animation: none; }
+}
+
+/* ---- Brand flourishes ---- */
+.ribbon-track {
+  animation: ribbonScroll 38s linear infinite;
+}
+.ribbon:hover .ribbon-track {
+  animation-play-state: paused;
+}
+@keyframes ribbonScroll {
+  to { transform: translateX(-50%); }
+}
+
+/* Repeating 200px tile of melting drips in the logo's crimson */
+.drip-edge {
+  background-repeat: repeat-x;
+  background-size: 200px 40px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 40'%3E%3Cpath fill='%2381001E' d='M0 0H200V12H178C172 12 170 15 170 20V28C170 34 160 34 160 28V20C160 15 158 12 152 12H118C112 12 110 15 110 22V33C110 41 98 41 98 33V22C98 15 96 12 90 12H58C52 12 50 15 50 18V22C50 27 42 27 42 22V18C42 15 40 12 34 12H0Z'/%3E%3C/svg%3E");
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ribbon-track { animation: none; }
+}
