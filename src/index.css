@@ -348,15 +348,78 @@ html {
   to { transform: translateX(-50%); }
 }
 
-/* Repeating 200px tile of melting drips in the logo's crimson */
-.drip-edge {
-  background-repeat: repeat-x;
-  background-size: 200px 40px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 40'%3E%3Cpath fill='%2381001E' d='M0 0H200V12H178C172 12 170 15 170 20V28C170 34 160 34 160 28V20C160 15 158 12 152 12H118C112 12 110 15 110 22V33C110 41 98 41 98 33V22C98 15 96 12 90 12H58C52 12 50 15 50 18V22C50 27 42 27 42 22V18C42 15 40 12 34 12H0Z'/%3E%3C/svg%3E");
+/* Overflowing sauce ribbon: glossy band + drips (photo tile), scrolling text, falling droplets.
+   --rh is the ribbon height; everything inside scales from it (tile is 1940x316). */
+.overflow-ribbon {
+  --rh: 160px;
+  position: relative;
+  height: var(--rh);
+  overflow: hidden;
+}
+@supports (overflow: clip) {
+  .overflow-ribbon { overflow-x: clip; overflow-y: visible; }
+}
+@media (max-width: 767px) {
+  .overflow-ribbon { --rh: 124px; }
+}
+.overflow-ribbon__tiles {
+  display: flex;
+  height: 100%;
+}
+.overflow-ribbon__tile {
+  position: relative;
+  flex: none;
+  height: 100%;
+  aspect-ratio: 1940 / 316;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+.overflow-ribbon__band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--rh) * 10 / 316);
+  height: calc(var(--rh) * 106 / 316);
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  color: #fff;
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 2px rgba(60, 0, 15, 0.5);
+}
+@media (max-width: 767px) {
+  .overflow-ribbon__band { font-size: 13px; }
+}
+
+/* A droplet swells at a drip tip, stretches, lets go and falls */
+.overflow-ribbon__drop {
+  --fall: calc(var(--rh) * 0.55);
+  position: absolute;
+  width: calc(var(--rh) * 0.065);
+  height: calc(var(--rh) * 0.085);
+  margin-top: calc(var(--rh) * -0.05);
+  border-radius: 50% 50% 50% 50% / 62% 62% 40% 40%;
+  background: radial-gradient(circle at 36% 62%, #ff9fb4 0 9%, #b3133b 32%, #74001b 78%, #5a0014 100%);
+  box-shadow: 0 2px 3px rgba(60, 0, 15, 0.3);
+  transform-origin: 50% 0;
+  opacity: 0;
+  animation: dripFall 6s infinite;
+}
+@keyframes dripFall {
+  0% { transform: translate(-50%, -30%) scale(0.2); opacity: 0; animation-timing-function: ease-out; }
+  12% { opacity: 1; }
+  42% { transform: translate(-50%, 0) scale(1, 1); animation-timing-function: ease-in-out; }
+  50% { transform: translate(-50%, 12%) scale(0.92, 1.18); animation-timing-function: cubic-bezier(0.55, 0, 1, 0.6); }
+  72% { transform: translate(-50%, var(--fall)) scale(0.88, 1.28); opacity: 1; }
+  80% { transform: translate(-50%, calc(var(--fall) * 1.12)) scale(0.88, 1.28); opacity: 0; }
+  100% { transform: translate(-50%, calc(var(--fall) * 1.12)); opacity: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .ribbon-track { animation: none; }
+  .overflow-ribbon__drop { display: none; }
 }
 
 /* Hold entrance animations while the logo splash is up, so they play as it fades */

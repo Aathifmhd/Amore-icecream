@@ -13,7 +13,7 @@ import { ParlourExperience } from './components/ParlourExperience';
 import { Footer } from './components/Footer';
 import { isAdminUser } from './utils/adminAuth';
 import { AmoreLogo } from './components/AmoreLogo';
-import { DripEdge, FlavourRibbon } from './components/BrandFlourish';
+import { OverflowRibbon } from './components/BrandFlourish';
 import { Reveal } from './components/Reveal';
 import { auth, onAuthStateChanged, type User } from './firebase';
 import { Currency, BranchId, ScoopItem, MenuItem, SelectedOrderItem, ServingFormat, MenuTab } from './types';
@@ -593,11 +593,8 @@ export default function App() {
           onOpenOrder={() => setIsOrderModalOpen(true)}
         />
 
-        {/* Flavour ribbon with drips melting off it */}
-        <div className="relative z-10">
-          <FlavourRibbon />
-          <DripEdge className="-mt-px -mb-10" />
-        </div>
+        {/* Overflowing sauce ribbon; its drips hang over the next section's top padding */}
+        <OverflowRibbon className="z-10 -mb-20" />
 
         {/* The Iconic Durian Spotlight */}
         <Reveal>

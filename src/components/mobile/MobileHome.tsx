@@ -5,7 +5,7 @@ import { AMORE_BRANCHES, ASSET_IMAGES } from '../../data/iceCreamData';
 import { formatPrice } from '../../utils/currency';
 import { AmoreLogo } from '../AmoreLogo';
 import { CurrencyToggle } from '../CurrencyToggle';
-import { DripEdge, FlavourRibbon } from '../BrandFlourish';
+import { OverflowRibbon } from '../BrandFlourish';
 import { isSoldOut, startingPriceLKR, useMenuItems, Reveal } from './mobileHooks';
 
 const HERO_SLIDES = [
@@ -132,11 +132,8 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
         </div>
       </section>
 
-      {/* Flavour ribbon with drips melting off it */}
-      <div className="mt-6">
-        <FlavourRibbon />
-        <DripEdge className="-mt-px" />
-      </div>
+      {/* Overflowing sauce ribbon */}
+      <OverflowRibbon className="z-10 mt-6 -mb-6" />
 
       {/* Branch picker */}
       <Reveal as="section" className="px-4 pt-1">
