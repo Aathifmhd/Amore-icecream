@@ -594,7 +594,7 @@ export default function App() {
         />
 
         {/* Overflowing sauce ribbon; its drips hang over the next section's top padding */}
-        <OverflowRibbon className="z-10 -mb-20" />
+        <OverflowRibbon className="z-10 -mb-14" />
 
         {/* The Iconic Durian Spotlight */}
         <Reveal>

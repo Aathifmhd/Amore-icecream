@@ -133,7 +133,7 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
       </section>
 
       {/* Overflowing sauce ribbon */}
-      <OverflowRibbon className="z-10 mt-6 -mb-6" />
+      <OverflowRibbon className="z-10 mt-5" />
 
       {/* Branch picker */}
       <Reveal as="section" className="px-4 pt-1">

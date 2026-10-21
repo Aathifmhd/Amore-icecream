@@ -351,7 +351,7 @@ html {
 /* Overflowing sauce ribbon: glossy band + drips (photo tile), scrolling text, falling droplets.
    --rh is the ribbon height; everything inside scales from it (tile is 1940x316). */
 .overflow-ribbon {
-  --rh: 160px;
+  --rh: 112px;
   position: relative;
   height: var(--rh);
   overflow: hidden;
@@ -360,7 +360,7 @@ html {
   .overflow-ribbon { overflow-x: clip; overflow-y: visible; }
 }
 @media (max-width: 767px) {
-  .overflow-ribbon { --rh: 124px; }
+  .overflow-ribbon { --rh: 90px; }
 }
 .overflow-ribbon__tiles {
   display: flex;
@@ -385,12 +385,13 @@ html {
   overflow: hidden;
   color: #fff;
   font-weight: 600;
-  font-size: 15px;
+  font-size: 14px;
   letter-spacing: 0.01em;
   text-shadow: 0 1px 2px rgba(60, 0, 15, 0.5);
 }
 @media (max-width: 767px) {
-  .overflow-ribbon__band { font-size: 13px; }
+  .overflow-ribbon__band { font-size: 12px; }
+  .overflow-ribbon .overflow-ribbon__drop { --fall: calc(var(--rh) * 0.2); }
 }
 
 /* A droplet swells at a drip tip, stretches, lets go and falls */
