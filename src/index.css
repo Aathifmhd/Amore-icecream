@@ -358,3 +358,8 @@ html {
 @media (prefers-reduced-motion: reduce) {
   .ribbon-track { animation: none; }
 }
+
+/* Hold entrance animations while the logo splash is up, so they play as it fades */
+.splash-on .rise-in {
+  animation-play-state: paused;
+}
