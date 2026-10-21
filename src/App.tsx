@@ -14,6 +14,7 @@ import { Footer } from './components/Footer';
 import { isAdminUser } from './utils/adminAuth';
 import { AmoreLogo } from './components/AmoreLogo';
 import { DripEdge, FlavourRibbon } from './components/BrandFlourish';
+import { Reveal } from './components/Reveal';
 import { auth, onAuthStateChanged, type User } from './firebase';
 import { Currency, BranchId, ScoopItem, MenuItem, SelectedOrderItem, ServingFormat, MenuTab } from './types';
 import { useIsMobile } from './components/mobile/mobileHooks';
@@ -599,23 +600,27 @@ export default function App() {
         </div>
 
         {/* The Iconic Durian Spotlight */}
-        <DurianSpecialSpotlight
-          currency={currency}
-          onOrderDurian={handleOrderDurian}
-          onExploreFullMenu={handleExploreMenu}
-        />
+        <Reveal>
+          <DurianSpecialSpotlight
+            currency={currency}
+            onOrderDurian={handleOrderDurian}
+            onExploreFullMenu={handleExploreMenu}
+          />
+        </Reveal>
 
         {/* Edible Biscuit Cup Feature */}
         <div id="biscuit-cups">
-          <EdibleBiscuitCupSpotlight
-            currency={currency}
-            onExploreMenu={handleExploreMenu}
-          />
+          <Reveal>
+            <EdibleBiscuitCupSpotlight
+              currency={currency}
+              onExploreMenu={handleExploreMenu}
+            />
+          </Reveal>
         </div>
 
         {/* Menu Showcase CTA to Open the Dedicated Ordering Page (Full Menu moved to /?page=menu) */}
         <section id="full-menu" className="py-16 md:py-20 bg-[#F5EFE6] border-y border-[#E8DFC8]/80 text-center px-4">
-          <div className="max-w-3xl mx-auto">
+          <Reveal className="max-w-3xl mx-auto">
             <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white border border-[#E8DFC8] text-[#8C102A] text-xs font-bold uppercase tracking-wider mb-3.5 shadow-2xs">
               🍨 20 Ice Cream Flavours • Barista Coffee • Fresh Cakes
             </span>
@@ -628,7 +633,7 @@ export default function App() {
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
               <button
                 onClick={handleNavigateToMenu}
-                className="px-7 py-3.5 rounded-full bg-[#8C102A] text-white font-bold text-sm hover:bg-[#730D22] active:scale-95 transition-all shadow-md hover:shadow-lg cursor-pointer flex items-center gap-2"
+                className="btn-shimmer px-7 py-3.5 rounded-full bg-[#8C102A] text-white font-bold text-sm hover:bg-[#730D22] active:scale-95 transition-all shadow-md hover:shadow-lg cursor-pointer flex items-center gap-2"
               >
                 <span>View Full Menu & Order Now</span>
                 <span className="bg-amber-400 text-[#8C102A] text-[10px] font-black px-2 py-0.5 rounded-full">
@@ -636,20 +641,24 @@ export default function App() {
                 </span>
               </button>
             </div>
-          </div>
+          </Reveal>
         </section>
 
         {/* 3 Branches Showcase (Akurana, Colombo, Arugam Bay with Tourist USD features) */}
-        <BranchShowcase
-          selectedBranch={selectedBranch}
-          onSelectBranch={setSelectedBranch}
-          currency={currency}
-          onToggleCurrency={setCurrency}
-          onOrderForBranch={handleOrderForBranch}
-        />
+        <Reveal>
+          <BranchShowcase
+            selectedBranch={selectedBranch}
+            onSelectBranch={setSelectedBranch}
+            currency={currency}
+            onToggleCurrency={setCurrency}
+            onOrderForBranch={handleOrderForBranch}
+          />
+        </Reveal>
 
         {/* The Parlour Vibe & Aesthetic Interior */}
-        <ParlourExperience />
+        <Reveal>
+          <ParlourExperience />
+        </Reveal>
       </main>
 
       {/* Footer */}

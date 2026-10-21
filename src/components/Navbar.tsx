@@ -97,13 +97,12 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Logo & Brand Name */}
           <a href="#" className="flex items-center gap-2.5 sm:gap-3 group">
             <AmoreLogo size="md" />
-            <div className="flex flex-col">
-              <span className="font-serif-title text-xl sm:text-2xl font-bold tracking-tight text-[#241A18] group-hover:text-[#8C102A] transition-colors">
-                Amore
+            {/* The logo already reads "amore", so the tagline sits beside it */}
+            <div className="flex flex-col leading-tight">
+              <span className="text-[15px] font-bold text-[#241A18] group-hover:text-[#81001E] transition-colors">
+                Speciality Ice Cream
               </span>
-              <span className="text-[9px] sm:text-[10px] uppercase tracking-widest text-[#8A7970] font-medium -mt-1">
-                Speciality Ice Cream, Coffee & Cakes
-              </span>
+              <span className="text-xs text-[#7A6458]">Coffee & Cakes</span>
             </div>
           </a>
 
