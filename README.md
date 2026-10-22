@@ -136,6 +136,16 @@ Put the client ID in `GOOGLE_CLIENT_ID` (Vercel settings and `backend/.env`). Th
 secret is not needed. The OAuth consent screen must be published ("In production") so any
 Google account can sign in, not only test users.
 
+## Checkout
+
+The tray (`QuickOrderModal.tsx`) runs in four numbered steps: delivery or pickup, address (or
+the pickup parlour), name and phone, payment; the total and the order button stay at the bottom.
+**Detect location & drop pin** (`LocationPickerModal.tsx`) opens a full-screen map that finds the
+customer, keeps the pin in the middle while they move the map, and looks up the street under it
+(OpenStreetMap tiles and Nominatim, no key needed). A delivery goes to the parlour nearest the pin
+(`utils/branchLocation.ts`). The last order's name, phone and address are kept on that device for
+the same Google account, so the next checkout is already filled in.
+
 ## Deploy (Vercel)
 
 `vercel.json` deploys both parts as one project: `/api/*` goes to the backend, everything

@@ -691,3 +691,23 @@ html {
   .anim-bell, .anim-scoop, .anim-sparkle, .anim-ride, .anim-speed, .anim-speed-2, .anim-wheel,
   .anim-bag, .anim-check, .anim-clock-hand, .seg-active, .row-flash { animation: none !important; }
 }
+
+/* Delivery-pin map: a calm, light map like delivery apps (OpenStreetMap tiles, softened) */
+.amore-pin-map.leaflet-container {
+  background: #f2f0ec;
+  font-family: inherit;
+}
+.amore-pin-map .leaflet-tile-pane {
+  filter: saturate(0.3) brightness(1.07) contrast(0.9);
+}
+.amore-pin-map .leaflet-control-attribution {
+  margin: 0 0 6px 8px !important;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.75) !important;
+  font-size: 9px;
+  color: #7a6458;
+}
+.amore-pin-map .leaflet-control-attribution a {
+  color: inherit;
+}

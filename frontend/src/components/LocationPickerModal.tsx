@@ -1,15 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  X,
-  MapPin,
-  Navigation,
-  Check,
-  Compass,
-  AlertCircle,
-  Loader2,
-  RefreshCw,
-  Search,
-} from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { ArrowLeft, LocateFixed, Loader2, MapPin, Search } from 'lucide-react';
+import { BranchId } from '../types';
+import { BRANCH_COORDS } from '../utils/branchLocation';
 
 interface LocationPickerModalProps {
   isOpen: boolean;
@@ -17,6 +9,8 @@ interface LocationPickerModalProps {
   initialAddress?: string;
   initialCity?: string;
   initialCoords?: { lat: number; lng: number };
+  /** Where the map starts when there is no pin yet and the phone can't find the customer */
+  fallbackBranch?: BranchId;
   onSelectLocation: (location: {
     address: string;
     city: string;
@@ -24,52 +18,68 @@ interface LocationPickerModalProps {
   }) => void;
 }
 
-// Sri Lanka Branch Defaults
-const BRANCH_DEFAULTS = {
-  colombo: { lat: 6.8835, lng: 79.8569, name: 'Colombo Marine Drive', city: 'Colombo' },
-  akurana: { lat: 7.3639, lng: 80.6175, name: 'Akurana Flagship', city: 'Akurana' },
-  arugambay: { lat: 6.8427, lng: 81.8344, name: 'Arugam Bay Surf', city: 'Arugam Bay' },
-};
-
 declare global {
   interface Window {
     L: any;
   }
 }
 
+type Coords = { lat: number; lng: number };
+
+/** "Deegala Road, Akurana" + "Kandy" from an OpenStreetMap (Nominatim) address */
+function describeAddress(data: any): { address: string; city: string } | null {
+  const a = data?.address;
+  if (!a) return null;
+  const street = [a.house_number, a.road || a.pedestrian || a.footway || a.path].filter(Boolean).join(' ');
+  const locality = a.suburb || a.neighbourhood || a.quarter || a.village || a.hamlet || '';
+  // "Kandy District" reads as "Kandy"
+  const city = String(a.town || a.city || a.municipality || a.county || a.state_district || a.village || '').replace(/ District$/, '');
+  const parts = [street, locality].filter((p, i, all) => p && p !== city && all.indexOf(p) === i);
+  const address = parts.join(', ') || String(data.display_name || '').split(',').slice(0, 2).join(',').trim();
+  return { address, city };
+}
+
+/**
+ * Full-screen map with a fixed pin in the middle: the customer moves the map until the pin
+ * sits on their door, then confirms. Opens on their current location when the phone allows it.
+ */
 export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
   isOpen,
   onClose,
   initialAddress = '',
   initialCity = '',
   initialCoords,
+  fallbackBranch = 'akurana',
   onSelectLocation,
 }) => {
-  const [coords, setCoords] = useState<{ lat: number; lng: number }>(
-    initialCoords || { lat: BRANCH_DEFAULTS.colombo.lat, lng: BRANCH_DEFAULTS.colombo.lng }
-  );
+  const [coords, setCoords] = useState<Coords>(initialCoords || BRANCH_COORDS[fallbackBranch]);
   const [address, setAddress] = useState(initialAddress);
   const [city, setCity] = useState(initialCity);
-  const [isDetecting, setIsDetecting] = useState(false);
-  const [isGeocoding, setIsGeocoding] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [leafletLoaded, setLeafletLoaded] = useState(false);
+  const [typed, setTyped] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [geocoding, setGeocoding] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [leafletLoaded, setLeafletLoaded] = useState(() => typeof window !== 'undefined' && Boolean(window.L));
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const markerInstanceRef = useRef<any>(null);
+  const mapRef = useRef<any>(null);
+  const lookupRef = useRef(0);
+  const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load Leaflet dynamically
+  // Start from what checkout already has each time the map opens
   useEffect(() => {
     if (!isOpen) return;
+    setCoords(initialCoords || BRANCH_COORDS[fallbackBranch]);
+    setAddress(initialAddress);
+    setCity(initialCity);
+    setTyped(false);
+    setNotice(null);
+  }, [isOpen]);
 
-    if (window.L) {
-      setLeafletLoaded(true);
-      return;
-    }
-
-    // Check if stylesheet is already attached
+  // Leaflet is only loaded when someone opens the map
+  useEffect(() => {
+    if (!isOpen || window.L) return;
     if (!document.getElementById('leaflet-css')) {
       const link = document.createElement('link');
       link.id = 'leaflet-css';
@@ -77,430 +87,248 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
       link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
       document.head.appendChild(link);
     }
-
-    // Load Leaflet script
-    if (!document.getElementById('leaflet-js')) {
-      const script = document.createElement('script');
-      script.id = 'leaflet-js';
-      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.async = true;
-      script.onload = () => {
-        setLeafletLoaded(true);
-      };
-      document.body.appendChild(script);
-    } else {
-      const existing = document.getElementById('leaflet-js') as HTMLScriptElement;
-      if (existing) {
-        existing.addEventListener('load', () => setLeafletLoaded(true));
-      }
-    }
-  }, [isOpen]);
-
-  // Reverse geocode coordinates to street address and city
-  const reverseGeocode = async (lat: number, lng: number) => {
-    setIsGeocoding(true);
-    setStatusMessage('Resolving street address from pin...');
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
-        {
-          headers: {
-            'Accept-Language': 'en',
-          },
-        }
-      );
-      if (!res.ok) throw new Error('Geocoding service unavailable');
-      const data = await res.json();
-
-      if (data && data.address) {
-        const addr = data.address;
-        const road = addr.road || addr.street || addr.neighbourhood || addr.suburb || '';
-        const houseNo = addr.house_number ? `${addr.house_number}, ` : '';
-        const suburb = addr.suburb || addr.neighbourhood || '';
-        const resolvedCity =
-          addr.city || addr.town || addr.municipality || addr.village || addr.county || 'Colombo';
-
-        let formattedStreet = '';
-        if (road && suburb && road !== suburb) {
-          formattedStreet = `${houseNo}${road}, ${suburb}`;
-        } else if (road) {
-          formattedStreet = `${houseNo}${road}`;
-        } else {
-          formattedStreet = data.display_name?.split(',').slice(0, 2).join(',') || 'Delivery Address';
-        }
-
-        setAddress(formattedStreet.trim());
-        setCity(resolvedCity.trim());
-        setStatusMessage(`Location identified: ${resolvedCity}`);
-      }
-    } catch (err) {
-      console.warn('Reverse geocoding error:', err);
-      setStatusMessage('Pin placed. You can adjust the street address details manually below.');
-    } finally {
-      setIsGeocoding(false);
-    }
-  };
-
-  // Forward geocode search query to coordinates
-  const handleSearchLocation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
-
-    setIsGeocoding(true);
-    setStatusMessage(`Searching for "${searchQuery}"...`);
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-          searchQuery + ', Sri Lanka'
-        )}&limit=1`
-      );
-      const data = await res.json();
-      if (data && data.length > 0) {
-        const lat = parseFloat(data[0].lat);
-        const lng = parseFloat(data[0].lon);
-        updatePinPosition(lat, lng, true);
-        reverseGeocode(lat, lng);
-      } else {
-        setStatusMessage('Location not found. Try dragging the pin on the map.');
-      }
-    } catch (err) {
-      console.warn('Geocoding search error:', err);
-      setStatusMessage('Search error. Please move the pin on the map.');
-    } finally {
-      setIsGeocoding(false);
-    }
-  };
-
-  // Browser GPS detection
-  const handleDetectGPS = () => {
-    if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser.');
+    const existing = document.getElementById('leaflet-js') as HTMLScriptElement | null;
+    if (existing) {
+      existing.addEventListener('load', () => setLeafletLoaded(true));
       return;
     }
+    const script = document.createElement('script');
+    script.id = 'leaflet-js';
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.async = true;
+    script.onload = () => setLeafletLoaded(true);
+    document.body.appendChild(script);
+  }, [isOpen]);
 
-    setIsDetecting(true);
-    setStatusMessage('Accessing GPS satellite coordinates...');
+  // The street address under the pin (only the latest lookup counts)
+  const lookUpAddress = useCallback(async (lat: number, lng: number) => {
+    const id = ++lookupRef.current;
+    setGeocoding(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`, {
+        headers: { 'Accept-Language': 'en' },
+      });
+      if (!res.ok) throw new Error('lookup failed');
+      const found = describeAddress(await res.json());
+      if (id !== lookupRef.current) return;
+      if (found) {
+        setAddress(found.address);
+        setCity(found.city);
+        setTyped(false);
+        setNotice(null);
+      }
+    } catch {
+      if (id === lookupRef.current) setNotice('Could not find the street name. Type it in below.');
+    } finally {
+      if (id === lookupRef.current) setGeocoding(false);
+    }
+  }, []);
 
+  const findMe = useCallback(() => {
+    if (!navigator.geolocation) {
+      setNotice('This phone cannot share its location. Move the map to your door.');
+      return;
+    }
+    setLocating(true);
+    setNotice(null);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setIsDetecting(false);
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        updatePinPosition(lat, lng, true);
-        reverseGeocode(lat, lng);
+        setLocating(false);
+        mapRef.current?.setView([pos.coords.latitude, pos.coords.longitude], 18, { animate: true });
       },
-      (err) => {
-        setIsDetecting(false);
-        console.warn('Geolocation error:', err);
-        setStatusMessage('Could not detect GPS. Please click or drag the pin on the map.');
+      () => {
+        setLocating(false);
+        setNotice('Could not find you. Move the map so the pin is on your door.');
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
-      }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
     );
-  };
+  }, []);
 
-  // Update pin position on map
-  const updatePinPosition = (lat: number, lng: number, recenter = false) => {
-    setCoords({ lat, lng });
-
-    if (markerInstanceRef.current) {
-      markerInstanceRef.current.setLatLng([lat, lng]);
-    }
-
-    if (recenter && mapInstanceRef.current) {
-      mapInstanceRef.current.setView([lat, lng], 16, { animate: true });
-    }
-  };
-
-  // Initialize map when leaflet is ready and modal is open
+  // Build the map: the pin stays in the middle and the map moves under it
   useEffect(() => {
     if (!isOpen || !leafletLoaded || !mapContainerRef.current) return;
+    const L = window.L;
+    const start = initialCoords || BRANCH_COORDS[fallbackBranch];
+    const map = L.map(mapContainerRef.current, {
+      center: [start.lat, start.lng],
+      zoom: initialCoords ? 18 : 15,
+      zoomControl: false,
+      attributionControl: false,
+    });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+    L.control.attribution({ position: 'bottomleft', prefix: false }).addAttribution('© OpenStreetMap').addTo(map);
 
-    // Delay slightly for container dimension resolution
-    const timeout = setTimeout(() => {
-      if (!mapContainerRef.current) return;
+    map.on('movestart', () => {
+      setMoving(true);
+      if (lookupTimer.current) clearTimeout(lookupTimer.current);
+    });
+    map.on('moveend', () => {
+      setMoving(false);
+      const c = map.getCenter();
+      setCoords({ lat: c.lat, lng: c.lng });
+      if (lookupTimer.current) clearTimeout(lookupTimer.current);
+      lookupTimer.current = setTimeout(() => lookUpAddress(c.lat, c.lng), 450);
+    });
+    mapRef.current = map;
+    // The container has only just been laid out
+    const settle = setTimeout(() => map.invalidateSize(), 120);
 
-      // Clean existing instance
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-
-      const L = window.L;
-      if (!L) return;
-
-      // Create Custom Ice Cream Pin Icon
-      const pinIcon = L.divIcon({
-        className: 'amore-custom-map-pin',
-        html: `
-          <div style="
-            width: 38px;
-            height: 38px;
-            background: #8C102A;
-            border: 3px solid #FFF;
-            border-radius: 50% 50% 50% 0;
-            transform: rotate(-45deg);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.35);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: grab;
-          ">
-            <span style="transform: rotate(45deg); font-size: 16px;">🍨</span>
-          </div>
-        `,
-        iconSize: [38, 38],
-        iconAnchor: [19, 38],
-        popupAnchor: [0, -38],
-      });
-
-      // Initialize map
-      const map = L.map(mapContainerRef.current, {
-        center: [coords.lat, coords.lng],
-        zoom: 15,
-        zoomControl: true,
-      });
-
-      // OpenStreetMap Tiles
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors',
-        maxZoom: 19,
-      }).addTo(map);
-
-      // Add Draggable Marker
-      const marker = L.marker([coords.lat, coords.lng], {
-        icon: pinIcon,
-        draggable: true,
-      }).addTo(map);
-
-      marker.on('dragend', () => {
-        const pos = marker.getLatLng();
-        setCoords({ lat: pos.lat, lng: pos.lng });
-        reverseGeocode(pos.lat, pos.lng);
-      });
-
-      // Click on map to drop/move pin
-      map.on('click', (e: any) => {
-        const { lat, lng } = e.latlng;
-        marker.setLatLng([lat, lng]);
-        setCoords({ lat, lng });
-        reverseGeocode(lat, lng);
-      });
-
-      mapInstanceRef.current = map;
-      markerInstanceRef.current = marker;
-
-      // Initial reverse geocode if address empty
-      if (!address.trim()) {
-        reverseGeocode(coords.lat, coords.lng);
-      }
-    }, 150);
+    if (initialCoords) {
+      if (!initialAddress.trim()) lookUpAddress(start.lat, start.lng);
+    } else {
+      findMe();
+      lookUpAddress(start.lat, start.lng);
+    }
 
     return () => {
-      clearTimeout(timeout);
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
+      clearTimeout(settle);
+      if (lookupTimer.current) clearTimeout(lookupTimer.current);
+      map.remove();
+      mapRef.current = null;
     };
   }, [isOpen, leafletLoaded]);
 
-  // ESC handler
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [isOpen, onClose]);
+
+  // Typing a place and pressing Enter moves the map there
+  const searchTyped = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = address.trim();
+    if (!q || !typed) return;
+    setGeocoding(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=lk&limit=1&q=${encodeURIComponent(q)}`, {
+        headers: { 'Accept-Language': 'en' },
+      });
+      const data = await res.json();
+      if (Array.isArray(data) && data.length) {
+        mapRef.current?.setView([parseFloat(data[0].lat), parseFloat(data[0].lon)], 17, { animate: true });
+      } else {
+        setNotice('Place not found. Move the map so the pin is on your door.');
+      }
+    } catch {
+      setNotice('Search is not working right now. Move the map instead.');
+    } finally {
+      setGeocoding(false);
+    }
+  };
 
   if (!isOpen) return null;
 
-  const handleConfirmLocation = () => {
-    if (!address.trim()) {
-      alert('Please provide or confirm your street address.');
-      return;
-    }
-    onSelectLocation({
-      address: address.trim(),
-      city: city.trim() || 'Colombo',
-      coords,
-    });
+  const shownAddress = typed || !city || address.includes(city) ? address : [address, city].filter(Boolean).join(', ');
+  const canConfirm = Boolean(address.trim()) && !moving;
+  const confirm = () => {
+    if (!canConfirm) return;
+    onSelectLocation({ address: address.trim(), city: city.trim(), coords });
     onClose();
   };
 
   return (
-    <div
-      className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-xs animate-fadeIn overflow-y-auto"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-    >
+    <div className="fixed inset-0 z-60 flex sm:items-center sm:justify-center sm:p-4 bg-black/70 backdrop-blur-xs animate-fadeIn" role="dialog" aria-modal="true" aria-label="Choose your delivery location" onClick={onClose}>
       <div
-        className="relative w-full max-w-2xl bg-white rounded-3xl overflow-hidden shadow-2xl border border-[#E8DFC8] my-auto flex flex-col max-h-[92vh] animate-scaleIn"
+        className="relative flex flex-col w-full h-[100dvh] sm:h-[min(780px,92vh)] sm:max-w-md bg-white sm:rounded-3xl overflow-hidden shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="bg-[#FAF7F2] px-5 py-3.5 border-b border-[#E8DFC8] flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-[#8C102A] text-white flex items-center justify-center shadow-xs">
-              <MapPin className="w-5 h-5 text-amber-200" />
+        {/* Map with the pin fixed in the middle */}
+        <div className="relative flex-1 min-h-0 bg-[#F2F0EC]">
+          <div ref={mapContainerRef} className="amore-pin-map absolute inset-0" />
+
+          <div className="absolute inset-0 pointer-events-none z-[500]">
+            <div className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full transition-transform duration-200 ${moving ? '-mt-3' : ''}`}>
+              <div className="flex flex-col items-center">
+                <span className="w-11 h-11 rounded-full bg-[#8C102A] shadow-[0_6px_16px_rgba(0,0,0,0.3)] flex items-center justify-center">
+                  <span className="w-4 h-4 rounded-full bg-white" />
+                </span>
+                <span className="w-[3px] h-4 rounded-b-full bg-[#241A18]" />
+              </div>
             </div>
-            <div>
-              <h2 className="font-serif-title font-bold text-lg text-[#241A18] leading-tight">
-                Pin Your Delivery Address
-              </h2>
-              <p className="text-[11px] text-[#7A6458]">
-                Detect your GPS or drag the pin directly to your doorstep
-              </p>
-            </div>
+            <span className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-1 rounded-full bg-black/30 transition-opacity ${moving ? 'opacity-100' : 'opacity-0'}`} />
+            {!moving && (
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 mt-3.5 animate-fadeIn">
+                <span className="relative block px-4 py-2.5 rounded-2xl bg-[#3A3330] text-white text-sm font-medium whitespace-nowrap shadow-lg">
+                  <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-[#3A3330]" />
+                  <span className="relative">{geocoding || locating ? 'Finding your location…' : 'Your selected location'}</span>
+                </span>
+              </div>
+            )}
           </div>
 
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center border border-[#E0D5C3] text-[#241A18] cursor-pointer shadow-2xs"
-            aria-label="Close location picker"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Search Bar & Fast GPS Detection */}
-        <div className="p-3 sm:px-4 bg-[#FAF7F2]/60 border-b border-[#E8DFC8] flex flex-col sm:flex-row items-center gap-2 shrink-0">
-          <form onSubmit={handleSearchLocation} className="relative flex-1 w-full">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search area (e.g. Marine Drive, Akurana, Galle Road)..."
-              className="w-full pl-8 pr-16 py-2 text-xs bg-white rounded-xl border border-[#D9CBB7] focus:outline-hidden focus:border-[#8C102A]"
-            />
-            <button
-              type="submit"
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-[#8C102A] text-white text-[10px] font-bold rounded-lg hover:bg-[#A31634] cursor-pointer"
-            >
-              Search
-            </button>
-          </form>
-
-          {/* Detect GPS Button */}
           <button
             type="button"
-            onClick={handleDetectGPS}
-            disabled={isDetecting}
-            className="w-full sm:w-auto px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 disabled:opacity-50"
-            title="Detect precise GPS location from device"
+            onClick={onClose}
+            aria-label="Back to checkout"
+            className="absolute top-[max(1rem,env(safe-area-inset-top))] left-4 z-[600] w-12 h-12 rounded-full bg-white text-[#241A18] shadow-[0_2px_12px_rgba(0,0,0,0.18)] flex items-center justify-center cursor-pointer active:scale-95 transition-transform"
           >
-            {isDetecting ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Locating GPS...</span>
-              </>
-            ) : (
-              <>
-                <Navigation className="w-3.5 h-3.5 text-emerald-200" />
-                <span>Detect My Location</span>
-              </>
-            )}
+            <ArrowLeft className="w-6 h-6" />
           </button>
-        </div>
 
-        {/* Branch Presets */}
-        <div className="px-4 py-2 bg-[#F6F2E9] border-b border-[#E8DFC8]/60 flex items-center gap-2 overflow-x-auto text-[11px] shrink-0">
-          <span className="font-bold text-[#7A6458] whitespace-nowrap">Quick Jump:</span>
-          {Object.entries(BRANCH_DEFAULTS).map(([key, b]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => {
-                updatePinPosition(b.lat, b.lng, true);
-                reverseGeocode(b.lat, b.lng);
-              }}
-              className="px-2.5 py-0.5 rounded-full bg-white border border-[#D9CBB7] hover:border-[#8C102A] text-[#3D2C24] font-medium whitespace-nowrap transition-colors cursor-pointer shadow-2xs"
-            >
-              📍 {b.name}
-            </button>
-          ))}
-        </div>
+          <button
+            type="button"
+            onClick={findMe}
+            disabled={locating}
+            aria-label="Go to my current location"
+            className="absolute bottom-4 right-4 z-[600] w-14 h-14 rounded-full bg-white text-[#241A18] shadow-[0_2px_12px_rgba(0,0,0,0.18)] flex items-center justify-center cursor-pointer active:scale-95 transition-transform disabled:opacity-80"
+          >
+            {locating ? <Loader2 className="w-6 h-6 animate-spin text-[#8C102A]" /> : <LocateFixed className="w-6 h-6" />}
+          </button>
 
-        {/* Map View Area */}
-        <div className="relative flex-1 min-h-[260px] sm:min-h-[320px] bg-slate-100">
-          <div ref={mapContainerRef} className="w-full h-full min-h-[260px] sm:min-h-[320px]" />
-
-          {/* Hint Overlay */}
-          <div className="absolute top-2 left-2 z-20 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-lg border border-[#D9CBB7] text-[10px] text-[#3D2C24] font-semibold shadow-xs pointer-events-none">
-            💡 Click anywhere or drag the 🍨 pin to pinpoint your home
-          </div>
-
-          {/* Geocoding status pill */}
-          {statusMessage && (
-            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 bg-[#241A18]/90 text-white px-3 py-1 rounded-full text-[10px] font-medium shadow-md pointer-events-none whitespace-nowrap flex items-center gap-1.5">
-              {isGeocoding && <Loader2 className="w-2.5 h-2.5 animate-spin text-amber-300" />}
-              <span>{statusMessage}</span>
-            </div>
+          {notice && (
+            <p className="absolute top-[max(1rem,env(safe-area-inset-top))] left-20 right-4 z-[600] px-3.5 py-2.5 rounded-2xl bg-white/95 text-[#3D2C24] text-xs font-medium shadow-[0_2px_12px_rgba(0,0,0,0.15)]">
+              {notice}
+            </p>
           )}
         </div>
 
-        {/* Confirmed Address Details Inputs */}
-        <div className="p-4 bg-[#FAF7F2] border-t border-[#E8DFC8] space-y-2.5 shrink-0">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-            <div className="sm:col-span-2">
-              <label className="block text-[10px] font-bold uppercase text-[#7A6458] mb-0.5">
-                Street Address / House No.
-              </label>
+        {/* Confirm sheet */}
+        <div className="shrink-0 bg-white px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-6px_20px_rgba(0,0,0,0.06)] relative z-[700]">
+          <h2 className="text-2xl font-bold text-[#241A18] tracking-tight">Confirm your location</h2>
+          <p className="text-sm text-[#6E5D54] mt-1">Press “Confirm” if this location is correct</p>
+
+          <form onSubmit={searchTyped} className="mt-4">
+            <label className="flex items-center gap-3 px-4 h-14 rounded-2xl border border-[#DDD3C6] bg-white focus-within:border-[#8C102A] focus-within:ring-2 focus-within:ring-[#8C102A]/15">
+              <span className="w-7 h-7 rounded-full bg-[#8C102A]/10 flex items-center justify-center shrink-0">
+                <MapPin className="w-4 h-4 text-[#8C102A]" />
+              </span>
               <input
-                type="text"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="Street address (detected automatically)"
-                className="w-full px-3 py-2 text-xs bg-white rounded-xl border border-[#D9CBB7] focus:outline-hidden focus:border-[#8C102A] font-medium text-[#241A18]"
+                value={shownAddress}
+                onChange={(e) => {
+                  setAddress(e.target.value);
+                  setCity('');
+                  setTyped(true);
+                }}
+                placeholder={geocoding ? 'Finding the street…' : 'Type your street or area'}
+                aria-label="Delivery address"
+                enterKeyHint="search"
+                className="flex-1 min-w-0 bg-transparent text-base text-[#241A18] placeholder:text-[#A8988B] outline-hidden truncate"
               />
-            </div>
+              {geocoding ? (
+                <Loader2 className="w-4 h-4 animate-spin text-[#8C102A] shrink-0" />
+              ) : (
+                typed &&
+                address.trim() && (
+                  <button type="submit" aria-label="Find this place on the map" className="p-1 -mr-1 text-[#8C102A] cursor-pointer shrink-0">
+                    <Search className="w-5 h-5" />
+                  </button>
+                )
+              )}
+            </label>
+          </form>
 
-            <div>
-              <label className="block text-[10px] font-bold uppercase text-[#7A6458] mb-0.5">
-                City / Area
-              </label>
-              <input
-                type="text"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                placeholder="City"
-                className="w-full px-3 py-2 text-xs bg-white rounded-xl border border-[#D9CBB7] focus:outline-hidden focus:border-[#8C102A] font-medium text-[#241A18]"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pt-1">
-            <span className="text-[10px] text-slate-500 font-mono">
-              GPS: {coords.lat.toFixed(5)}° N, {coords.lng.toFixed(5)}° E
-            </span>
-
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 rounded-xl bg-white border border-[#D9CBB7] text-xs font-bold text-[#5D4E46] hover:bg-gray-50 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmLocation}
-                className="px-5 py-2 rounded-xl bg-[#8C102A] hover:bg-[#A31634] text-white text-xs font-bold shadow-md cursor-pointer flex items-center gap-1.5"
-              >
-                <Check className="w-3.5 h-3.5" />
-                <span>Confirm & Use This Location</span>
-              </button>
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={confirm}
+            disabled={!canConfirm}
+            className="mt-4 w-full h-14 rounded-full bg-[#8C102A] hover:bg-[#A31634] text-white text-base font-bold shadow-md transition-colors cursor-pointer active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Confirm
+          </button>
         </div>
       </div>
     </div>
   );
 };
-
