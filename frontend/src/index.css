@@ -19,6 +19,22 @@ body,
   touch-action: pan-x pan-y;
 }
 
+/* Always the light design. Phones in dark mode get the same colours, and browsers that darken
+   sites on their own (Chrome's "darken websites", Samsung Internet) see the site has its own say. */
+:root {
+  color-scheme: only light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: only light;
+  }
+  html,
+  body {
+    background-color: #faf7f2;
+    color: #241a18;
+  }
+}
+
 html {
   scroll-behavior: smooth;
   font-family: 'Outfit', system-ui, -apple-system, sans-serif;
