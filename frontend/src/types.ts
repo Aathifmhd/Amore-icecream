@@ -53,6 +53,8 @@ export interface ScoopItem {
   isPopular?: boolean;
   isArugamBaySpecial?: boolean;
   accentColor: string;
+  /** Waffle cone photo (optional). `image` is the biscuit cup photo, the default. */
+  coneImage?: string;
   /** Old "sold out everywhere" switch; stock is now per branch (soldOutAt). */
   isAvailable?: boolean;
   /** Branches where this item is sold out right now. */

@@ -345,6 +345,7 @@ export const ALL_20_FLAVOURS: ScoopItem[] = [
     doubleConePriceLKR: 1450,
     doubleCupPriceLKR: 1520,
     image: durianScoopImg,
+    coneImage: durianConeImg,
     dietary: ['Eggless', 'Halal', 'Vegetarian', '100% Real Fruit'],
     tastingNotes: ['Golden Durian Pulp', 'Rich Cream Custard', 'Caramelized Sweetness', 'Silky Lingering Finish'],
     creaminess: 5,

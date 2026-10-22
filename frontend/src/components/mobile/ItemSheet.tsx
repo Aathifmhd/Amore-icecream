@@ -4,6 +4,7 @@ import { Currency, MenuItem, ScoopItem, SelectedOrderItem, ServingFormat } from 
 import { formatPrice } from '../../utils/currency';
 import { isScoop } from './mobileHooks';
 import { useIsSoldOut } from '../../utils/stock';
+import { scoopPhoto } from '../../utils/menuPhotos';
 
 interface ItemSheetProps {
   item: ScoopItem | MenuItem;
@@ -33,6 +34,9 @@ export const ItemSheet: React.FC<ItemSheetProps> = ({ item, currency, onClose, o
     };
   }, [onClose]);
 
+  // The photo follows the chosen serving (waffle cone or biscuit cup)
+  const photo = scoop ? scoopPhoto(scoop, format) : item.image;
+
   const unitPrice = scoop
     ? format === 'biscuit-cup'
       ? scoop.biscuitCupPriceLKR
@@ -47,7 +51,7 @@ export const ItemSheet: React.FC<ItemSheetProps> = ({ item, currency, onClose, o
       format: scoop ? format : undefined,
       priceLKR: unitPrice,
       quantity: qty,
-      image: item.image,
+      image: photo,
     });
   };
 
@@ -83,8 +87,8 @@ export const ItemSheet: React.FC<ItemSheetProps> = ({ item, currency, onClose, o
       <div className="relative w-full max-h-[90dvh] overflow-y-auto bg-white rounded-t-3xl shadow-2xl animate-sheet-up pb-safe">
         {/* Photo header */}
         <div className="relative h-52 bg-[#F3EDE3] overflow-hidden">
-          {item.image && (
-            <img src={item.image} alt={item.name} className="w-full h-full object-cover animate-[heroZoom_6s_ease-out_both]" referrerPolicy="no-referrer" />
+          {photo && (
+            <img key={photo} src={photo} alt={item.name} className="w-full h-full object-cover animate-[heroZoom_6s_ease-out_both]" referrerPolicy="no-referrer" />
           )}
           <div className="absolute inset-x-0 top-0 flex justify-center pt-2">
             <span className="w-10 h-1.5 rounded-full bg-white/80" />

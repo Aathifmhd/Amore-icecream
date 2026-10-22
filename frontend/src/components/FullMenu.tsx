@@ -12,6 +12,7 @@ import { formatPrice } from '../utils/currency';
 import { CurrencyToggle } from './CurrencyToggle';
 import { Search, Sparkles, Cookie, Coffee, Cake, Check, Heart, ArrowRight, X, Plus, AlertCircle } from 'lucide-react';
 import { useIsSoldOut } from '../utils/stock';
+import { cardPhoto } from '../utils/menuPhotos';
 
 interface FullMenuProps {
   currency: Currency;
@@ -346,7 +347,7 @@ export const FullMenu: React.FC<FullMenuProps> = ({
                     {/* Top image or visual accent */}
                     <div className="relative h-44 bg-[#FAF7F2] overflow-hidden">
                       <img loading="lazy" decoding="async"
-                        src={scoop.image}
+                        src={cardPhoto(scoop, activeTab === 'scoops' ? preferredFormat : 'both', getSelectedFormats(scoop.id))}
                         alt={scoop.name}
                         className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${
                           isSoldOut ? 'grayscale-[30%] opacity-85' : ''

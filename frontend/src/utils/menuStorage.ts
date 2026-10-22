@@ -20,7 +20,7 @@ export const MENU_UPDATED_EVENT = 'amore_menu_updated';
  * built-in menu in iceCreamData.ts changes so returning visitors drop their stale
  * copy; admin edits live on the server (MongoDB) and are merged back in on the next sync.
  */
-const MENU_DEFAULTS_VERSION = '2026-10-22-mongodb';
+const MENU_DEFAULTS_VERSION = '2026-10-22-cone-photos';
 const MENU_DEFAULTS_VERSION_KEY = 'amore_menu_defaults_version';
 
 try {
@@ -35,9 +35,10 @@ try {
 }
 
 // Fix photo links saved against an older build (see resolveBundledImage)
-function withCurrentImage<T extends { image?: string }>(item: T): T {
+function withCurrentImage<T extends { image?: string; coneImage?: string }>(item: T): T {
   const image = resolveBundledImage(item.image);
-  return image === item.image ? item : { ...item, image };
+  const coneImage = resolveBundledImage(item.coneImage);
+  return image === item.image && coneImage === item.coneImage ? item : { ...item, image, coneImage };
 }
 
 const menuPath = (id: string) => `/menu/${encodeURIComponent(id)}`;

@@ -28,6 +28,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { useIsSoldOut } from '../utils/stock';
+import { scoopPhoto } from '../utils/menuPhotos';
 
 interface MobileFullMenuPageProps {
   currency: Currency;
@@ -409,7 +410,7 @@ export const MobileFullMenuPage: React.FC<MobileFullMenuPageProps> = ({
                         title="View Scoop Details"
                       >
                         <img loading="lazy" decoding="async"
-                          src={scoop.image}
+                          src={scoopPhoto(scoop, formatFilter === 'cone' ? 'waffle-cone' : 'biscuit-cup')}
                           alt={scoop.name}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />

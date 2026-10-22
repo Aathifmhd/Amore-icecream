@@ -34,7 +34,7 @@ const BRANCH_SHORT: Record<BranchId, string> = { akurana: 'Akurana', colombo: 'C
 
 // ---- Photo picker ----
 
-const PhotoPicker: React.FC<{ value: string; onChange: (url: string) => void }> = ({ value, onChange }) => {
+const PhotoPicker: React.FC<{ value: string; onChange: (url: string) => void; onClear?: () => void }> = ({ value, onChange, onClear }) => {
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
@@ -65,6 +65,11 @@ const PhotoPicker: React.FC<{ value: string; onChange: (url: string) => void }> 
           <Button size="sm" variant="ghost" icon={<Images className="w-4 h-4" />} onClick={() => setShowLibrary((v) => !v)}>
             {showLibrary ? 'Hide photos' : 'Choose from our photos'}
           </Button>
+          {onClear && value && (
+            <Button size="sm" variant="ghost" icon={<X className="w-4 h-4" />} onClick={onClear}>
+              Remove photo
+            </Button>
+          )}
           <input
             ref={fileRef}
             type="file"
@@ -114,6 +119,8 @@ interface Draft {
   tagline: string;
   description: string;
   image: string;
+  /** Ice cream only: the waffle cone photo ('' = use the biscuit cup photo) */
+  coneImage: string;
   price: string;
   cone: string;
   cup: string;
@@ -125,13 +132,14 @@ interface Draft {
 
 const toDraft = (item?: ScoopItem | MenuItem): Draft => {
   if (!item)
-    return { name: '', tagline: '', description: '', image: '', price: '', cone: '', cup: '', doubleCone: '', doubleCup: '', popular: false, signature: false };
+    return { name: '', tagline: '', description: '', image: '', coneImage: '', price: '', cone: '', cup: '', doubleCone: '', doubleCup: '', popular: false, signature: false };
   if (isScoop(item))
     return {
       name: item.name,
       tagline: item.tagline,
       description: item.description,
       image: item.image,
+      coneImage: item.coneImage || '',
       price: '',
       cone: String(item.conePriceLKR),
       cup: String(item.biscuitCupPriceLKR),
@@ -145,6 +153,7 @@ const toDraft = (item?: ScoopItem | MenuItem): Draft => {
     tagline: item.portionOrTemp || '',
     description: item.description,
     image: item.image || '',
+    coneImage: '',
     price: String(item.priceLKR),
     cone: '',
     cup: '',
@@ -175,6 +184,7 @@ const ItemEditor: React.FC<{ kind: Kind; item?: ScoopItem | MenuItem; onClose: (
         tagline: d.tagline.trim(),
         description: d.description.trim(),
         image,
+        coneImage: d.coneImage,
         conePriceLKR: cone,
         biscuitCupPriceLKR: cup,
         doubleConePriceLKR: num(d.doubleCone) || Math.round(cone * 1.8),
@@ -260,9 +270,24 @@ const ItemEditor: React.FC<{ kind: Kind; item?: ScoopItem | MenuItem; onClose: (
           Changes here apply to all three branches. Each branch switches its own stock (in stock / sold out) in the list.
         </p>
 
-        <Field label="Photo">
-          <PhotoPicker value={d.image} onChange={(url) => set('image', url)} />
-        </Field>
+        {scoop ? (
+          <div className="space-y-5">
+            <div>
+              <p className="text-sm font-semibold text-[#3D2C24]">Biscuit cup photo</p>
+              <p className="text-xs text-[#8A7970] mb-2">The main photo, shown on the menu by default.</p>
+              <PhotoPicker value={d.image} onChange={(url) => set('image', url)} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-[#3D2C24]">Waffle cone photo</p>
+              <p className="text-xs text-[#8A7970] mb-2">Shown when a customer picks a waffle cone. Without one, the biscuit cup photo is used.</p>
+              <PhotoPicker value={d.coneImage} onChange={(url) => set('coneImage', url)} onClear={() => set('coneImage', '')} />
+            </div>
+          </div>
+        ) : (
+          <Field label="Photo">
+            <PhotoPicker value={d.image} onChange={(url) => set('image', url)} />
+          </Field>
+        )}
         <Field label="Name">
           <input value={d.name} onChange={(e) => set('name', e.target.value)} className={inputClass} />
         </Field>
@@ -427,8 +452,18 @@ export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; canEdit:
             const available = branch === 'all' ? soldOutAt.length < AMORE_BRANCHES.length : !soldOutAt.includes(branch);
             const details = (
               <>
-                <span className="w-14 h-14 rounded-xl overflow-hidden bg-[#F3EDE3] shrink-0">
+                <span className="relative w-14 h-14 rounded-xl overflow-hidden bg-[#F3EDE3] shrink-0">
                   {i.image && <img src={i.image} alt="" loading="lazy" className={cx('w-full h-full object-cover', !available && 'grayscale opacity-60')} referrerPolicy="no-referrer" />}
+                  {isScoop(i) && i.coneImage && (
+                    <img
+                      src={i.coneImage}
+                      alt=""
+                      title="Has a waffle cone photo"
+                      loading="lazy"
+                      className="absolute bottom-0.5 right-0.5 w-6 h-6 rounded-full object-cover ring-2 ring-white"
+                      referrerPolicy="no-referrer"
+                    />
+                  )}
                 </span>
                 <span className="min-w-0">
                   <span className="flex items-center gap-2">

@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { type User } from '../customerAuth';
 import { useIsSoldOut } from '../utils/stock';
+import { cardPhoto } from '../utils/menuPhotos';
 
 interface MenuOrderingPageProps {
   currency: Currency;
@@ -598,7 +599,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
                       {/* Scoop Image & Badges */}
                       <div className="relative w-full h-44 rounded-xl overflow-hidden bg-[#FAF7F2] mb-3 group">
                         <img loading="lazy" decoding="async"
-                          src={scoop.image}
+                          src={cardPhoto(scoop, effectiveFormat, scoopFormats)}
                           alt={scoop.name}
                           className={`w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300 ${
                             isSoldOut ? 'grayscale-[30%] opacity-85' : ''

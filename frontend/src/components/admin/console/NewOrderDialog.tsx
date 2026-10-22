@@ -7,6 +7,7 @@ import { formatPrice } from '../../../utils/currency';
 import { Button, Dialog, Field, cx, inputClass, useConsoleUi } from './ui';
 import { formatLabel, shortRef } from './orderMeta';
 import { MenuData } from './useConsoleData';
+import { scoopPhoto } from '../../../utils/menuPhotos';
 
 const lkr = (n: number) => formatPrice(n, 'LKR');
 const DELIVERY_FEE = 250;
@@ -61,7 +62,7 @@ export const NewOrderDialog: React.FC<{
     setLines((prev) => {
       const i = prev.findIndex((l) => l.itemId === item.id && l.format === fmt);
       if (i >= 0) return prev.map((l, j) => (j === i ? { ...l, quantity: l.quantity + 1 } : l));
-      return [...prev, { itemId: item.id, name: item.name, category: isScoop ? 'scoops' : (item as MenuItem).category, format: fmt, priceLKR: price, quantity: 1, image: item.image }];
+      return [...prev, { itemId: item.id, name: item.name, category: isScoop ? 'scoops' : (item as MenuItem).category, format: fmt, priceLKR: price, quantity: 1, image: isScoop ? scoopPhoto(item as ScoopItem, fmt) : item.image }];
     });
     setPickKey('');
   };

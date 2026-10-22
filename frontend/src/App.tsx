@@ -29,6 +29,7 @@ import {
   syncMenuFromServer,
   subscribeToRealtimeMenu,
 } from './utils/menuStorage';
+import { scoopPhoto } from './utils/menuPhotos';
 
 // Screens and popups that aren't needed for the first paint are split out so the
 // storefront loads faster. The menu chunk is prefetched once the home page is idle.
@@ -312,7 +313,7 @@ export default function App() {
         format: chosenFormat,
         priceLKR: price,
         quantity: 1,
-        image: scoop.image,
+        image: scoopPhoto(scoop, chosenFormat),
       };
       handleAddItemToOrder(newOrderItem, false);
       return;

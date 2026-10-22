@@ -3,6 +3,7 @@ import { ScoopItem, MenuItem, Currency, SelectedOrderItem } from '../types';
 import { formatPrice } from '../utils/currency';
 import { X, Check, ShoppingBag, ArrowLeft, AlertCircle } from 'lucide-react';
 import { useIsSoldOut } from '../utils/stock';
+import { scoopPhoto } from '../utils/menuPhotos';
 
 interface ProductDetailModalProps {
   item: ScoopItem | MenuItem | null;
@@ -38,6 +39,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const isSoldOut = soldOutHere(item);
   const isScoop = 'tastingNotes' in item;
   const scoop = isScoop ? (item as ScoopItem) : null;
+  const photo = scoop ? scoopPhoto(scoop, 'waffle-cone') : item.image;
 
   // Single base price for the item
   const currentSinglePrice = scoop ? scoop.conePriceLKR : item.priceLKR;
@@ -52,7 +54,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       format: isScoop ? 'waffle-cone' : undefined,
       priceLKR: currentSinglePrice,
       quantity,
-      image: item.image,
+      image: photo,
     };
     onOrderNow(orderItem, openTrayDirectly);
     setHasAddedToTray(true);
@@ -77,10 +79,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         </button>
 
         {/* Top Image */}
-        {item.image && (
+        {photo && (
           <div className="relative h-44 sm:h-48 w-full bg-[#FAF7F2] overflow-hidden">
             <img loading="lazy" decoding="async"
-              src={item.image}
+              src={photo}
               alt={item.name}
               className={`w-full h-full object-cover ${isSoldOut ? 'grayscale-[30%] opacity-85' : ''}`}
               referrerPolicy="no-referrer"
@@ -116,7 +118,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
         {/* Modal Body - Clean & Well-Arranged Content */}
         <div className="p-5 sm:p-6 space-y-4">
-          {!item.image && (
+          {!photo && (
             <div className="border-b border-[#E8DFC8] pb-3">
               {isSoldOut ? (
                 <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-600 text-white mb-1.5 shadow-xs">
