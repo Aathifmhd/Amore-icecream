@@ -18,7 +18,7 @@ export const ItemSheet: React.FC<ItemSheetProps> = ({ item, currency, onClose, o
   // Sold out at the branch the customer has picked
   const soldOutHere = useIsSoldOut();
   const scoop = isScoop(item) ? item : null;
-  const [format, setFormat] = useState<ServingFormat>('waffle-cone');
+  const [format, setFormat] = useState<ServingFormat>('biscuit-cup');
   const [qty, setQty] = useState(1);
   const soldOut = soldOutHere(item);
 
@@ -55,22 +55,24 @@ export const ItemSheet: React.FC<ItemSheetProps> = ({ item, currency, onClose, o
     });
   };
 
-  const formats: { id: ServingFormat; label: string; hint: string; price: number; icon: React.ReactNode }[] =
+  const formats: { id: ServingFormat; label: string; hint: string; price: number; photo?: string; icon: React.ReactNode }[] =
     scoop
       ? [
-          {
-            id: 'waffle-cone',
-            label: 'Waffle cone',
-            hint: 'Crisp, freshly rolled',
-            price: scoop.conePriceLKR,
-            icon: <IceCreamCone className="w-5 h-5" />,
-          },
           {
             id: 'biscuit-cup',
             label: 'Biscuit cup',
             hint: 'Edible, zero waste',
             price: scoop.biscuitCupPriceLKR,
+            photo: scoopPhoto(scoop, 'biscuit-cup'),
             icon: <Cookie className="w-5 h-5" />,
+          },
+          {
+            id: 'waffle-cone',
+            label: 'Waffle cone',
+            hint: 'Crisp, freshly rolled',
+            price: scoop.conePriceLKR,
+            photo: scoopPhoto(scoop, 'waffle-cone'),
+            icon: <IceCreamCone className="w-5 h-5" />,
           },
         ]
       : [];
@@ -86,9 +88,13 @@ export const ItemSheet: React.FC<ItemSheetProps> = ({ item, currency, onClose, o
 
       <div className="relative w-full max-h-[90dvh] overflow-y-auto bg-white rounded-t-3xl shadow-2xl animate-sheet-up pb-safe">
         {/* Photo header */}
-        <div className="relative h-52 bg-[#F3EDE3] overflow-hidden">
-          {photo && (
-            <img key={photo} src={photo} alt={item.name} className="w-full h-full object-cover animate-[heroZoom_6s_ease-out_both]" referrerPolicy="no-referrer" />
+        <div className="relative aspect-[4/3] max-h-[46dvh] w-full bg-[#F3EDE3] overflow-hidden">
+          {photo && <img key={photo} src={photo} alt={item.name} className="absolute inset-0 w-full h-full object-cover animate-fadeIn" referrerPolicy="no-referrer" />}
+          {scoop && (
+            <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/92 text-xs font-semibold text-[#241A18] shadow">
+              {format === 'biscuit-cup' ? <Cookie className="w-3.5 h-3.5 text-amber-700" /> : <IceCreamCone className="w-3.5 h-3.5 text-[#8C102A]" />}
+              {format !== 'biscuit-cup' && !scoop.coneImage ? 'Photo shows a biscuit cup' : format === 'biscuit-cup' ? 'Biscuit cup' : 'Waffle cone'}
+            </span>
           )}
           <div className="absolute inset-x-0 top-0 flex justify-center pt-2">
             <span className="w-10 h-1.5 rounded-full bg-white/80" />
@@ -136,7 +142,16 @@ export const ItemSheet: React.FC<ItemSheetProps> = ({ item, currency, onClose, o
                         selected ? 'border-[#8C102A] bg-[#8C102A]/5 shadow-md' : 'border-[#E8DFC8] bg-white'
                       }`}
                     >
-                      <span className={selected ? 'text-[#8C102A]' : 'text-[#7A6458]'}>{f.icon}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="w-11 h-11 rounded-xl overflow-hidden bg-[#FAF7F2] shrink-0 flex items-center justify-center">
+                          {f.photo ? (
+                            <img src={f.photo} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <span className={selected ? 'text-[#8C102A]' : 'text-[#7A6458]'}>{f.icon}</span>
+                          )}
+                        </span>
+                        <span className={selected ? 'text-[#8C102A]' : 'text-[#7A6458]'}>{f.icon}</span>
+                      </span>
                       <span className="block text-sm font-bold text-[#241A18] mt-1">{f.label}</span>
                       <span className="block text-[11px] text-[#7A6458]">{f.hint}</span>
                       <span className="block text-sm font-bold text-[#8C102A] mt-1">{formatPrice(f.price, currency)}</span>
