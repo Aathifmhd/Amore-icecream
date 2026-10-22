@@ -11,7 +11,7 @@ import { EdibleBiscuitCupSpotlight } from './components/EdibleBiscuitCupSpotligh
 import { BranchShowcase } from './components/BranchShowcase';
 import { ParlourExperience } from './components/ParlourExperience';
 import { Footer } from './components/Footer';
-import { hasAdminSession, lockConsole, signOutAdmin, useAdminGate } from './utils/adminAuth';
+import { forgetThisDevice, hasAdminSession, lockConsole, signOutAdmin, useAdminGate } from './utils/adminAuth';
 import { AmoreLogo } from './components/AmoreLogo';
 import { OverflowRibbon } from './components/BrandFlourish';
 import { Reveal } from './components/Reveal';
@@ -81,16 +81,13 @@ const AdminArea: React.FC<{
       {gate === 'open' && admin ? (
         <AdminDashboard
           admin={admin}
-          // With a user code set, "Lock" closes the console until the code is entered again;
-          // otherwise this is a full sign-out.
-          signOutLabel={codeOnThisDevice ? 'Lock' : 'Sign Out'}
-          onSignOut={() => {
-            if (codeOnThisDevice) {
-              lockConsole();
-            } else {
-              signOutAdmin();
-              onBackToStore();
-            }
+          // "Lock" (only with a user code) closes the console until the code is entered again.
+          // "Sign out" is a full sign-out: this device also forgets its code.
+          onLock={codeOnThisDevice ? lockConsole : undefined}
+          onSignOut={async () => {
+            if (codeOnThisDevice) await forgetThisDevice();
+            signOutAdmin();
+            onBackToStore();
           }}
           onBackToStore={onBackToStore}
           currency={currency}

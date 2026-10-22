@@ -49,9 +49,10 @@ function sectionFromUrl(): Section {
 interface Props {
   /** Who is signed in: a super admin sees everything, a branch admin only their branch. */
   admin: AdminProfile;
+  /** Sign out completely (this device also forgets its user code). */
   onSignOut: () => void;
-  /** "Lock" when this device has a user code, otherwise "Sign Out" */
-  signOutLabel?: string;
+  /** Close the console until the user code is entered again; only when this device has a code. */
+  onLock?: () => void;
   onBackToStore: () => void;
   currency?: Currency;
   onToggleCurrency?: (c: Currency) => void;
@@ -65,7 +66,7 @@ export const OperationsConsole: React.FC<Props> = (props) => (
   </ConsoleUiProvider>
 );
 
-const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, signOutLabel = 'Sign Out', onBackToStore }) => {
+const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore }) => {
   const orders = useOrders();
   const menu = useMenu();
   const isSuper = admin.role !== 'branch';
@@ -122,7 +123,6 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, signOutLabel = 'Sign 
     menu: soldOut ? { n: soldOut, tone: 'bg-stone-400 text-white' } : undefined,
   };
   const title = section === 'settings' ? SETTINGS_TITLE : SECTIONS.find((s) => s.id === section)!.title;
-  const SignOutIcon = signOutLabel === 'Lock' ? Lock : LogOut;
 
   const changeSound = (on: boolean) => {
     setSoundOn(on);
@@ -206,9 +206,15 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, signOutLabel = 'Sign 
             <Settings />
             <span className="rail-label">{SETTINGS_TITLE}</span>
           </button>
-          <button type="button" onClick={onSignOut} aria-label={signOutLabel} className="rail-item rail-quiet rail-danger">
-            <SignOutIcon />
-            <span className="rail-label">{signOutLabel}</span>
+          {onLock && (
+            <button type="button" onClick={onLock} aria-label="Lock" className="rail-item rail-quiet">
+              <Lock />
+              <span className="rail-label">Lock</span>
+            </button>
+          )}
+          <button type="button" onClick={onSignOut} aria-label="Sign out" className="rail-item rail-quiet rail-danger">
+            <LogOut />
+            <span className="rail-label">Sign out</span>
           </button>
         </div>
 
@@ -264,8 +270,13 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, signOutLabel = 'Sign 
                   <button type="button" onClick={onBackToStore} className="w-full flex items-center gap-3 h-11 px-3 rounded-xl text-sm hover:bg-[#F3EDE3] cursor-pointer">
                     <ExternalLink className="w-4 h-4" /> View website
                   </button>
+                  {onLock && (
+                    <button type="button" onClick={onLock} className="w-full flex items-center gap-3 h-11 px-3 rounded-xl text-sm hover:bg-[#F3EDE3] cursor-pointer">
+                      <Lock className="w-4 h-4" /> Lock
+                    </button>
+                  )}
                   <button type="button" onClick={onSignOut} className="w-full flex items-center gap-3 h-11 px-3 rounded-xl text-sm text-red-700 hover:bg-red-50 cursor-pointer">
-                    <SignOutIcon className="w-4 h-4" /> {signOutLabel}
+                    <LogOut className="w-4 h-4" /> Sign out
                   </button>
                 </div>
               </>
