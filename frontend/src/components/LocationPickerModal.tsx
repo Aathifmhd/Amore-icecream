@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ArrowLeft, LocateFixed, Loader2, MapPin, Search } from 'lucide-react';
+import { AlertCircle, ArrowLeft, LocateFixed, Loader2, MapPin, Search, Store } from 'lucide-react';
 import { BranchId } from '../types';
-import { BRANCH_COORDS } from '../utils/branchLocation';
+import { AMORE_BRANCHES } from '../data/iceCreamData';
+import { BRANCH_COORDS, DELIVERY_RADIUS_KM, deliveryCheck } from '../utils/branchLocation';
 
 interface LocationPickerModalProps {
   isOpen: boolean;
@@ -11,6 +12,10 @@ interface LocationPickerModalProps {
   initialCoords?: { lat: number; lng: number };
   /** Where the map starts when there is no pin yet and the phone can't find the customer */
   fallbackBranch?: BranchId;
+  /** The parlour that delivers, when it is already fixed (editing a placed order); else the nearest */
+  deliverFrom?: BranchId;
+  /** Offered when the pin is too far for delivery: switch the order to pickup from this parlour */
+  onChoosePickup?: (branch: BranchId) => void;
   onSelectLocation: (location: {
     address: string;
     city: string;
@@ -50,6 +55,8 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
   initialCity = '',
   initialCoords,
   fallbackBranch = 'akurana',
+  deliverFrom,
+  onChoosePickup,
   onSelectLocation,
 }) => {
   const [coords, setCoords] = useState<Coords>(initialCoords || BRANCH_COORDS[fallbackBranch]);
@@ -221,7 +228,11 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
   if (!isOpen) return null;
 
   const shownAddress = typed || !city || address.includes(city) ? address : [address, city].filter(Boolean).join(', ');
-  const canConfirm = Boolean(address.trim()) && !moving;
+  // Parlours deliver only within DELIVERY_RADIUS_KM
+  const range = deliveryCheck(coords, deliverFrom);
+  const tooFar = !range.ok && !moving && !locating;
+  const rangeBranch = AMORE_BRANCHES.find((b) => b.id === range.branch);
+  const canConfirm = Boolean(address.trim()) && !moving && range.ok;
   const confirm = () => {
     if (!canConfirm) return;
     onSelectLocation({ address: address.trim(), city: city.trim(), coords });
@@ -250,9 +261,9 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
             <span className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-1 rounded-full bg-black/30 transition-opacity ${moving ? 'opacity-100' : 'opacity-0'}`} />
             {!moving && (
               <div className="absolute left-1/2 top-1/2 -translate-x-1/2 mt-3.5 animate-fadeIn">
-                <span className="relative block px-4 py-2.5 rounded-2xl bg-[#3A3330] text-white text-sm font-medium whitespace-nowrap shadow-lg">
-                  <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-[#3A3330]" />
-                  <span className="relative">{geocoding || locating ? 'Finding your location…' : 'Your selected location'}</span>
+                <span className={`relative block px-4 py-2.5 rounded-2xl text-white text-sm font-medium whitespace-nowrap shadow-lg ${tooFar ? 'bg-[#B42318]' : 'bg-[#3A3330]'}`}>
+                  <span className={`absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 ${tooFar ? 'bg-[#B42318]' : 'bg-[#3A3330]'}`} />
+                  <span className="relative">{locating ? 'Finding your location…' : tooFar ? 'We can’t deliver here' : 'Your selected location'}</span>
                 </span>
               </div>
             )}
@@ -318,6 +329,34 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
               )}
             </label>
           </form>
+
+          {tooFar && (
+            <div role="alert" className="mt-3 p-3.5 rounded-2xl bg-red-50 border border-red-200">
+              <p className="flex items-center gap-2 text-sm font-bold text-red-800">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                We can’t deliver to this location
+              </p>
+              <p className="text-xs text-red-800/90 mt-1 leading-relaxed">
+                {deliverFrom
+                  ? `Amore ${rangeBranch?.name} delivers within ${DELIVERY_RADIUS_KM} km, and this pin is ${range.km.toFixed(1)} km away.`
+                  : `We deliver within ${DELIVERY_RADIUS_KM} km of our parlours. The nearest, Amore ${rangeBranch?.name}, is ${range.km.toFixed(1)} km from this pin.`}{' '}
+                {onChoosePickup ? 'You can pick up your order from the parlour instead.' : 'Move the pin closer, or cancel and order for parlour pickup.'}
+              </p>
+              {onChoosePickup && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChoosePickup(range.branch);
+                    onClose();
+                  }}
+                  className="mt-3 w-full h-11 rounded-xl bg-white border border-red-200 text-[#8C102A] text-sm font-bold flex items-center justify-center gap-2 cursor-pointer hover:bg-red-50/40"
+                >
+                  <Store className="w-4 h-4" />
+                  Pick up from Amore {rangeBranch?.name}
+                </button>
+              )}
+            </div>
+          )}
 
           <button
             type="button"

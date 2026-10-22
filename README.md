@@ -146,6 +146,12 @@ customer, keeps the pin in the middle while they move the map, and looks up the 
 (`utils/branchLocation.ts`). The last order's name, phone and address are kept on that device for
 the same Google account, so the next checkout is already filled in.
 
+**Delivery range:** parlours deliver within 6 km (`DELIVERY_RADIUS_KM`). A delivery needs a map
+pin; a pin further than that shows "We can't deliver to this location" with a button to switch to
+pickup from the nearest parlour, and the backend refuses such orders and pin moves too
+(`backend/src/orderRules.js`). The parlour locations are in both `frontend/src/utils/branchLocation.ts`
+and `backend/src/orderRules.js`: change them together. Orders the console adds by hand are not checked.
+
 ## Deploy (Vercel)
 
 `vercel.json` deploys both parts as one project: `/api/*` goes to the backend, everything

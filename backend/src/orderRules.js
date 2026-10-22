@@ -144,6 +144,32 @@ function pick(body, allowed, { forUpdate = false } = {}) {
 
 const close = (a, b) => Math.abs(a - b) < 0.5;
 
+// Where each parlour is, and how far it delivers (mirrors frontend/src/utils/branchLocation.ts)
+const BRANCH_COORDS = {
+  akurana: { lat: 7.3639, lng: 80.6175 },
+  colombo: { lat: 6.909, lng: 79.8478 },
+  arugambay: { lat: 6.84, lng: 81.836 },
+};
+export const DELIVERY_RADIUS_KM = 6;
+
+function distanceKm(a, b) {
+  const rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad;
+  const dLng = (b.lng - a.lng) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(h));
+}
+
+/** A customer's delivery must have a map pin within the parlour's delivery range. */
+function checkDeliveryRange(order) {
+  if (order.orderType !== 'delivery') return;
+  if (!order.deliveryCoordinates) throw bad('Drop a pin on the map so we can check we deliver to you.');
+  // A few metres of slack for rounding between the phone and here
+  if (distanceKm(order.deliveryCoordinates, BRANCH_COORDS[order.branchId]) > DELIVERY_RADIUS_KM + 0.05) {
+    throw bad(`We can't deliver to this location: we deliver within ${DELIVERY_RADIUS_KM} km of the parlour. You can choose parlour pickup instead.`);
+  }
+}
+
 /** A customer placing an order (they must be signed in). */
 export function newCustomerOrder(body, customer) {
   const { set: d } = pick(body, NEW_ORDER_FIELDS);
@@ -163,6 +189,7 @@ export function newCustomerOrder(body, customer) {
     throw bad('The order total does not add up. Please refresh the page and try again.');
   }
   if (d.deliveryFeeLKR > 5000) throw bad('Invalid delivery fee');
+  checkDeliveryRange(d);
 
   // Trust the sign-in for who placed it, and our clock if theirs is far off
   d.userId = customer.uid;
@@ -200,6 +227,8 @@ export function orderUpdate(body, existing, { admin, customer }) {
     if (changed.includes('paymentMethod') && !CUSTOMER_PAYMENTS.includes(next.paymentMethod)) {
       throw bad('Card payments are not available yet');
     }
+    // A moved pin must still be within the parlour's delivery range
+    if (changed.includes('deliveryCoordinates')) checkDeliveryRange(next);
     const historyHide = changed.every((k) => HISTORY_HIDE_FIELDS.includes(k));
     const pendingEdit =
       existing.status === 'pending_confirmation' &&

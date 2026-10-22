@@ -1484,6 +1484,9 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
         initialAddress={editAddress}
         initialCity={editCity}
         initialCoords={editCoords}
+        // A placed order keeps its parlour, so the new pin must be within its delivery range
+        deliverFrom={orders.find((o) => o.orderReference === editingRef)?.branchId}
+        fallbackBranch={orders.find((o) => o.orderReference === editingRef)?.branchId}
         onSelectLocation={(loc) => {
           setEditAddress(loc.address);
           if (loc.city) setEditCity(loc.city);

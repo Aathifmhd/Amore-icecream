@@ -32,7 +32,7 @@ import {
 import { type User } from '../customerAuth';
 import { LocationPickerModal } from './LocationPickerModal';
 import { repriceForBranch } from '../utils/branchMenu';
-import { nearestBranch } from '../utils/branchLocation';
+import { DELIVERY_RADIUS_KM, deliveryCheck, nearestBranch } from '../utils/branchLocation';
 
 interface QuickOrderModalProps {
   isOpen: boolean;
@@ -123,6 +123,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
   const nameRef = useRef<HTMLInputElement>(null);
   const phoneRef = useRef<HTMLInputElement>(null);
   const addressRef = useRef<HTMLInputElement>(null);
+  const pinRef = useRef<HTMLDivElement>(null);
 
   // Payment Method Selection: 'card' or 'cod' for delivery; 'pay_at_parlour' for pickup
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'cod' | 'pay_at_parlour'>(
@@ -251,13 +252,20 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
     }
   }, [deliveryAddress, city, deliveryCoords]);
 
+  // Parlours deliver only within DELIVERY_RADIUS_KM of the pin
+  const deliveryRange = deliveryCoords ? deliveryCheck(deliveryCoords) : null;
+  const choosePickup = (branch: BranchId) => {
+    setOrderType('pickup');
+    setPickupBranchId(branch);
+  };
+
   const assignedBranchId = orderType === 'pickup' ? pickupBranchId : detectedBranchId;
   const assignedBranch = AMORE_BRANCHES.find((b) => b.id === assignedBranchId) || AMORE_BRANCHES[0];
 
   // A fixed field clears the message about it
   useEffect(() => {
     setFormError(null);
-  }, [customerName, contactNumber, deliveryAddress, orderType, cardNumber, cardExpiry, cardCvv]);
+  }, [customerName, contactNumber, deliveryAddress, deliveryCoords, orderType, cardNumber, cardExpiry, cardCvv]);
 
   // Pricing calculations
   // Each branch can set its own prices: price the tray for the branch that will make the order
@@ -319,13 +327,17 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
     }
 
     // 2. Validate Contact and Delivery Details (the message shows above the button)
-    const fail = (message: string, field?: React.RefObject<HTMLInputElement | null>) => {
+    const fail = (message: string, field?: React.RefObject<HTMLElement | null>) => {
       setFormError(message);
       field?.current?.focus();
       field?.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     };
-    if (orderType === 'delivery' && !deliveryAddress.trim()) {
-      return fail('Add your house number and street, or drop a pin on the map.', addressRef);
+    if (orderType === 'delivery') {
+      if (!deliveryCoords) return fail('Drop a pin on the map so we can check we deliver to you.', pinRef);
+      if (deliveryRange && !deliveryRange.ok) {
+        return fail('We can’t deliver to this location. Choose parlour pickup, or move the pin.', pinRef);
+      }
+      if (!deliveryAddress.trim()) return fail('Add your house number and street.', addressRef);
     }
     if (!customerName.trim()) return fail('Add your name.', nameRef);
     if (contactNumber.replace(/\D/g, '').length < 9) return fail('Add a phone number we can call (at least 9 digits).', phoneRef);
@@ -717,38 +729,72 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
                 {orderType === 'delivery' ? (
                   <section>
                     <StepTitle n={2} title="Delivery address" />
-                    {deliveryCoords ? (
-                      <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center gap-3">
-                        <span className="w-10 h-10 rounded-xl bg-white border border-emerald-200 flex items-center justify-center shrink-0">
-                          <MapPin className="w-5 h-5 text-emerald-700" />
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">Pinned on the map</p>
-                          <p className="text-sm text-[#241A18] truncate">{[deliveryAddress, city].filter(Boolean).join(', ') || 'Your pin'}</p>
+                    <div ref={pinRef} tabIndex={-1} className="outline-hidden">
+                      {deliveryRange && !deliveryRange.ok ? (
+                        <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200">
+                          <p className="flex items-center gap-2 text-sm font-bold text-red-800">
+                            <AlertCircle className="w-4 h-4 shrink-0" />
+                            We can’t deliver to this location
+                          </p>
+                          <p className="text-xs text-red-800/90 mt-1 leading-relaxed">
+                            We deliver within {DELIVERY_RADIUS_KM} km of our parlours. The nearest, Amore{' '}
+                            {AMORE_BRANCHES.find((b) => b.id === deliveryRange.branch)?.name}, is {deliveryRange.km.toFixed(1)} km away. You can pick up
+                            your order from the parlour instead.
+                          </p>
+                          <div className="mt-3 grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => choosePickup(deliveryRange.branch)}
+                              className="h-11 rounded-xl bg-[#8C102A] hover:bg-[#A31634] text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                              <Store className="w-4 h-4" />
+                              Parlour pickup
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setIsLocationPickerOpen(true)}
+                              className="h-11 rounded-xl bg-white border border-red-200 text-[#8C102A] text-xs font-bold cursor-pointer hover:bg-red-50/40"
+                            >
+                              Move the pin
+                            </button>
+                          </div>
                         </div>
+                      ) : deliveryCoords ? (
+                        <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center gap-3">
+                          <span className="w-10 h-10 rounded-xl bg-white border border-emerald-200 flex items-center justify-center shrink-0">
+                            <MapPin className="w-5 h-5 text-emerald-700" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">Pinned on the map</p>
+                            <p className="text-sm text-[#241A18] truncate">{[deliveryAddress, city].filter(Boolean).join(', ') || 'Your pin'}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setIsLocationPickerOpen(true)}
+                            className="px-3 py-2 rounded-xl text-xs font-bold text-[#8C102A] hover:bg-white cursor-pointer shrink-0"
+                          >
+                            Change
+                          </button>
+                        </div>
+                      ) : (
                         <button
                           type="button"
                           onClick={() => setIsLocationPickerOpen(true)}
-                          className="px-3 py-2 rounded-xl text-xs font-bold text-[#8C102A] hover:bg-white cursor-pointer shrink-0"
+                          className="w-full p-3.5 rounded-2xl border-2 border-dashed border-[#8C102A]/35 bg-[#8C102A]/5 hover:bg-[#8C102A]/10 flex items-center gap-3 text-left transition-colors cursor-pointer"
                         >
-                          Change
+                          <span className="w-11 h-11 rounded-xl bg-[#8C102A] text-amber-200 flex items-center justify-center shrink-0 shadow-xs">
+                            <Navigation className="w-5 h-5" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-bold text-[#8C102A]">Detect location & drop pin</span>
+                            <span className="block text-xs text-[#7A6458] mt-0.5">We find you on the map — just check the pin is on your door.</span>
+                          </span>
+                          <ChevronRight className="w-5 h-5 text-[#8C102A] shrink-0" />
                         </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setIsLocationPickerOpen(true)}
-                        className="w-full p-3.5 rounded-2xl border-2 border-dashed border-[#8C102A]/35 bg-[#8C102A]/5 hover:bg-[#8C102A]/10 flex items-center gap-3 text-left transition-colors cursor-pointer"
-                      >
-                        <span className="w-11 h-11 rounded-xl bg-[#8C102A] text-amber-200 flex items-center justify-center shrink-0 shadow-xs">
-                          <Navigation className="w-5 h-5" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold text-[#8C102A]">Detect location & drop pin</span>
-                          <span className="block text-xs text-[#7A6458] mt-0.5">We find you on the map — just check the pin is on your door.</span>
-                        </span>
-                        <ChevronRight className="w-5 h-5 text-[#8C102A] shrink-0" />
-                      </button>
+                      )}
+                    </div>
+                    {!deliveryCoords && (
+                      <p className="text-[11px] text-[#7A6458] mt-1.5">We deliver within {DELIVERY_RADIUS_KM} km of our parlours in Akurana, Colombo and Arugam Bay.</p>
                     )}
 
                     <div className="mt-3 space-y-2.5">
@@ -777,12 +823,14 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
                           className={fieldClass}
                         />
                       </label>
-                      <p className="flex items-center gap-1.5 text-xs text-[#7A6458]">
-                        <Store className="w-3.5 h-3.5 text-[#8C102A] shrink-0" />
-                        <span>
-                          Made and sent from <strong className="text-[#3D2C24]">Amore {assignedBranch.name}</strong>
-                        </span>
-                      </p>
+                      {deliveryRange?.ok && (
+                        <p className="flex items-center gap-1.5 text-xs text-[#7A6458]">
+                          <Store className="w-3.5 h-3.5 text-[#8C102A] shrink-0" />
+                          <span>
+                            Made and sent from <strong className="text-[#3D2C24]">Amore {assignedBranch.name}</strong>
+                          </span>
+                        </p>
+                      )}
                     </div>
                   </section>
                 ) : (
@@ -1059,6 +1107,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
         initialCity={city}
         initialCoords={deliveryCoords}
         fallbackBranch={detectedBranchId}
+        onChoosePickup={choosePickup}
         onSelectLocation={(loc) => {
           setDeliveryAddress(loc.address);
           if (loc.city) setCity(loc.city);
