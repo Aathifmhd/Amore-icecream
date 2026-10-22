@@ -21,13 +21,13 @@ import { UsersView } from './UsersView';
 
 type Section = 'orders' | 'refunds' | 'menu' | 'reports' | 'employees' | 'users';
 
-const ALL_SECTIONS: { id: Section; label: string; icon: React.ReactNode; title: string; superOnly?: boolean }[] = [
-  { id: 'orders', label: 'Orders', icon: <ClipboardList className="w-5 h-5" />, title: 'Orders' },
-  { id: 'refunds', label: 'Refunds', icon: <RotateCcw className="w-5 h-5" />, title: 'Refunds' },
-  { id: 'menu', label: 'Menu', icon: <UtensilsCrossed className="w-5 h-5" />, title: 'Menu & stock' },
-  { id: 'reports', label: 'Reports', icon: <BarChart3 className="w-5 h-5" />, title: 'Reports' },
-  { id: 'employees', label: 'Staff', icon: <IdCard className="w-5 h-5" />, title: 'Employees' },
-  { id: 'users', label: 'Users', icon: <UserCog className="w-5 h-5" />, title: 'Users & access', superOnly: true },
+const ALL_SECTIONS: { id: Section; label: string; icon: React.ReactNode; title: string; group: string; superOnly?: boolean }[] = [
+  { id: 'orders', label: 'Orders', icon: <ClipboardList className="w-5 h-5" />, title: 'Orders', group: 'Daily work' },
+  { id: 'refunds', label: 'Refunds', icon: <RotateCcw className="w-5 h-5" />, title: 'Refunds', group: 'Daily work' },
+  { id: 'menu', label: 'Menu', icon: <UtensilsCrossed className="w-5 h-5" />, title: 'Menu & stock', group: 'Menu' },
+  { id: 'reports', label: 'Reports', icon: <BarChart3 className="w-5 h-5" />, title: 'Reports', group: 'Insights' },
+  { id: 'employees', label: 'Staff', icon: <IdCard className="w-5 h-5" />, title: 'Employees', group: 'Team' },
+  { id: 'users', label: 'Users', icon: <UserCog className="w-5 h-5" />, title: 'Users & access', group: 'Team', superOnly: true },
 ];
 
 // Old links (?tab=returns, ?tab=overview…) still land in the right place
@@ -165,67 +165,65 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, signOutLabel = 'Sign 
   );
 
   return (
-    <div className="min-h-screen bg-[#F7F3EC] text-[#241A18] lg:pl-20 xl:pl-60">
-      {/* Sidebar (desktop) */}
-      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-20 xl:w-60 flex-col bg-white border-r border-[#EAE2D6] z-30">
-        <div className="flex items-center justify-center xl:justify-start gap-3 px-5 h-16 border-b border-[#F0E8DC]">
+    <div className="min-h-screen bg-[#F7F3EC] text-[#241A18] lg:pl-[76px]">
+      {/* Menu (desktop): a slim icon rail that opens over the page on hover */}
+      <aside className="console-rail hidden lg:flex" aria-label="Console menu">
+        <div className="rail-brand">
           <AmoreLogo size="sm" showShadow={false} />
-          <div className="leading-tight hidden xl:block">
-            <p className="font-bold">Amore</p>
-            <p className="text-xs text-[#8A7970] truncate" title={admin.displayName}>
-              {admin.displayName} · {isSuper ? 'Super admin' : 'Branch admin'}
-            </p>
+          <div className="rail-label leading-tight">
+            <p className="font-serif-title text-lg font-bold text-white">Amore</p>
+            <p className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-[#E8B04B]">Operations</p>
           </div>
         </div>
-        <nav className="flex-1 p-3 space-y-1" aria-label="Console">
-          {SECTIONS.map((s) => {
+
+        <nav className="rail-nav" aria-label="Console">
+          {SECTIONS.map((s, i) => {
             const b = badges[s.id];
+            const startsGroup = i === 0 || SECTIONS[i - 1].group !== s.group;
             return (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => go(s.id)}
-                aria-current={section === s.id ? 'page' : undefined}
-                title={s.label}
-                className={cx(
-                  'relative w-full flex items-center justify-center xl:justify-start gap-3 h-11 px-3 rounded-xl text-sm font-semibold cursor-pointer transition-colors',
-                  section === s.id ? 'bg-[#81001E] text-white' : 'text-[#3D2C24] hover:bg-[#F3EDE3]'
+              <React.Fragment key={s.id}>
+                {startsGroup && (
+                  <div className="rail-group" aria-hidden="true">
+                    <span className="rail-label">{s.group}</span>
+                  </div>
                 )}
-              >
-                {s.icon}
-                <span className="flex-1 text-left hidden xl:block">{s.label}</span>
-                {b && (
-                  <span
-                    className={cx(
-                      'min-w-5 h-5 xl:min-w-6 xl:h-6 px-1.5 rounded-full text-[11px] xl:text-xs font-bold flex items-center justify-center absolute top-0.5 right-1.5 xl:static',
-                      section === s.id ? 'bg-white text-[#81001E]' : b.tone
-                    )}
-                  >
-                    {b.n}
-                  </span>
-                )}
-              </button>
+                <button type="button" onClick={() => go(s.id)} aria-current={section === s.id ? 'page' : undefined} aria-label={s.label} className="rail-item">
+                  {s.icon}
+                  <span className="rail-label flex-1 text-left">{s.label}</span>
+                  {b && <span className={cx('rail-badge', b.tone)}>{b.n}</span>}
+                </button>
+              </React.Fragment>
             );
           })}
         </nav>
-        <div className="p-3 border-t border-[#F0E8DC] space-y-1">
-          <button
-            type="button"
-            onClick={toggleSound}
-            title={`New-order sound: ${soundOn ? 'On' : 'Off'}`}
-            className="w-full flex items-center justify-center xl:justify-start gap-3 h-10 px-3 rounded-xl text-sm text-[#3D2C24] hover:bg-[#F3EDE3] cursor-pointer"
-          >
-            {soundOn ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
-            <span className="hidden xl:inline">
-              New-order sound: <strong>{soundOn ? 'On' : 'Off'}</strong>
+
+        <div className="rail-foot">
+          <button type="button" onClick={toggleSound} aria-label={`New-order sound: ${soundOn ? 'On' : 'Off'}`} className="rail-item rail-quiet">
+            {soundOn ? <Bell /> : <BellOff />}
+            <span className="rail-label">
+              New-order sound: <strong className="text-white">{soundOn ? 'On' : 'Off'}</strong>
             </span>
           </button>
-          <button type="button" onClick={onBackToStore} title="View website" className="w-full flex items-center justify-center xl:justify-start gap-3 h-10 px-3 rounded-xl text-sm text-[#3D2C24] hover:bg-[#F3EDE3] cursor-pointer">
-            <ExternalLink className="w-4 h-4" /> <span className="hidden xl:inline">View website</span>
+          <button type="button" onClick={onBackToStore} aria-label="View website" className="rail-item rail-quiet">
+            <ExternalLink />
+            <span className="rail-label">View website</span>
           </button>
-          <button type="button" onClick={onSignOut} title={signOutLabel} className="w-full flex items-center justify-center xl:justify-start gap-3 h-10 px-3 rounded-xl text-sm text-red-700 hover:bg-red-50 cursor-pointer">
-            <SignOutIcon className="w-4 h-4" /> <span className="hidden xl:inline">{signOutLabel}</span>
+          <button type="button" onClick={onSignOut} aria-label={signOutLabel} className="rail-item rail-quiet rail-danger">
+            <SignOutIcon />
+            <span className="rail-label">{signOutLabel}</span>
           </button>
+        </div>
+
+        <div className="rail-user" title={admin.displayName}>
+          <span className="rail-avatar" aria-hidden="true">
+            {(admin.displayName || admin.username).trim()[0]?.toUpperCase()}
+          </span>
+          <span className="rail-label min-w-0 leading-tight pr-4">
+            <span className="block font-semibold text-white truncate">{admin.displayName}</span>
+            <span className="block text-xs text-[#E9D9C6]/70 truncate">
+              {isSuper ? 'Super admin' : `Branch admin · ${lockedBranch ? BRANCH_SHORT[lockedBranch] : ''}`}
+            </span>
+          </span>
         </div>
       </aside>
 
@@ -294,9 +292,9 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, signOutLabel = 'Sign 
                 aria-current={section === s.id ? 'page' : undefined}
                 className={cx('relative flex flex-col items-center justify-center gap-0.5 text-[11px] sm:text-xs font-semibold cursor-pointer', section === s.id ? 'text-[#81001E]' : 'text-[#7A6458]')}
               >
-                <span className="relative">
+                <span className={cx('relative flex items-center justify-center w-12 h-7 rounded-full transition-colors', section === s.id && 'bg-[#81001E]/10')}>
                   {s.icon}
-                  {b && <span className={cx('absolute -top-2 -right-3 min-w-5 h-5 px-1 rounded-full text-[11px] font-bold flex items-center justify-center', b.tone)}>{b.n}</span>}
+                  {b && <span className={cx('absolute -top-1.5 right-0 min-w-5 h-5 px-1 rounded-full text-[11px] font-bold flex items-center justify-center ring-2 ring-white', b.tone)}>{b.n}</span>}
                 </span>
                 {s.label}
               </button>

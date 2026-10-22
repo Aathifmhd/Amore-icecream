@@ -149,38 +149,55 @@ export const Dialog: React.FC<{
           </button>
         </div>
         {children && <div className="px-5 pb-4 overflow-y-auto">{children}</div>}
-        {footer && <div className="px-5 py-4 border-t border-[#F0E8DC] flex flex-wrap justify-end gap-2 pb-safe">{footer}</div>}
+        {footer && <div className="px-5 py-4 border-t border-[#F0E8DC] flex flex-wrap justify-end gap-2 pb-[max(1rem,env(safe-area-inset-bottom))]">{footer}</div>}
       </div>
     </div>
   );
 };
 
-/** Side panel from the right on desktop, full-height sheet on phones. */
-export const Drawer: React.FC<{
+/**
+ * A popup window for details and forms: centred over the page on larger screens,
+ * a sheet that slides up from the bottom on phones. Confirmations (Dialog) open above it.
+ */
+export const Popup: React.FC<{
   open: boolean;
   onClose: () => void;
   title: React.ReactNode;
   subtitle?: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
-}> = ({ open, onClose, title, subtitle, children, footer }) => {
+  /** Wider window, for content with more columns (e.g. an order). */
+  wide?: boolean;
+}> = ({ open, onClose, title, subtitle, children, footer, wide }) => {
   useOverlay(open, onClose);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[70] flex justify-end" role="dialog" aria-modal="true">
-      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/35 animate-fadeIn cursor-default" />
-      <div className="relative h-full w-full sm:max-w-lg bg-[#FCFAF7] shadow-2xl flex flex-col drawer-in">
-        <div className="flex items-start justify-between gap-4 px-5 py-4 bg-white border-b border-[#EAE2D6]">
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center sm:p-6" role="dialog" aria-modal="true">
+      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-[#241A18]/45 backdrop-blur-[2px] animate-fadeIn cursor-default" />
+      <div
+        className={cx(
+          'popup-in relative w-full flex flex-col overflow-hidden bg-[#FCFAF7] shadow-2xl ring-1 ring-black/5',
+          'rounded-t-3xl sm:rounded-3xl max-h-[94dvh] sm:max-h-[88vh]',
+          wide ? 'sm:max-w-3xl' : 'sm:max-w-xl'
+        )}
+      >
+        <span className="sm:hidden mx-auto mt-2.5 h-1.5 w-10 rounded-full bg-[#E2D8CA]" aria-hidden="true" />
+        <div className="flex items-start justify-between gap-4 px-5 sm:px-6 pt-3 sm:pt-5 pb-4 bg-white border-b border-[#EAE2D6]">
           <div className="min-w-0">
             <div className="text-lg font-bold text-[#241A18] truncate">{title}</div>
             {subtitle && <div className="text-sm text-[#6B5A51] mt-0.5">{subtitle}</div>}
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="p-2 -m-2 rounded-lg text-[#7A6458] hover:bg-[#F3EDE3] cursor-pointer">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="w-9 h-9 -mr-1.5 shrink-0 rounded-full flex items-center justify-center text-[#7A6458] bg-[#F7F3EC] hover:bg-[#EFE7DB] hover:text-[#241A18] cursor-pointer transition-colors"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
-        {footer && <div className="px-5 py-4 bg-white border-t border-[#EAE2D6] flex flex-wrap gap-2 pb-safe">{footer}</div>}
+        <div className="flex-1 overflow-y-auto overscroll-contain px-5 sm:px-6 py-5">{children}</div>
+        {footer && <div className="px-5 sm:px-6 py-4 bg-white border-t border-[#EAE2D6] flex flex-wrap gap-2 pb-[max(1rem,env(safe-area-inset-bottom))]">{footer}</div>}
       </div>
     </div>
   );

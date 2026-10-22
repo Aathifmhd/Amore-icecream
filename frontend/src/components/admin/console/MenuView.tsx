@@ -15,7 +15,7 @@ import {
   updateScoopItem,
 } from '../../../utils/menuStorage';
 import { formatPrice } from '../../../utils/currency';
-import { Badge, Button, Card, Drawer, EmptyState, Field, Switch, cx, inputClass, useConsoleUi } from './ui';
+import { Badge, Button, Card, Popup, EmptyState, Field, Switch, cx, inputClass, useConsoleUi } from './ui';
 import { BranchFilter, MenuData } from './useConsoleData';
 import { isSoldOutAt } from '../../../utils/stock';
 import { uploadMenuPhoto } from '../../../utils/imageUpload';
@@ -227,7 +227,7 @@ const ItemEditor: React.FC<{ kind: Kind; item?: ScoopItem | MenuItem; onClose: (
   );
 
   return (
-    <Drawer
+    <Popup
       open
       onClose={onClose}
       title={item ? item.name : `New ${kind === 'scoops' ? 'ice cream flavour' : kind === 'coffee' ? 'coffee' : 'cake'}`}
@@ -294,7 +294,7 @@ const ItemEditor: React.FC<{ kind: Kind; item?: ScoopItem | MenuItem; onClose: (
           )}
         </div>
       </div>
-    </Drawer>
+    </Popup>
   );
 };
 

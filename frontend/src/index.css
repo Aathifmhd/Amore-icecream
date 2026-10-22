@@ -429,15 +429,15 @@ html {
 }
 
 /* ---- Operations console ---- */
-@keyframes drawerIn {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
+@keyframes popupIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to { opacity: 1; transform: none; }
 }
-.drawer-in {
-  animation: drawerIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+.popup-in {
+  animation: popupIn 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 @media (max-width: 639px) {
-  .drawer-in { animation: sheetUp 0.28s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .popup-in { animation: sheetUp 0.28s cubic-bezier(0.16, 1, 0.3, 1) both; }
 }
 @keyframes newOrderPulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.45); }
@@ -447,7 +447,169 @@ html {
   animation: newOrderPulse 2s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  .drawer-in, .new-order-pulse { animation: none; }
+  .popup-in, .new-order-pulse { animation: none; }
+}
+
+/* ---- Console menu: a slim icon rail that opens over the page on hover (as in Cargo POS) ----
+   The rail is 76px; the logo, every menu icon and the avatar sit on one centre line (38px),
+   so opening only widens the rail and nothing jumps. Keyboard focus opens it too. */
+.console-rail {
+  position: fixed;
+  inset-block: 0;
+  left: 0;
+  z-index: 40;
+  width: 76px;
+  flex-direction: column;
+  overflow: hidden;
+  color: #F3E6D6;
+  background:
+    radial-gradient(140% 55% at 0% 0%, rgba(160, 20, 52, 0.55) 0%, transparent 60%),
+    linear-gradient(180deg, #4A0716 0%, #33050F 55%, #22030A 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  transition: width 0.32s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.console-rail:hover,
+.console-rail:has(:focus-visible) {
+  width: 264px;
+  box-shadow: 24px 0 64px rgba(34, 3, 10, 0.38);
+}
+.rail-label {
+  opacity: 0;
+  white-space: nowrap;
+  transition: opacity 0.16s;
+}
+.console-rail:hover .rail-label,
+.console-rail:has(:focus-visible) .rail-label {
+  opacity: 1;
+  transition-delay: 0.06s;
+}
+
+.rail-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 72px;
+  padding-left: 20px;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.rail-nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  padding: 8px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.rail-nav::-webkit-scrollbar { display: none; }
+
+/* Group titles become short dividers while the rail is closed */
+.rail-group {
+  position: relative;
+  height: 30px;
+  padding: 14px 16px 0;
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(232, 176, 75, 0.75);
+}
+.rail-group::before {
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: 18px;
+  width: 16px;
+  height: 1px;
+  background: rgba(243, 230, 214, 0.28);
+  transition: opacity 0.16s;
+}
+.console-rail:hover .rail-group::before,
+.console-rail:has(:focus-visible) .rail-group::before { opacity: 0; }
+
+.rail-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  height: 44px;
+  flex-shrink: 0;
+  padding: 0 16px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: rgba(243, 230, 214, 0.78);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+.rail-item > svg { width: 20px; height: 20px; flex-shrink: 0; }
+.rail-item:hover { background: rgba(255, 255, 255, 0.07); color: #fff; }
+.rail-item:focus-visible { outline: 2px solid #E8B04B; outline-offset: -2px; }
+.rail-item[aria-current="page"] {
+  color: #fff;
+  background: linear-gradient(90deg, rgba(232, 176, 75, 0.24), rgba(232, 176, 75, 0.06));
+  box-shadow: inset 3px 0 0 #E8B04B;
+}
+.rail-item[aria-current="page"] > svg { color: #F2C46D; }
+.rail-item.rail-quiet { height: 40px; font-size: 13px; font-weight: 500; color: rgba(243, 230, 214, 0.62); }
+.rail-item.rail-quiet:hover { color: #fff; }
+.rail-item.rail-danger:hover { background: rgba(239, 68, 68, 0.16); color: #FECACA; }
+
+/* Count badge: on the icon while closed, at the end of the row when open */
+.rail-badge {
+  position: absolute;
+  left: 30px;
+  top: 5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 0 0 2px #3A0611;
+  transition: left 0.32s cubic-bezier(0.16, 1, 0.3, 1), top 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.console-rail:hover .rail-badge,
+.console-rail:has(:focus-visible) .rail-badge { left: calc(100% - 38px); top: 13px; }
+
+.rail-foot {
+  flex-shrink: 0;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+.rail-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 12px 0 16px 20px;
+}
+.rail-avatar {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 15px;
+  color: #3A0611;
+  background: linear-gradient(135deg, #F6D58E, #E8B04B);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.14);
+}
+@media (prefers-reduced-motion: reduce) {
+  .console-rail, .rail-badge { transition: none; }
 }
 
 /* ---- Console status animations ---- */

@@ -8,7 +8,7 @@ import { BranchId } from '../../../types';
 import { AMORE_BRANCHES } from '../../../data/iceCreamData';
 import { api, ApiError, type AdminProfile } from '../../../api';
 import { signOutAdmin } from '../../../utils/adminAuth';
-import { Badge, Button, Card, Drawer, EmptyState, Field, cx, inputClass, useConsoleUi } from './ui';
+import { Badge, Button, Card, Popup, EmptyState, Field, cx, inputClass, useConsoleUi } from './ui';
 import { timeAgo } from './orderMeta';
 
 interface AdminUser extends AdminProfile {
@@ -153,7 +153,7 @@ const UserEditor: React.FC<{
   };
 
   return (
-    <Drawer
+    <Popup
       open
       onClose={onClose}
       title={isNew ? 'New branch admin' : user.displayName}
@@ -230,7 +230,7 @@ const UserEditor: React.FC<{
         />
         {passwordProblem && <p className="text-sm text-red-700 -mt-2">{passwordProblem}</p>}
       </div>
-    </Drawer>
+    </Popup>
   );
 };
 

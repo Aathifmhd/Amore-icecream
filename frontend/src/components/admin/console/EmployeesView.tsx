@@ -10,7 +10,7 @@ import { AMORE_BRANCHES } from '../../../data/iceCreamData';
 import { api, ApiError } from '../../../api';
 import { photoDataUrl } from '../../../utils/imageUpload';
 import { formatPrice } from '../../../utils/currency';
-import { Badge, Button, Card, Drawer, EmptyState, Field, cx, inputClass, useConsoleUi } from './ui';
+import { Badge, Button, Card, Popup, EmptyState, Field, cx, inputClass, useConsoleUi } from './ui';
 import { BranchFilter } from './useConsoleData';
 
 export interface Employee {
@@ -131,7 +131,7 @@ const EmployeeEditor: React.FC<{
   );
 
   return (
-    <Drawer
+    <Popup
       open
       onClose={onClose}
       title={employee ? employee.fullName : 'New employee'}
@@ -208,7 +208,7 @@ const EmployeeEditor: React.FC<{
         </Field>
         <p className="text-xs text-[#8A7970]">Only this branch's admin and the super admin can see these details.</p>
       </div>
-    </Drawer>
+    </Popup>
   );
 };
 

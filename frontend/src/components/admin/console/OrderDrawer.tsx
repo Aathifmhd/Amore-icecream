@@ -10,7 +10,7 @@ import {
   updateOrder,
 } from '../../../utils/orderStorage';
 import { formatPrice } from '../../../utils/currency';
-import { Badge, Button, Dialog, Drawer, Field, cx, inputClass, useConsoleUi } from './ui';
+import { Badge, Button, Dialog, Popup, Field, cx, inputClass, useConsoleUi } from './ui';
 import { clockTime, formatLabel, isPickup, nextStep, paymentLabel, shortRef, statusLabel } from './orderMeta';
 import { NextStepButton } from './OrdersView';
 import { printSlip } from './printSlip';
@@ -271,8 +271,9 @@ export const OrderDrawer: React.FC<{ order: OrderRecord | null; onClose: () => v
 
   return (
     <>
-      <Drawer
+      <Popup
         open
+        wide
         onClose={onClose}
         title={
           <span className="flex items-center gap-2">
@@ -418,7 +419,7 @@ export const OrderDrawer: React.FC<{ order: OrderRecord | null; onClose: () => v
             </ol>
           </Section>
         </div>
-      </Drawer>
+      </Popup>
 
       {dialog === 'edit' && <EditDialog order={order} onClose={() => setDialog(null)} />}
       {dialog === 'cancel' && (
