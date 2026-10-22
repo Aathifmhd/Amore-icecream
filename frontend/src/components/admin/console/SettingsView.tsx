@@ -3,7 +3,7 @@
  * the default prices for every branch and the photo gallery that menu photos are picked from.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Bell, ImagePlus, Images, KeyRound, Lock, RotateCcw, ShieldCheck, Trash2, Upload, UserCog, Volume2 } from 'lucide-react';
+import { Bell, ImagePlus, Images, KeyRound, Lock, RotateCcw, Tag, Trash2, Upload, UserCog, Volume2 } from 'lucide-react';
 import { ApiError, ADMIN_SESSION_EVENT, type AdminProfile } from '../../../api';
 import { getRememberedDevice, isValidCodeFormat, lockConsole, removeUserCode, setUserCode } from '../../../utils/adminAuth';
 import { Badge, Button, Card, EmptyState, Field, Popup, Switch, cx, inputClass, useConsoleUi } from './ui';
@@ -22,19 +22,28 @@ import type { MenuData } from './useConsoleData';
 const BRANCH_NAME: Record<string, string> = { akurana: 'Akurana', colombo: 'Colombo', arugambay: 'Arugam Bay' };
 const errorText = (err: unknown, fallback: string) => (err instanceof ApiError ? err.message : fallback);
 
-const SettingCard: React.FC<{ icon: React.ReactNode; title: string; children: React.ReactNode }> = ({ icon, title, children }) => (
-  <Card className="p-5">
-    <div className="flex items-center gap-3 mb-4">
-      <span className="w-10 h-10 rounded-xl bg-[#81001E]/10 text-[#81001E] flex items-center justify-center shrink-0">{icon}</span>
-      <h2 className="font-bold text-[#241A18]">{title}</h2>
-    </div>
-    {children}
-  </Card>
+// ---- This device -------------------------------------------------------------
+
+const SoundSettings: React.FC<{ soundOn: boolean; onSoundChange: (on: boolean) => void; onTestSound: () => void }> = ({
+  soundOn,
+  onSoundChange,
+  onTestSound,
+}) => (
+  <div className="max-w-xl">
+    <label className="flex items-center justify-between gap-4 rounded-xl bg-[#FBF8F3] border border-[#EAE2D6] px-4 py-3 cursor-pointer">
+      <span>
+        <span className="block font-semibold text-[#241A18]">Play a sound for new orders</span>
+        <span className="block text-xs text-[#7A6458] mt-0.5">A chime when a new order comes in. The count also shows in the browser tab.</span>
+      </span>
+      <Switch checked={soundOn} onChange={onSoundChange} label="New-order sound" />
+    </label>
+    <Button className="mt-3" variant="secondary" icon={<Volume2 className="w-4 h-4" />} onClick={onTestSound}>
+      Play test sound
+    </Button>
+  </div>
 );
 
-// ---- General ---------------------------------------------------------------
-
-const UserCodeCard: React.FC = () => {
+const UserCodeSettings: React.FC = () => {
   const { toast } = useConsoleUi();
   const [hasCode, setHasCode] = useState(() => Boolean(getRememberedDevice()));
   const [editing, setEditing] = useState(false);
@@ -87,7 +96,7 @@ const UserCodeCard: React.FC = () => {
   );
 
   return (
-    <SettingCard icon={<KeyRound className="w-5 h-5" />} title="User code on this device">
+    <div className="max-w-xl">
       <p className="text-sm text-[#6B5A51]">
         {hasCode
           ? 'This device opens the console with your 4–6 digit code. Five wrong tries and the full name and password are needed again.'
@@ -126,61 +135,38 @@ const UserCodeCard: React.FC = () => {
           )}
         </div>
       )}
-    </SettingCard>
+    </div>
   );
 };
 
-const GeneralSettings: React.FC<{
-  admin: AdminProfile;
-  menu: MenuData;
-  soundOn: boolean;
-  onSoundChange: (on: boolean) => void;
-  onTestSound: () => void;
-  onOpenUsers: () => void;
-}> = ({ admin, soundOn, onSoundChange, onTestSound, onOpenUsers }) => {
+// ---- Account ------------------------------------------------------------------
+
+const AccountSettings: React.FC<{ admin: AdminProfile; onOpenUsers: () => void }> = ({ admin, onOpenUsers }) => {
   const isSuper = admin.role !== 'branch';
   return (
-    <div className="grid lg:grid-cols-2 gap-5 items-start">
-      <SettingCard icon={<Bell className="w-5 h-5" />} title="Notifications">
-        <label className="flex items-center justify-between gap-4 rounded-xl bg-[#FBF8F3] border border-[#EAE2D6] px-4 py-3 cursor-pointer">
-          <span>
-            <span className="block font-semibold text-[#241A18]">New-order sound</span>
-            <span className="block text-xs text-[#7A6458] mt-0.5">A chime when a new order comes in. The count also shows in the browser tab.</span>
-          </span>
-          <Switch checked={soundOn} onChange={onSoundChange} label="New-order sound" />
-        </label>
-        <Button className="mt-3" variant="ghost" size="sm" icon={<Volume2 className="w-4 h-4" />} onClick={onTestSound}>
-          Play test sound
-        </Button>
-        <p className="text-xs text-[#8A7970] mt-2">This setting is kept on this device only.</p>
-      </SettingCard>
-
-      <UserCodeCard />
-
-      <SettingCard icon={isSuper ? <ShieldCheck className="w-5 h-5" /> : <UserCog className="w-5 h-5" />} title="Your account">
-        <div className="flex items-center gap-3">
-          <span className="w-12 h-12 rounded-full bg-gradient-to-br from-[#F6D58E] to-[#E8B04B] text-[#3A0611] font-extrabold text-lg flex items-center justify-center shrink-0">
-            {(admin.displayName || admin.username).trim()[0]?.toUpperCase()}
-          </span>
-          <div className="min-w-0">
-            <p className="font-semibold text-[#241A18] truncate">{admin.displayName}</p>
-            <p className="text-sm text-[#7A6458] truncate">
-              {isSuper ? 'Super admin' : `Branch admin · ${admin.branchId ? BRANCH_NAME[admin.branchId] : ''}`}
-              {admin.google ? ' · Google sign-in' : ` · signs in as “${admin.username}”`}
-            </p>
-          </div>
+    <div className="max-w-xl">
+      <div className="flex items-center gap-3">
+        <span className="w-12 h-12 rounded-full bg-gradient-to-br from-[#F6D58E] to-[#E8B04B] text-[#3A0611] font-extrabold text-lg flex items-center justify-center shrink-0">
+          {(admin.displayName || admin.username).trim()[0]?.toUpperCase()}
+        </span>
+        <div className="min-w-0">
+          <p className="font-semibold text-[#241A18] truncate">{admin.displayName}</p>
+          <p className="text-sm text-[#7A6458] truncate">
+            {isSuper ? 'Super admin' : `Branch admin · ${admin.branchId ? BRANCH_NAME[admin.branchId] : ''}`}
+            {admin.google ? ' · Google sign-in' : ` · signs in as “${admin.username}”`}
+          </p>
         </div>
-        <p className="text-sm text-[#6B5A51] mt-4">
-          {isSuper
-            ? 'Change your password, or add and manage branch admins, on the Users page.'
-            : 'To change your password, ask the super admin.'}
-        </p>
-        {isSuper && (
-          <Button className="mt-3" variant="secondary" icon={<UserCog className="w-4 h-4" />} onClick={onOpenUsers}>
-            Open Users
-          </Button>
-        )}
-      </SettingCard>
+      </div>
+      <p className="text-sm text-[#6B5A51] mt-4">
+        {isSuper
+          ? 'Change your password, or add and manage branch admins, on the Users page.'
+          : 'To change your password, ask the super admin.'}
+      </p>
+      {isSuper && (
+        <Button className="mt-3" variant="secondary" icon={<UserCog className="w-4 h-4" />} onClick={onOpenUsers}>
+          Open Users
+        </Button>
+      )}
     </div>
   );
 };
@@ -365,7 +351,7 @@ const PhotoGallery: React.FC = () => {
           </EmptyState>
         </Card>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
           {shown.map((p) => (
             <figure key={p.id} className="group bg-white rounded-2xl border border-[#EAE2D6] overflow-hidden shadow-xs">
               <div className="relative aspect-square bg-[#F3EDE3] overflow-hidden">
@@ -403,7 +389,37 @@ const PhotoGallery: React.FC = () => {
 
 // ---- Page -------------------------------------------------------------------------
 
-type Tab = 'general' | 'prices' | 'gallery';
+type SectionId = 'sound' | 'code' | 'account' | 'prices' | 'gallery';
+type Section = { id: SectionId; icon: React.ReactNode; label: string; desc: string; superOnly?: boolean };
+
+// The settings menu, grouped under headings (like Cargo POS)
+const GROUPS: { heading: string; items: Section[] }[] = [
+  {
+    heading: 'This device',
+    items: [
+      { id: 'sound', icon: <Bell className="w-4 h-4" />, label: 'New-order sound', desc: 'A chime for new orders. Kept on this device only.' },
+      { id: 'code', icon: <KeyRound className="w-4 h-4" />, label: 'User code', desc: 'Open the console on this device with a short code instead of the password.' },
+    ],
+  },
+  {
+    heading: 'Account',
+    items: [{ id: 'account', icon: <UserCog className="w-4 h-4" />, label: 'Your account', desc: 'Who is signed in here, and where passwords are changed.' }],
+  },
+  {
+    heading: 'Menu',
+    items: [
+      {
+        id: 'prices',
+        icon: <Tag className="w-4 h-4" />,
+        label: 'Default prices',
+        desc: 'The price at every branch, unless a branch has set its own price for an item.',
+        superOnly: true,
+      },
+      { id: 'gallery', icon: <Images className="w-4 h-4" />, label: 'Photo gallery', desc: 'The photos menu items are picked from.', superOnly: true },
+    ],
+  },
+];
+const SECTION_KEY = 'amore_settings_section';
 
 export const SettingsView: React.FC<{
   admin: AdminProfile;
@@ -412,49 +428,96 @@ export const SettingsView: React.FC<{
   onSoundChange: (on: boolean) => void;
   onTestSound: () => void;
   onOpenUsers: () => void;
-}> = (props) => {
-  const isSuper = props.admin.role !== 'branch';
-  const [tab, setTab] = useState<Tab>(() => {
-    const view = new URLSearchParams(window.location.search).get('view');
-    return isSuper && (view === 'gallery' || view === 'prices') ? view : 'general';
+}> = ({ admin, menu, soundOn, onSoundChange, onTestSound, onOpenUsers }) => {
+  const isSuper = admin.role !== 'branch';
+  const groups = GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => isSuper || !i.superOnly) })).filter((g) => g.items.length);
+  const all = groups.flatMap((g) => g.items.map((i) => ({ ...i, group: g.heading })));
+
+  // The page link (?view=) first, then the section last opened on this device
+  const [section, setSection] = useState<SectionId>(() => {
+    const ok = (v: string | null) => all.find((i) => i.id === v)?.id;
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem(SECTION_KEY);
+    } catch {
+      /* storage blocked */
+    }
+    return ok(new URLSearchParams(window.location.search).get('view')) || ok(saved) || all[0].id;
   });
 
-  const choose = (t: Tab) => {
-    setTab(t);
+  const open = (id: SectionId) => {
+    setSection(id);
+    try {
+      localStorage.setItem(SECTION_KEY, id);
+    } catch {
+      /* storage blocked */
+    }
     const url = new URL(window.location.href);
-    if (t === 'general') url.searchParams.delete('view');
-    else url.searchParams.set('view', t);
+    url.searchParams.set('view', id);
     window.history.replaceState({}, '', url.toString());
   };
 
+  const cur = all.find((i) => i.id === section) || all[0];
+
   return (
-    <div className="space-y-5">
-      {isSuper && (
-        <div className="inline-flex p-1 bg-[#F3EDE3] rounded-xl" role="tablist">
-          {(
-            [
-              ['general', 'General'],
-              ['prices', 'Default prices'],
-              ['gallery', 'Photo gallery'],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={tab === id}
-              onClick={() => choose(id)}
-              className={cx(
-                'h-9 px-4 rounded-lg text-sm font-semibold whitespace-nowrap cursor-pointer',
-                tab === id ? 'bg-white text-[#241A18] shadow-sm' : 'text-[#6B5A51] hover:text-[#241A18]'
-              )}
-            >
-              {label}
-            </button>
-          ))}
+    <div className="grid lg:grid-cols-[15rem_minmax(0,1fr)] gap-5 items-start">
+      {/* Phones and tablets: one row of sections to swipe through */}
+      <nav className="lg:hidden flex gap-1.5 overflow-x-auto no-scrollbar -mx-1 px-1" aria-label="Settings sections">
+        {all.map((i) => (
+          <button
+            key={i.id}
+            type="button"
+            aria-current={cur.id === i.id ? 'page' : undefined}
+            onClick={() => open(i.id)}
+            className={cx(
+              'inline-flex items-center gap-2 h-10 px-3.5 rounded-full text-sm font-semibold whitespace-nowrap cursor-pointer border transition-colors',
+              cur.id === i.id ? 'bg-[#81001E] text-white border-[#81001E]' : 'bg-white text-[#5C4D44] border-[#E2D8CA] hover:border-[#C9B9A4]'
+            )}
+          >
+            {i.icon}
+            {i.label}
+          </button>
+        ))}
+      </nav>
+
+      {/* Larger screens: the sections grouped under headings */}
+      <nav className="hidden lg:flex flex-col gap-4 sticky top-4 bg-white border border-[#EAE2D6] rounded-2xl p-3 shadow-xs" aria-label="Settings sections">
+        {groups.map((g) => (
+          <div key={g.heading} className="flex flex-col gap-0.5">
+            <p className="px-2.5 pb-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-[#A8988B]">{g.heading}</p>
+            {g.items.map((i) => (
+              <button
+                key={i.id}
+                type="button"
+                aria-current={cur.id === i.id ? 'page' : undefined}
+                onClick={() => open(i.id)}
+                className={cx(
+                  'flex items-center gap-2.5 w-full px-2.5 py-2.5 rounded-lg text-sm font-semibold text-left cursor-pointer transition-colors',
+                  cur.id === i.id ? 'bg-[#81001E]/10 text-[#81001E]' : 'text-[#5C4D44] hover:bg-[#F7F3EC] hover:text-[#241A18]'
+                )}
+              >
+                {i.icon}
+                <span>{i.label}</span>
+              </button>
+            ))}
+          </div>
+        ))}
+      </nav>
+
+      <Card className="min-h-[22rem]">
+        <div className="px-5 sm:px-6 pt-5 pb-4 border-b border-[#F0E8DC]">
+          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#A8988B]">{cur.group}</p>
+          <h2 className="text-xl font-bold text-[#241A18] mt-0.5">{cur.label}</h2>
+          <p className="text-sm text-[#6B5A51] mt-1">{cur.desc}</p>
         </div>
-      )}
-      {tab === 'gallery' && isSuper ? <PhotoGallery /> : tab === 'prices' && isSuper ? <DefaultPricesView menu={props.menu} /> : <GeneralSettings {...props} />}
+        <div className="px-5 sm:px-6 py-5">
+          {cur.id === 'sound' && <SoundSettings soundOn={soundOn} onSoundChange={onSoundChange} onTestSound={onTestSound} />}
+          {cur.id === 'code' && <UserCodeSettings />}
+          {cur.id === 'account' && <AccountSettings admin={admin} onOpenUsers={onOpenUsers} />}
+          {cur.id === 'prices' && isSuper && <DefaultPricesView menu={menu} />}
+          {cur.id === 'gallery' && isSuper && <PhotoGallery />}
+        </div>
+      </Card>
     </div>
   );
 };

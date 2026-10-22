@@ -1,9 +1,10 @@
 /**
  * Settings → Default prices (super admin only): the price every branch charges unless it has set
- * its own. Change any item here, or set a whole column at once, then save.
+ * its own (the menu shows those as "price different at …"). Change any item here, or set a whole
+ * column at once, then save.
  */
 import React, { useMemo, useState } from 'react';
-import { RotateCcw, Tag } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 import { BranchId, MenuItem, ScoopItem } from '../../../types';
 import { AMORE_BRANCHES } from '../../../data/iceCreamData';
 import { updateCakeItem, updateCoffeeItem, updateScoopItem } from '../../../utils/menuStorage';
@@ -103,75 +104,63 @@ export const DefaultPricesView: React.FC<{ menu: MenuData }> = ({ menu }) => {
 
   return (
     <div className="space-y-4">
-      <Card className="p-5 space-y-4">
-        <div>
-          <h2 className="font-bold text-[#241A18] flex items-center gap-2">
-            <Tag className="w-5 h-5 text-[#81001E]" /> Default prices
-          </h2>
-          <p className="text-sm text-[#6B5A51] mt-1">
-            The price at every branch, unless a branch has set its own price for an item (shown as “price different at …”). Only the
-            super admin can change default prices.
-          </p>
+      <div className="flex flex-col xl:flex-row gap-3 xl:items-center xl:justify-between">
+        <div className="inline-flex p-1 bg-[#F3EDE3] rounded-xl self-start" role="tablist">
+          {KINDS.map((k) => (
+            <button
+              key={k.id}
+              type="button"
+              role="tab"
+              aria-selected={kind === k.id}
+              onClick={() => setKind(k.id)}
+              className={cx(
+                'h-9 px-3.5 rounded-lg text-sm font-semibold whitespace-nowrap cursor-pointer',
+                kind === k.id ? 'bg-white text-[#241A18] shadow-sm' : 'text-[#6B5A51] hover:text-[#241A18]'
+              )}
+            >
+              {k.label} <span className="text-[#A8988B] font-medium">{itemsOf(k.id).length}</span>
+            </button>
+          ))}
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
-          <div className="inline-flex p-1 bg-[#F3EDE3] rounded-xl self-start" role="tablist">
-            {KINDS.map((k) => (
-              <button
-                key={k.id}
-                type="button"
-                role="tab"
-                aria-selected={kind === k.id}
-                onClick={() => setKind(k.id)}
-                className={cx(
-                  'h-9 px-3.5 rounded-lg text-sm font-semibold whitespace-nowrap cursor-pointer',
-                  kind === k.id ? 'bg-white text-[#241A18] shadow-sm' : 'text-[#6B5A51] hover:text-[#241A18]'
-                )}
-              >
-                {k.label} <span className="text-[#A8988B] font-medium">{itemsOf(k.id).length}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Set one price for a whole column */}
-          <div className="flex flex-wrap items-center gap-2 text-sm text-[#5C4D44]">
-            <span>Set every</span>
-            {kind === 'scoops' ? (
-              <select
-                value={fillCol}
-                onChange={(e) => setFillCol(e.target.value as PriceKey)}
-                aria-label="Which price"
-                className={cx(inlineInput, 'h-10 pr-8 cursor-pointer')}
-              >
-                {SCOOP_COLS.map((c) => (
-                  <option key={c.key} value={c.key}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="font-semibold text-[#241A18]">{KINDS.find((x) => x.id === kind)!.label.toLowerCase()} price</span>
-            )}
-            <span>to</span>
-            <span className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#A8988B]">LKR</span>
-              <input
-                value={fillValue}
-                onChange={(e) => setFillValue(digits(e.target.value))}
-                onKeyDown={(e) => e.key === 'Enter' && fillAll()}
-                inputMode="numeric"
-                aria-label="Price for all"
-                className={cx(inlineInput, 'h-10 w-32 pl-11 text-right tabular-nums')}
-              />
-            </span>
-            <Button variant="secondary" onClick={fillAll} disabled={!fillValue}>
-              Apply
-            </Button>
-          </div>
+        {/* Set one price for a whole column */}
+        <div className="flex flex-wrap items-center gap-2 text-sm text-[#5C4D44]">
+          <span>Set every</span>
+          {kind === 'scoops' ? (
+            <select
+              value={fillCol}
+              onChange={(e) => setFillCol(e.target.value as PriceKey)}
+              aria-label="Which price"
+              className={cx(inlineInput, 'h-10 pr-8 cursor-pointer')}
+            >
+              {SCOOP_COLS.map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="font-semibold text-[#241A18]">{KINDS.find((x) => x.id === kind)!.label.toLowerCase()} price</span>
+          )}
+          <span>to</span>
+          <span className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#A8988B]">LKR</span>
+            <input
+              value={fillValue}
+              onChange={(e) => setFillValue(digits(e.target.value))}
+              onKeyDown={(e) => e.key === 'Enter' && fillAll()}
+              inputMode="numeric"
+              aria-label="Price for all"
+              className={cx(inlineInput, 'h-10 w-32 pl-11 text-right tabular-nums')}
+            />
+          </span>
+          <Button variant="secondary" onClick={fillAll} disabled={!fillValue}>
+            Apply
+          </Button>
         </div>
-      </Card>
+      </div>
 
-      <Card className="overflow-hidden">
+      <div className="rounded-xl border border-[#EAE2D6] overflow-hidden">
         <div className={cx('hidden sm:grid gap-3 px-4 py-2.5 bg-[#F7F3EC] text-xs font-semibold uppercase tracking-wide text-[#8A7970]', kind === 'scoops' ? scoopGrid : oneGrid)}>
           <span>Item</span>
           {cols.map((c) => (
@@ -228,7 +217,7 @@ export const DefaultPricesView: React.FC<{ menu: MenuData }> = ({ menu }) => {
             );
           })}
         </div>
-      </Card>
+      </div>
 
       {(changes.list.length > 0 || changes.invalid > 0) && (
         <div className="sticky bottom-3 z-10">

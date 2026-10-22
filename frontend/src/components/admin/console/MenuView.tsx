@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Plus, Search, Pencil, Trash2, Upload, Images, X, ImageOff, Check, CircleSlash, RotateCcw, Tag } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Upload, Images, X, ImageOff, Check, CircleSlash, RotateCcw } from 'lucide-react';
 import { BranchId, MenuItem, ScoopItem } from '../../../types';
 import { AMORE_BRANCHES } from '../../../data/iceCreamData';
 import {
@@ -481,10 +481,6 @@ export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; isSuper:
   const whereText = (where: BranchId[]) =>
     where.length === AMORE_BRANCHES.length ? 'all branches' : where.map((b) => BRANCH_SHORT[b]).join(' & ');
   const where = branch === 'all' ? '' : ` at ${BRANCH_SHORT[branch]}`;
-  // Items a branch sells with its own prices, photos or text (super admin, all branches)
-  const differentNow = [...menu.scoops, ...menu.coffee, ...menu.cakes]
-    .map((i) => ({ item: i, branches: AMORE_BRANCHES.map((b) => ({ id: b.id, changes: describeBranchChanges(i, b.id) })).filter((x) => x.changes.length) }))
-    .filter((x) => x.branches.length > 0);
 
   const switchStock = (i: ScoopItem | MenuItem, b: BranchId) => {
     const inStock = isSoldOutAt(i, b);
@@ -561,28 +557,6 @@ export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; isSuper:
           )}
         </div>
       </div>
-
-      {branch === 'all' && differentNow.length > 0 && (
-        <Card className="p-4 border-amber-200 bg-amber-50/50">
-          <p className="text-sm font-semibold text-[#241A18] mb-2.5 flex items-center gap-2">
-            <Tag className="w-4 h-4 text-amber-700" /> Different at branches
-          </p>
-          <ul className="space-y-1.5">
-            {differentNow.map(({ item, branches }) => (
-              <li key={item.id} className="text-sm text-[#3D2C24]">
-                <strong className="text-[#241A18]">{item.name}</strong>
-                {branches.map((b) => (
-                  <span key={b.id}>
-                    {' '}
-                    · <span className="font-semibold">{BRANCH_SHORT[b.id]}:</span> {b.changes.join(', ')}
-                  </span>
-                ))}
-              </li>
-            ))}
-          </ul>
-          <p className="text-xs text-[#8A7970] mt-2.5">Open an item to see or reset a branch's own version. Pick a branch at the top to edit it.</p>
-        </Card>
-      )}
 
       {editBranch && (
         <p className="text-xs text-[#5C2A0A] rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5">

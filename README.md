@@ -78,6 +78,10 @@ The console is at **/admin** (it is not linked from the storefront).
 | Users (admin logins) | add, change, reset passwords, remove | — |
 | Settings | sound, user code, account, **default prices**, **photo gallery** | sound, user code, account |
 
+The console's **Settings** page is laid out like Cargo POS: sections grouped on the left (This
+device: new-order sound, user code · Account · Menu: default prices, photo gallery — the Menu group
+is super admin only), the open section on the right, and `?view=<section>` links straight to one.
+
 The **photo gallery** (Settings → Photo gallery) is what menu photos are picked from: Amore's
 own photos are built into the website (`CATALOG_PRESET_IMAGES` in `frontend/src/data/iceCreamData.ts`,
 files in `frontend/src/assets/images`), and the super admin can upload more.
@@ -89,8 +93,8 @@ Prices, photos and text can differ per branch. A branch admin's menu edits apply
 branch (stored as `branchOverrides.<branch>`, holding just the fields that differ); the super
 admin's item is the default everywhere else. With **All branches** picked, the Menu page shows the
 default price and names any branch that charges differently ("Cone LKR 850 (price different at
-Colombo)"), and lists every item a branch sells differently; each item's editor can reset a branch
-to the default. Looking at one branch shows that branch's prices only. Customers see, and are
+Colombo)"); each item's editor lists what a branch changed and can reset that branch to the
+default. Looking at one branch shows that branch's prices only. Customers see, and are
 charged, the version of the branch they order from.
 
 **Settings → Default prices** (super admin) lists every item's default prices in one table: change
