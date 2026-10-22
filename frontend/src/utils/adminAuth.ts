@@ -147,6 +147,17 @@ export async function setUserCode(code: string): Promise<void> {
   saveAdminSession(session, true);
 }
 
+/** Stop using a user code on this device but stay signed in (the session is kept as before a code was set). */
+export async function removeUserCode(): Promise<void> {
+  const device = getRememberedDevice();
+  if (!device) return;
+  forgetDeviceLocally();
+  const session = getAdminSession();
+  if (session) saveAdminSession(session, false);
+  else notify();
+  await api('/admin/device/forget', { method: 'POST', body: device, as: 'none' }).catch(() => {});
+}
+
 export function skipUserCode(): void {
   store.del(sessionStorage, OFFER_KEY);
   notify();

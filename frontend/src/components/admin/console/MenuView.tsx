@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Plus, Search, Pencil, Trash2, Upload, Images, X, ImageOff } from 'lucide-react';
 import { BranchId, MenuItem, ScoopItem } from '../../../types';
-import { AMORE_BRANCHES, CATALOG_PRESET_IMAGES } from '../../../data/iceCreamData';
+import { AMORE_BRANCHES } from '../../../data/iceCreamData';
 import {
   createCakeItem,
   createCoffeeItem,
@@ -18,6 +18,7 @@ import { formatPrice } from '../../../utils/currency';
 import { Badge, Button, Card, Popup, EmptyState, Field, Switch, cx, inputClass, useConsoleUi } from './ui';
 import { BranchFilter, MenuData } from './useConsoleData';
 import { isSoldOutAt } from '../../../utils/stock';
+import { useGallery } from './gallery';
 import { uploadMenuPhoto } from '../../../utils/imageUpload';
 import { ApiError } from '../../../api';
 
@@ -78,24 +79,30 @@ const PhotoPicker: React.FC<{ value: string; onChange: (url: string) => void }> 
         </div>
       </div>
       {note && <p className="text-xs text-[#8A7970] mt-2">{note}</p>}
-      {showLibrary && (
-        <div className="mt-3 grid grid-cols-4 gap-2">
-          {CATALOG_PRESET_IMAGES.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              title={p.name}
-              onClick={() => {
-                onChange(p.url);
-                setShowLibrary(false);
-              }}
-              className={cx('aspect-square rounded-lg overflow-hidden ring-2 cursor-pointer', value === p.url ? 'ring-[#81001E]' : 'ring-transparent hover:ring-[#C9B9A4]')}
-            >
-              <img src={p.url} alt={p.name} loading="lazy" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-            </button>
-          ))}
-        </div>
-      )}
+      {showLibrary && <GalleryChooser value={value} onPick={(url) => { onChange(url); setShowLibrary(false); }} />}
+    </div>
+  );
+};
+
+/** Pick a photo from the gallery (Settings → Photo gallery). */
+const GalleryChooser: React.FC<{ value: string; onPick: (url: string) => void }> = ({ value, onPick }) => {
+  const { photos, loading } = useGallery();
+  return (
+    <div className="mt-3">
+      {loading && <p className="text-xs text-[#8A7970] mb-2">Loading uploaded photos…</p>}
+      <div className="grid grid-cols-4 gap-2 max-h-72 overflow-y-auto pr-1">
+        {photos.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            title={p.name}
+            onClick={() => onPick(p.url)}
+            className={cx('aspect-square rounded-lg overflow-hidden ring-2 cursor-pointer', value === p.url ? 'ring-[#81001E]' : 'ring-transparent hover:ring-[#C9B9A4]')}
+          >
+            <img src={p.url} alt={p.name} loading="lazy" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+          </button>
+        ))}
+      </div>
     </div>
   );
 };

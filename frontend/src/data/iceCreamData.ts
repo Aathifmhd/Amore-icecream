@@ -11,6 +11,11 @@ import cafeInteriorImg from '../assets/images/amore_cafe_parlour_1788549300314.w
 import pistachioScoopImg from '../assets/images/amore_pistachio_scoop_1788549364846.webp';
 import chocolateScoopImg from '../assets/images/amore_chocolate_scoop_1788549390724.webp';
 import officialLogoSvg from '../assets/images/amore_official_logo.svg';
+import oreoBowlImg from '../assets/images/oreo_waffle_bowl_1792663001000.webp';
+import strawberryCheesecakeBowlImg from '../assets/images/strawberry_cheesecake_waffle_bowl_1792663002000.webp';
+import chocolateBrownieBowlImg from '../assets/images/chocolate_brownie_waffle_bowl_1792663003000.webp';
+import vanillaBowlImg from '../assets/images/vanilla_waffle_bowl_1792663004000.webp';
+import mangoBowlImg from '../assets/images/mango_waffle_bowl_1792663005000.webp';
 
 export const ASSET_IMAGES = {
   officialLogo: officialLogoSvg,
@@ -25,6 +30,11 @@ export const ASSET_IMAGES = {
   cafeInterior: cafeInteriorImg,
   pistachioScoop: pistachioScoopImg,
   chocolateScoop: chocolateScoopImg,
+  oreoBowl: oreoBowlImg,
+  strawberryCheesecakeBowl: strawberryCheesecakeBowlImg,
+  chocolateBrownieBowl: chocolateBrownieBowlImg,
+  vanillaBowl: vanillaBowlImg,
+  mangoBowl: mangoBowlImg,
 };
 
 // Base file name (e.g. "durian_cone_macro_1789128785535") of an image path, ignoring
@@ -51,7 +61,7 @@ export function resolveBundledImage<T extends string | undefined>(url: T): T {
 export interface CatalogPresetImage {
   id: string;
   name: string;
-  category: 'Brand Signatures' | 'Gelato Flavours' | 'Specialty Coffee' | 'Artisan Cakes';
+  category: 'Brand Signatures' | 'Ice Cream Flavours' | 'Specialty Coffee' | 'Artisan Cakes';
   url: string;
   description: string;
 }
@@ -108,46 +118,81 @@ export const CATALOG_PRESET_IMAGES: CatalogPresetImage[] = [
     description: 'Warm rattan ambience & artisan churn parlor',
   },
 
-  // Gelato Flavours
+  // Ice Cream Flavours — Amore's own waffle-bowl photos
+  {
+    id: 'flavour-oreo-bowl',
+    name: 'Oreo Cookies & Cream',
+    category: 'Ice Cream Flavours',
+    url: ASSET_IMAGES.oreoBowl,
+    description: 'Cookies & cream scoops with crushed Oreo in a waffle bowl',
+  },
+  {
+    id: 'flavour-strawberry-cheesecake-bowl',
+    name: 'Strawberry Cheesecake',
+    category: 'Ice Cream Flavours',
+    url: ASSET_IMAGES.strawberryCheesecakeBowl,
+    description: 'Strawberry ripple and biscuit crumble in a waffle bowl',
+  },
+  {
+    id: 'flavour-chocolate-brownie-bowl',
+    name: 'Chocolate Brownie',
+    category: 'Ice Cream Flavours',
+    url: ASSET_IMAGES.chocolateBrownieBowl,
+    description: 'Chocolate scoops with brownie pieces and fudge drizzle',
+  },
+  {
+    id: 'flavour-vanilla-bowl',
+    name: 'Vanilla',
+    category: 'Ice Cream Flavours',
+    url: ASSET_IMAGES.vanillaBowl,
+    description: 'Vanilla bean scoops with crushed nuts in a waffle bowl',
+  },
+  {
+    id: 'flavour-mango-bowl',
+    name: 'Mango',
+    category: 'Ice Cream Flavours',
+    url: ASSET_IMAGES.mangoBowl,
+    description: 'Alphonso mango scoops with mango cubes and pistachio',
+  },
   {
     id: 'gelato-strawberry',
     name: 'Italian Wild Strawberry Swirl',
-    category: 'Gelato Flavours',
+    category: 'Ice Cream Flavours',
     url: 'https://images.unsplash.com/photo-1560008581-09826d1de69e?auto=format&fit=crop&w=800&q=80',
     description: 'Fresh berry ripple with creamy sweet milk',
   },
   {
     id: 'gelato-vanilla',
     name: 'Bourbon Vanilla Bean Gelato',
-    category: 'Gelato Flavours',
+    category: 'Ice Cream Flavours',
     url: 'https://images.unsplash.com/photo-1501443762994-82bd5dace89a?auto=format&fit=crop&w=800&q=80',
     description: 'Rich custard infused with pure vanilla caviar',
   },
   {
     id: 'gelato-belgian-choc',
     name: 'Belgian Chocolate & Cocoa Nib',
-    category: 'Gelato Flavours',
+    category: 'Ice Cream Flavours',
     url: 'https://images.unsplash.com/photo-1557142046-c704a3adf364?auto=format&fit=crop&w=800&q=80',
     description: 'Deep silky Belgian fudge gelato',
   },
   {
     id: 'gelato-mango-sorbet',
     name: 'Alphonso Mango Passion Sorbet',
-    category: 'Gelato Flavours',
+    category: 'Ice Cream Flavours',
     url: 'https://images.unsplash.com/photo-1587314168485-3236d6710814?auto=format&fit=crop&w=800&q=80',
     description: 'Tropical sun-ripened dairy-free sorbetto',
   },
   {
     id: 'gelato-matcha',
     name: 'Uji Ceremonial Matcha Gelato',
-    category: 'Gelato Flavours',
+    category: 'Ice Cream Flavours',
     url: 'https://images.unsplash.com/photo-1576506295286-5cda18df43e7?auto=format&fit=crop&w=800&q=80',
     description: 'Stoneground green tea with earthy floral notes',
   },
   {
     id: 'gelato-hazelnut',
     name: 'Piedmont Roasted Hazelnut',
-    category: 'Gelato Flavours',
+    category: 'Ice Cream Flavours',
     url: 'https://images.unsplash.com/photo-1580915411954-282cb1b0d780?auto=format&fit=crop&w=800&q=80',
     description: 'Crushed praline with toasted Nocciola paste',
   },

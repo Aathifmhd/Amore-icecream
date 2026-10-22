@@ -12,6 +12,7 @@ import path from 'node:path';
  *   admins          admin sign-in names with salted password hashes
  *   admin_devices   devices where an admin set a user code (salted hash, wrong-try count)
  *   employees       staff records per branch (kept by the branch admins)
+ *   gallery         photos the super admin added to the photo gallery (files are in images)
  *   settings        small key/value settings (e.g. the session-signing secret)
  *
  * Connection: MONGODB_URI (+ optional MONGODB_DB, default "amore").
@@ -74,6 +75,7 @@ export async function setup() {
     col('images').createIndex({ id: 1 }, { unique: true }),
     col('employees').createIndex({ id: 1 }, { unique: true }),
     col('employees').createIndex({ branchId: 1, fullName: 1 }),
+    col('gallery').createIndex({ id: 1 }, { unique: true }),
     col('deleted_orders').createIndex({ branchId: 1, deletedAt: 1 }),
     col('settings').createIndex({ key: 1 }, { unique: true }),
   ]);

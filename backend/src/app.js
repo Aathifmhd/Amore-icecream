@@ -10,6 +10,7 @@ import admin from './routes/admin.js';
 import customerAuth from './routes/auth.js';
 import users from './routes/users.js';
 import employees from './routes/employees.js';
+import gallery from './routes/gallery.js';
 
 export function createApp() {
   const app = express();
@@ -30,6 +31,7 @@ export function createApp() {
   app.use('/api/admin/users', users);
   app.use('/api/admin', admin);
   app.use('/api/employees', employees);
+  app.use('/api/gallery', gallery);
   app.use('/api/orders', orders);
   app.use('/api/menu', menu);
   app.use('/api/images', images);

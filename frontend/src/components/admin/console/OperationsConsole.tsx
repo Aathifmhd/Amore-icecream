@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ClipboardList, RotateCcw, UtensilsCrossed, BarChart3, Bell, BellOff, CloudOff, ExternalLink, IdCard, LogOut, Lock, MapPin, MoreHorizontal, UserCog } from 'lucide-react';
+import { ClipboardList, RotateCcw, UtensilsCrossed, BarChart3, CloudOff, ExternalLink, IdCard, LogOut, Lock, MapPin, MoreHorizontal, Settings, UserCog } from 'lucide-react';
 import { BranchId, Currency, OrderRecord } from '../../../types';
 import { AMORE_BRANCHES } from '../../../data/iceCreamData';
 import { isCapturedReturnedBill } from '../../../utils/orderStorage';
 import { isSoldOutAt } from '../../../utils/stock';
 import type { AdminProfile } from '../../../api';
 import { AmoreLogo } from '../../AmoreLogo';
-import { ConsoleUiProvider, cx, useConsoleUi } from './ui';
+import { Button, ConsoleUiProvider, cx, useConsoleUi } from './ui';
 import { BranchFilter, inBranch, useMenu, useNewOrderAlert, useOrders, usePendingWrites, useStoredState, chime } from './useConsoleData';
 import { SYNC_ERROR_EVENT } from '../../../utils/outbox';
 import { stageOf } from './orderMeta';
@@ -18,8 +18,9 @@ import { MenuView } from './MenuView';
 import { ReportsView } from './ReportsView';
 import { EmployeesView } from './EmployeesView';
 import { UsersView } from './UsersView';
+import { SettingsView } from './SettingsView';
 
-type Section = 'orders' | 'refunds' | 'menu' | 'reports' | 'employees' | 'users';
+type Section = 'orders' | 'refunds' | 'menu' | 'reports' | 'employees' | 'users' | 'settings';
 
 const ALL_SECTIONS: { id: Section; label: string; icon: React.ReactNode; title: string; group: string; superOnly?: boolean }[] = [
   { id: 'orders', label: 'Orders', icon: <ClipboardList className="w-5 h-5" />, title: 'Orders', group: 'Daily work' },
@@ -29,6 +30,8 @@ const ALL_SECTIONS: { id: Section; label: string; icon: React.ReactNode; title: 
   { id: 'employees', label: 'Staff', icon: <IdCard className="w-5 h-5" />, title: 'Employees', group: 'Team' },
   { id: 'users', label: 'Users', icon: <UserCog className="w-5 h-5" />, title: 'Users & access', group: 'Team', superOnly: true },
 ];
+// Settings sits at the bottom of the menu (and in "More" on phones), not with the work pages
+const SETTINGS_TITLE = 'Settings';
 
 // Old links (?tab=returns, ?tab=overview…) still land in the right place
 function sectionFromUrl(): Section {
@@ -39,6 +42,7 @@ function sectionFromUrl(): Section {
   if (t === 'overview' || t === 'branches' || t === 'reports') return 'reports';
   if (t === 'employees' || t === 'staff') return 'employees';
   if (t === 'users') return 'users';
+  if (t === 'settings') return 'settings';
   return 'orders';
 }
 
@@ -70,7 +74,7 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, signOutLabel = 'Sign 
   const SECTIONS = ALL_SECTIONS.filter((s) => isSuper || !s.superOnly);
   const [section, setSection] = useState<Section>(() => {
     const s = sectionFromUrl();
-    return SECTIONS.some((x) => x.id === s) ? s : 'orders';
+    return s === 'settings' || SECTIONS.some((x) => x.id === s) ? s : 'orders';
   });
   const [pickedBranch, setBranch] = useStoredState<BranchFilter>('amore_console_branch', 'all');
   const branch: BranchFilter = lockedBranch ?? pickedBranch;
@@ -93,6 +97,7 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, signOutLabel = 'Sign 
     setMoreOpen(false);
     const url = new URL(window.location.href);
     url.searchParams.set('tab', s);
+    if (s !== 'settings') url.searchParams.delete('view');
     window.history.replaceState({}, '', url.toString());
     window.scrollTo({ top: 0 });
   };
@@ -116,13 +121,12 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, signOutLabel = 'Sign 
     refunds: refundCount ? { n: refundCount, tone: 'bg-red-600 text-white' } : undefined,
     menu: soldOut ? { n: soldOut, tone: 'bg-stone-400 text-white' } : undefined,
   };
-  const current = SECTIONS.find((s) => s.id === section)!;
+  const title = section === 'settings' ? SETTINGS_TITLE : SECTIONS.find((s) => s.id === section)!.title;
   const SignOutIcon = signOutLabel === 'Lock' ? Lock : LogOut;
 
-  const toggleSound = () => {
-    const next = !soundOn;
-    setSoundOn(next);
-    if (next) chime(); // confirms it works, and unlocks audio on browsers that need a tap first
+  const changeSound = (on: boolean) => {
+    setSoundOn(on);
+    if (on) chime(); // confirms it works, and unlocks audio on browsers that need a tap first
   };
 
   const branchPicker = lockedBranch ? (
@@ -198,15 +202,9 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, signOutLabel = 'Sign 
         </nav>
 
         <div className="rail-foot">
-          <button type="button" onClick={toggleSound} aria-label={`New-order sound: ${soundOn ? 'On' : 'Off'}`} className="rail-item rail-quiet">
-            {soundOn ? <Bell /> : <BellOff />}
-            <span className="rail-label">
-              New-order sound: <strong className="text-white">{soundOn ? 'On' : 'Off'}</strong>
-            </span>
-          </button>
-          <button type="button" onClick={onBackToStore} aria-label="View website" className="rail-item rail-quiet">
-            <ExternalLink />
-            <span className="rail-label">View website</span>
+          <button type="button" onClick={() => go('settings')} aria-current={section === 'settings' ? 'page' : undefined} aria-label={SETTINGS_TITLE} className="rail-item">
+            <Settings />
+            <span className="rail-label">{SETTINGS_TITLE}</span>
           </button>
           <button type="button" onClick={onSignOut} aria-label={signOutLabel} className="rail-item rail-quiet rail-danger">
             <SignOutIcon />
@@ -233,7 +231,7 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, signOutLabel = 'Sign 
           <span className="lg:hidden">
             <AmoreLogo size="sm" showShadow={false} />
           </span>
-          <h1 className="text-xl font-bold flex-1 truncate">{current.title}</h1>
+          <h1 className="text-xl font-bold flex-1 truncate">{title}</h1>
           {unsaved > 0 && (
             <span
               role="status"
@@ -245,7 +243,13 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, signOutLabel = 'Sign 
               <span className="sm:hidden">{unsaved}</span>
             </span>
           )}
-          {section !== 'users' && branchPicker}
+          {section !== 'users' && section !== 'settings' && branchPicker}
+          {/* Phones have this in the "More" menu */}
+          <span className="hidden lg:block">
+            <Button variant="secondary" size="sm" icon={<ExternalLink className="w-4 h-4" />} onClick={onBackToStore}>
+              View website
+            </Button>
+          </span>
           <div className="relative lg:hidden">
             <button type="button" aria-label="More" onClick={() => setMoreOpen((v) => !v)} className="w-10 h-10 rounded-xl bg-white border border-[#E2D8CA] flex items-center justify-center cursor-pointer">
               <MoreHorizontal className="w-5 h-5" />
@@ -254,8 +258,8 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, signOutLabel = 'Sign 
               <>
                 <button type="button" aria-label="Close menu" className="fixed inset-0 cursor-default" onClick={() => setMoreOpen(false)} />
                 <div className="absolute right-0 mt-2 w-60 bg-white rounded-2xl shadow-xl border border-[#EAE2D6] p-2 z-10 animate-scaleUp">
-                  <button type="button" onClick={toggleSound} className="w-full flex items-center gap-3 h-11 px-3 rounded-xl text-sm hover:bg-[#F3EDE3] cursor-pointer">
-                    {soundOn ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />} New-order sound: <strong>{soundOn ? 'On' : 'Off'}</strong>
+                  <button type="button" onClick={() => go('settings')} className="w-full flex items-center gap-3 h-11 px-3 rounded-xl text-sm hover:bg-[#F3EDE3] cursor-pointer">
+                    <Settings className="w-4 h-4" /> {SETTINGS_TITLE}
                   </button>
                   <button type="button" onClick={onBackToStore} className="w-full flex items-center gap-3 h-11 px-3 rounded-xl text-sm hover:bg-[#F3EDE3] cursor-pointer">
                     <ExternalLink className="w-4 h-4" /> View website
@@ -277,6 +281,9 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, signOutLabel = 'Sign 
         {section === 'reports' && <ReportsView orders={orders} branch={branch} />}
         {section === 'employees' && <EmployeesView branch={branch} lockedBranch={lockedBranch} />}
         {section === 'users' && isSuper && <UsersView me={admin} />}
+        {section === 'settings' && (
+          <SettingsView admin={admin} soundOn={soundOn} onSoundChange={changeSound} onTestSound={chime} onOpenUsers={() => go('users')} />
+        )}
       </main>
 
       {/* Bottom tabs (phones / tablets) */}

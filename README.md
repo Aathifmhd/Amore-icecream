@@ -45,6 +45,7 @@ whole site (website + API) from the backend on one port.
 | `PUT / DELETE /api/menu/:id` | super admin — edit / remove an item |
 | `PUT /api/menu/:id/stock` | super admin (any branch) or branch admin (own branch) — in stock / sold out |
 | `POST /api/images`, `GET /api/images/:id` | admin uploads, everyone views |
+| `/api/gallery` | admins see, super admin adds / removes photos in the photo gallery |
 | `POST /api/orders` | signed-in customer (checked like the old Firestore rules) or admin |
 | `GET /api/orders/mine` | signed-in customer — their own orders |
 | `GET / PATCH / DELETE /api/orders/:ref` | the customer who placed it (limited) or admin |
@@ -71,6 +72,11 @@ The console is at **/admin** (it is not linked from the storefront).
 | Menu | edit items, prices, photos; stock at any branch | stock (sold out / in stock) at own branch |
 | Employees | every branch | own branch |
 | Users (admin logins) | add, change, reset passwords, remove | — |
+| Settings | sound, user code, account, **photo gallery** | sound, user code, account |
+
+The **photo gallery** (Settings → Photo gallery) is what menu photos are picked from: Amore's
+own photos are built into the website (`CATALOG_PRESET_IMAGES` in `frontend/src/data/iceCreamData.ts`,
+files in `frontend/src/assets/images`), and the super admin can upload more.
 
 Stock is per branch: customers see an item as sold out only at the branch they order from,
 and the server refuses an order with an item sold out at that branch.
