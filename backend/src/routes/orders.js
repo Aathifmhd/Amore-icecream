@@ -1,9 +1,44 @@
 import { Router } from 'express';
 import { col, now, PUBLIC } from '../db.js';
 import { HttpError, adminBranch, requireAdmin, requireCustomer } from '../auth.js';
-import { newCustomerOrder, newAdminOrder, orderUpdate, checkDelete } from '../orderRules.js';
+import { newCustomerOrder, newAdminOrder, orderUpdate, checkDelete, isRefundRecord } from '../orderRules.js';
+import { logActivity, lkr } from '../activity.js';
 
 const router = Router();
+
+/** What a change to an order means, for the Action Center (null for small things like the grace timer). */
+function describeOrderChange(before, after, req) {
+  const ref = after.orderReference;
+  const pickup = after.orderType === 'pickup';
+  if (before.status !== after.status) {
+    switch (after.status) {
+      case 'confirmed':
+      case 'paid':
+        return ['order', `accepted order ${ref}`];
+      case 'preparing':
+        return ['order', `started preparing order ${ref}`];
+      case 'on_the_way':
+        return ['order', pickup ? `marked order ${ref} ready for pickup` : `sent order ${ref} out for delivery`];
+      case 'delivered':
+        return ['order', pickup ? `marked order ${ref} as collected` : `marked order ${ref} as delivered`];
+      case 'cancelled': {
+        const why = after.cancellationReason ? ` — ${after.cancellationReason}` : '';
+        return ['order', `cancelled order ${ref}${why}`];
+      }
+      default:
+        return ['order', `changed order ${ref} to ${after.status}`];
+    }
+  }
+  if (before.refundStatus !== 'completed' && after.refundStatus === 'completed') {
+    return ['refund', `paid the refund for ${ref} (${lkr(after.refundAmountLKR ?? after.grandTotalLKR)})`];
+  }
+  const changed = Object.keys(req.body || {}).filter((k) => JSON.stringify(before[k]) !== JSON.stringify(after[k]));
+  const quiet = ['updatedAt', 'createdAt', 'isGracePeriodPaused', 'gracePeriodRemainingSeconds', 'gracePeriodPausedAt', 'customerDeletedHistory', 'inconvenienceEmailContent'];
+  const meaningful = changed.filter((k) => !quiet.includes(k));
+  if (!meaningful.length) return null;
+  if (isRefundRecord(after)) return ['refund', `edited the refund record ${ref}`];
+  return ['order', req.admin ? `edited order ${ref}` : `changed the delivery details of order ${ref}`];
+}
 
 // A customer may place this many orders in 10 minutes
 const ORDER_BURST_LIMIT = 10;
@@ -110,6 +145,12 @@ router.post('/', async (req, res) => {
   }
   // A reference can be reused after a delete; it is a live order again
   await col('deleted_orders').deleteOne({ orderReference: order.orderReference });
+  const what = req.admin
+    ? isRefundRecord(order)
+      ? ['refund', `added a refund record ${order.orderReference} for ${order.customerName} (${lkr(order.refundAmountLKR ?? order.grandTotalLKR)})`]
+      : ['order', `added order ${order.orderReference} for ${order.customerName} · ${lkr(order.grandTotalLKR)}`]
+    : ['order', `placed a new online order ${order.orderReference} · ${lkr(order.grandTotalLKR)} (${order.orderType})`];
+  await logActivity(req, { category: what[0], summary: what[1], branchId: order.branchId, ref: order.orderReference });
   res.status(201).json({ order, serverTime: stamp });
 });
 
@@ -127,6 +168,8 @@ router.patch('/:ref', async (req, res) => {
     { ...update, $set: { ...update.$set, _syncedAt: stamp } },
     { returnDocument: 'after', ...PUBLIC }
   );
+  const what = describeOrderChange(existing, order, req);
+  if (what) await logActivity(req, { category: what[0], summary: what[1], branchId: order.branchId, ref: order.orderReference });
   res.json({ order, serverTime: now() });
 });
 
@@ -142,6 +185,7 @@ router.delete('/:ref', async (req, res) => {
     { $set: { orderReference: existing.orderReference, branchId: existing.branchId, deletedAt: stamp } },
     { upsert: true }
   );
+  await logActivity(req, { category: 'order', summary: `deleted order ${existing.orderReference}`, branchId: existing.branchId });
   res.json({ deleted: true, serverTime: now() });
 });
 

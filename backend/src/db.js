@@ -13,6 +13,7 @@ import path from 'node:path';
  *   admin_devices   devices where an admin set a user code (salted hash, wrong-try count)
  *   employees       staff records per branch (kept by the branch admins)
  *   gallery         photos the super admin added to the photo gallery (files are in images)
+ *   activity        the Action Center's log of what happened (kept 90 days)
  *   settings        small key/value settings (e.g. the session-signing secret)
  *
  * Connection: MONGODB_URI (+ optional MONGODB_DB, default "amore").
@@ -76,6 +77,10 @@ export async function setup() {
     col('employees').createIndex({ id: 1 }, { unique: true }),
     col('employees').createIndex({ branchId: 1, fullName: 1 }),
     col('gallery').createIndex({ id: 1 }, { unique: true }),
+    col('activity').createIndex({ atDate: 1 }, { expireAfterSeconds: 90 * 24 * 3600 }),
+    col('activity').createIndex({ at: -1 }),
+    col('activity').createIndex({ branchId: 1, at: -1 }),
+    col('activity').createIndex({ category: 1, at: -1 }),
     col('deleted_orders').createIndex({ branchId: 1, deletedAt: 1 }),
     col('settings').createIndex({ key: 1 }, { unique: true }),
   ]);

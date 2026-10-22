@@ -48,9 +48,16 @@ function pushItem(item: { id: string }, itemType: 'scoop' | 'coffee' | 'cake') {
 }
 
 /** Delete on the server: it keeps a marker so every device drops the item. */
-function pushDelete(id: string) {
-  queueWrite({ method: 'DELETE', path: menuPath(id) });
+function pushDelete(id: string, name?: string) {
+  // The name is only for the Action Center ("removed Mango from the menu")
+  queueWrite({ method: 'DELETE', path: `${menuPath(id)}${name ? `?name=${encodeURIComponent(name)}` : ''}` });
 }
+
+/** A change to this item (save, stock or delete) is still on its way to the server. */
+const hasPendingWrite = (pending: Set<string>, id: string) => {
+  const base = menuPath(id);
+  return [...pending].some((p) => p === base || p.startsWith(`${base}/`) || p.startsWith(`${base}?`));
+};
 
 function notifyMenuUpdated() {
   if (typeof window !== 'undefined') {
@@ -127,7 +134,7 @@ export function deleteScoopItem(id: string): boolean {
 
   saveAllGelatoFlavours(filtered);
 
-  pushDelete(id);
+  pushDelete(id, current.find((i) => i.id === id)?.name);
 
   return true;
 }
@@ -197,7 +204,7 @@ export function deleteCoffeeItem(id: string): boolean {
 
   saveAllCoffeeItems(filtered);
 
-  pushDelete(id);
+  pushDelete(id, current.find((i) => i.id === id)?.name);
 
   return true;
 }
@@ -267,7 +274,7 @@ export function deleteCakeItem(id: string): boolean {
 
   saveAllCakeItems(filtered);
 
-  pushDelete(id);
+  pushDelete(id, current.find((i) => i.id === id)?.name);
 
   return true;
 }
@@ -303,7 +310,7 @@ export function setItemStock(itemId: string, itemType: 'scoops' | 'coffee' | 'ca
   queueWrite({
     method: 'PUT',
     path: `${menuPath(itemId)}/stock`,
-    body: { branchId, inStock, itemType: itemType === 'scoops' ? 'scoop' : itemType === 'coffee' ? 'coffee' : 'cake' },
+    body: { branchId, inStock, itemName: item.name, itemType: itemType === 'scoops' ? 'scoop' : itemType === 'coffee' ? 'coffee' : 'cake' },
   });
 }
 
@@ -343,7 +350,7 @@ export function mergeServerMenuItems(items: any[]): void {
   let hasCakeChanges = false;
 
   items.forEach((raw) => {
-    if (!raw?.id || pending.has(menuPath(raw.id)) || pending.has(`${menuPath(raw.id)}/stock`)) return;
+    if (!raw?.id || hasPendingWrite(pending, raw.id)) return;
     const { updatedAt: _updatedAt, ...item } = raw;
 
     // Deleted on the server: remove it here too

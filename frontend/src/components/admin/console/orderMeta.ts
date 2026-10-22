@@ -136,3 +136,18 @@ export function graceOf(o: OrderRecord, now: number): Grace {
 }
 
 export const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.max(0, Math.floor(s % 60))).padStart(2, '0')}`;
+
+/**
+ * When an order counts as a sale (used by Reports and the Dashboard):
+ * a card delivery payment counts once the parlour accepts it (it is captured then);
+ * cash and counter payments count once the order is delivered / collected.
+ */
+export function saleTime(o: OrderRecord): string | null {
+  if (o.orderReference.startsWith('RET-') || o.items.some((i) => i.itemId === 'returned-item-manual')) return null;
+  const card = o.paymentMethod === 'card' && o.orderType !== 'pickup';
+  if (card) {
+    const captured = ['confirmed', 'paid', 'preparing', 'on_the_way', 'delivered'].includes(o.status) || (o.status === 'cancelled' && !!o.confirmedAt);
+    return captured ? o.confirmedAt || o.createdAt : null;
+  }
+  return o.status === 'delivered' ? o.deliveredAt || o.createdAt : null;
+}

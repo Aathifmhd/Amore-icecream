@@ -14,6 +14,7 @@ import {
   syncMenuFromServer,
 } from '../../../utils/menuStorage';
 import { OUTBOX_EVENT, pendingWrites } from '../../../utils/outbox';
+import { startPolling } from '../../../utils/poll';
 
 export function useOrders(): OrderRecord[] {
   const [orders, setOrders] = useState<OrderRecord[]>(() => getAllOrdersAdmin());
@@ -45,8 +46,9 @@ export function useMenu(): MenuData {
 
   useEffect(() => {
     const reload = () => setMenu(read());
-    syncMenuFromServer().then(reload);
     const unsubscribe = subscribeToRealtimeMenu(reload);
+    // The console checks more often than the website, so a branch's sold-out switch shows up quickly
+    const stopFastSync = startPolling(syncMenuFromServer, { visibleMs: 15_000, hiddenMs: 60_000 });
     const onStorage = (e: StorageEvent) => {
       if (!e.key || e.key.startsWith('amore_menu_')) reload();
     };
@@ -54,6 +56,7 @@ export function useMenu(): MenuData {
     window.addEventListener('storage', onStorage);
     return () => {
       unsubscribe();
+      stopFastSync();
       window.removeEventListener(MENU_UPDATED_EVENT, reload);
       window.removeEventListener('storage', onStorage);
     };

@@ -280,7 +280,9 @@ export async function passwordLogin(username, password) {
         }
       );
     }
-    throw new HttpError(401, 'Wrong name or password');
+    // `justLocked` lets the route record the lock once (not on every later try)
+    const justLocked = Boolean(admin) && (admin.failedLogins || 0) + 1 >= MAX_LOGIN_FAILURES;
+    throw new HttpError(401, 'Wrong name or password', justLocked ? { justLocked: true } : undefined);
   }
   await col('admins').updateOne({ username: key }, { $set: { failedLogins: 0, lockedUntil: null, lastLoginAt: now() } });
   return issueAdminSession(admin);
@@ -349,7 +351,7 @@ export async function unlockWithCode(deviceId, deviceSecret, code) {
   const attempts = (device.attempts || 0) + 1;
   if (attempts >= MAX_CODE_ATTEMPTS) {
     await col('admin_devices').deleteOne({ deviceId });
-    throw new HttpError(410, 'Too many wrong codes. Sign in with name and password.');
+    throw new HttpError(410, 'Too many wrong codes. Sign in with name and password.', { tooManyCodes: true, username: device.username });
   }
   await col('admin_devices').updateOne({ deviceId }, { $set: { attempts } });
   throw new HttpError(401, 'Wrong code', { triesLeft: MAX_CODE_ATTEMPTS - attempts });

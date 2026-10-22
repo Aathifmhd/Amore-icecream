@@ -46,6 +46,7 @@ whole site (website + API) from the backend on one port.
 | `PUT /api/menu/:id/stock` | super admin (any branch) or branch admin (own branch) — in stock / sold out |
 | `POST /api/images`, `GET /api/images/:id` | admin uploads, everyone views |
 | `/api/gallery` | admins see, super admin adds / removes photos in the photo gallery |
+| `/api/activity` | super admin — the Action Center log (what happened, who, which branch; kept 90 days) |
 | `POST /api/orders` | signed-in customer (checked like the old Firestore rules) or admin |
 | `GET /api/orders/mine` | signed-in customer — their own orders |
 | `GET / PATCH / DELETE /api/orders/:ref` | the customer who placed it (limited) or admin |
@@ -68,6 +69,8 @@ The console is at **/admin** (it is not linked from the storefront).
 
 | | Super admin | Branch admin |
 | --- | --- | --- |
+| Dashboard | today for all branches (or one), each branch, latest activity | today for own branch |
+| Action Center | everything that happens at every branch | — |
 | Orders, refunds, reports | all branches | own branch only |
 | Menu | edit items, prices, photos; stock at any branch | stock (sold out / in stock) at own branch |
 | Employees | every branch | own branch |

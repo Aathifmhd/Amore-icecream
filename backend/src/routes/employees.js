@@ -2,6 +2,7 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import { col, now } from '../db.js';
 import { BRANCHES, HttpError, adminBranch, requireAdmin } from '../auth.js';
+import { branchName, logActivity } from '../activity.js';
 
 /*
  * Employee records. A branch admin keeps the records of their own branch;
@@ -123,6 +124,7 @@ router.post('/', async (req, res) => {
     updatedBy: req.admin.username,
   };
   await col('employees').insertOne({ ...employee });
+  await logActivity(req, { category: 'staff', summary: `added ${employee.fullName} (${employee.position}) to the staff at ${branchName(employee.branchId)}`, branchId: employee.branchId });
   res.status(201).json({ employee });
 });
 
@@ -135,12 +137,15 @@ router.patch('/:id', async (req, res) => {
     { $set: set },
     { returnDocument: 'after', projection: { _id: 0 } }
   );
+  const moved = employee.branchId !== existing.branchId ? ` and moved them to ${branchName(employee.branchId)}` : '';
+  await logActivity(req, { category: 'staff', summary: `updated the details of ${employee.fullName}${moved}`, branchId: employee.branchId });
   res.json({ employee });
 });
 
 router.delete('/:id', async (req, res) => {
   const existing = await findEmployee(req, req.params.id);
   await col('employees').deleteOne({ id: existing.id });
+  await logActivity(req, { category: 'staff', summary: `removed ${existing.fullName} from the staff at ${branchName(existing.branchId)}`, branchId: existing.branchId });
   res.json({ deleted: true });
 });
 

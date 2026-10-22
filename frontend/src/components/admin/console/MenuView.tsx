@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Plus, Search, Pencil, Trash2, Upload, Images, X, ImageOff } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Upload, Images, X, ImageOff, Check, CircleSlash } from 'lucide-react';
 import { BranchId, MenuItem, ScoopItem } from '../../../types';
 import { AMORE_BRANCHES } from '../../../data/iceCreamData';
 import {
@@ -322,6 +322,12 @@ export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; canEdit:
   const shown = useMemo(() => (q ? items.filter((i) => i.name.toLowerCase().includes(q)) : items), [items, q]);
   const soldOutWhere = (i: ScoopItem | MenuItem) => AMORE_BRANCHES.map((b) => b.id).filter((b) => isSoldOutAt(i, b));
   const soldOut = items.filter((i) => (branch === 'all' ? soldOutWhere(i).length > 0 : isSoldOutAt(i, branch))).length;
+  // Every sold-out item on the whole menu with where it is sold out (super admin, all branches)
+  const soldOutNow = [...menu.scoops, ...menu.coffee, ...menu.cakes]
+    .map((i) => ({ item: i, where: soldOutWhere(i) }))
+    .filter((x) => x.where.length > 0);
+  const whereText = (where: BranchId[]) =>
+    where.length === AMORE_BRANCHES.length ? 'all branches' : where.map((b) => BRANCH_SHORT[b]).join(' & ');
   const where = branch === 'all' ? '' : ` at ${BRANCH_SHORT[branch]}`;
 
   const switchStock = (i: ScoopItem | MenuItem, b: BranchId) => {
@@ -377,20 +383,39 @@ export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; canEdit:
         </div>
       </div>
 
-      <p className="text-sm text-[#6B5A51]">
-        {soldOut > 0 ? (
-          <>
-            <strong className="text-[#241A18]">
-              {soldOut} sold out{branch === 'all' ? ' somewhere' : where}
-            </strong>{' '}
-            · {branch === 'all' ? 'tap a branch to switch its stock.' : 'flip the switch when an item is back.'}
-          </>
-        ) : branch === 'all' ? (
-          'Everything is in stock at all branches. Tap a branch to mark an item sold out there.'
+      {branch === 'all' ? (
+        soldOutNow.length > 0 ? (
+          <Card className="p-4 border-red-200 bg-red-50/40">
+            <p className="text-sm font-semibold text-[#241A18] mb-2.5 flex items-center gap-2">
+              <CircleSlash className="w-4 h-4 text-red-600" /> Sold out right now
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {soldOutNow.map(({ item, where }) => (
+                <span key={item.id} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-white border border-red-200 text-sm">
+                  <span className="font-semibold text-[#241A18]">{item.name}</span>
+                  <span className="text-red-700">at {whereText(where)}</span>
+                </span>
+              ))}
+            </div>
+            <p className="text-xs text-[#8A7970] mt-2.5">Only the branches named are sold out; the others are still selling it. Tap a branch below to switch its stock.</p>
+          </Card>
         ) : (
-          `Everything is in stock${where}. Flip the switch to mark an item sold out.`
-        )}
-      </p>
+          <p className="text-sm text-[#6B5A51]">Everything is in stock at all branches. Tap a branch below to mark an item sold out there.</p>
+        )
+      ) : (
+        <p className="text-sm text-[#6B5A51]">
+          {soldOut > 0 ? (
+            <>
+              <strong className="text-[#241A18]">
+                {soldOut} sold out{where}
+              </strong>{' '}
+              · flip the switch when an item is back.
+            </>
+          ) : (
+            `Everything is in stock${where}. Flip the switch to mark an item sold out.`
+          )}
+        </p>
+      )}
 
       <Card className="divide-y divide-[#F0E8DC] overflow-hidden">
         {shown.length === 0 ? (
@@ -398,7 +423,8 @@ export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; canEdit:
         ) : (
           shown.map((i) => {
             const soldOutAt = soldOutWhere(i);
-            const available = branch === 'all' ? soldOutAt.length === 0 : !soldOutAt.includes(branch);
+            // In the all-branches view an item only looks unavailable when every branch is out of it
+            const available = branch === 'all' ? soldOutAt.length < AMORE_BRANCHES.length : !soldOutAt.includes(branch);
             const details = (
               <>
                 <span className="w-14 h-14 rounded-xl overflow-hidden bg-[#F3EDE3] shrink-0">
@@ -407,7 +433,8 @@ export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; canEdit:
                 <span className="min-w-0">
                   <span className="flex items-center gap-2">
                     <span className={cx('font-semibold truncate', canEdit && 'group-hover:underline', available ? 'text-[#241A18]' : 'text-[#8A7970]')}>{i.name}</span>
-                    {!available && branch !== 'all' && <Badge tone="grey">Sold out</Badge>}
+                    {branch !== 'all' && !available && <Badge tone="grey">Sold out</Badge>}
+                    {branch === 'all' && soldOutAt.length > 0 && <Badge tone="red">Sold out at {whereText(soldOutAt)}</Badge>}
                   </span>
                   <span className="block text-sm text-[#7A6458] truncate">{priceText(i)}</span>
                 </span>
@@ -423,8 +450,8 @@ export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; canEdit:
                   <div className="flex items-center gap-3 min-w-0 flex-1">{details}</div>
                 )}
                 {branch === 'all' ? (
-                  // One chip per branch: green = in stock there, grey = sold out there
-                  <div className="flex gap-1.5 w-full sm:w-auto" role="group" aria-label={`${i.name} stock by branch`}>
+                  // One chip per branch: green = selling there, red = sold out there
+                  <div className="flex flex-wrap gap-1.5 w-full sm:w-auto" role="group" aria-label={`${i.name} stock by branch`}>
                     {AMORE_BRANCHES.map((b) => {
                       const out = soldOutAt.includes(b.id);
                       return (
@@ -435,11 +462,13 @@ export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; canEdit:
                           title={`${BRANCH_SHORT[b.id]}: ${out ? 'sold out — tap when back in stock' : 'in stock — tap to mark sold out'}`}
                           onClick={() => switchStock(i, b.id)}
                           className={cx(
-                            'h-8 px-2.5 rounded-full text-xs font-semibold border cursor-pointer whitespace-nowrap',
-                            out ? 'bg-[#F3EDE3] text-[#8A7970] border-[#E2D8CA] line-through' : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            'inline-flex items-center gap-1 h-8 px-2.5 rounded-full text-xs font-semibold border cursor-pointer whitespace-nowrap transition-colors',
+                            out ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
                           )}
                         >
+                          {out ? <CircleSlash className="w-3.5 h-3.5" /> : <Check className="w-3.5 h-3.5" />}
                           {BRANCH_SHORT[b.id]}
+                          {out && <span className="font-normal">· sold out</span>}
                         </button>
                       );
                     })}

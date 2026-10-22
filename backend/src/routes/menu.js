@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { col, now } from '../db.js';
 import { BRANCHES, HttpError, adminBranch, requireAdmin, requireSuperAdmin } from '../auth.js';
+import { branchName, logActivity } from '../activity.js';
 
 /*
  * The built-in menu ships with the website (frontend/src/data/iceCreamData.ts).
@@ -44,19 +45,24 @@ router.put('/:id', requireSuperAdmin, async (req, res) => {
     if (NOT_SAVED.includes(key) || key.startsWith('$') || key.includes('.')) continue;
     if (value !== undefined) fields[key] = value;
   }
+  const before = await col('menu_items').findOne({ id }, { projection: { _id: 0, name: 1, isDeleted: 1 } });
   const item = await col('menu_items').findOneAndUpdate(
     { id },
     // Saving an item again brings it back if it had been deleted
     { $set: { ...fields, id, updatedAt: now() }, $unset: { isDeleted: '' } },
     { upsert: true, returnDocument: 'after', projection: { _id: 0 } }
   );
+  const name = item.name || id;
+  // Built-in items have no record until first edited, so "added" is judged by the id the console gives new items
+  const isNew = !before && /-\d{10,}$/.test(id);
+  await logActivity(req, { category: 'menu', summary: isNew ? `added ${name} to the menu` : `edited ${name} on the menu` });
   res.json({ item });
 });
 
 // In stock / sold out at one branch
 router.put('/:id/stock', requireAdmin, async (req, res) => {
   const id = checkId(req.params.id);
-  const { branchId, inStock, itemType } = req.body || {};
+  const { branchId, inStock, itemType, itemName } = req.body || {};
   if (!BRANCHES.includes(branchId)) throw new HttpError(400, 'Choose a branch');
   if (typeof inStock !== 'boolean') throw new HttpError(400, 'Say whether the item is in stock');
   if (!ITEM_TYPES.includes(itemType)) throw new HttpError(400, 'Invalid itemType');
@@ -77,13 +83,22 @@ router.put('/:id/stock', requireAdmin, async (req, res) => {
     },
     { upsert: true, returnDocument: 'after', projection: { _id: 0 } }
   );
+  const name = item.name || (typeof itemName === 'string' && itemName.trim().slice(0, 100)) || id;
+  await logActivity(req, {
+    category: 'stock',
+    summary: inStock ? `put ${name} back in stock at ${branchName(branchId)}` : `marked ${name} sold out at ${branchName(branchId)}`,
+    branchId,
+  });
   res.json({ item });
 });
 
 // Delete: keep a marker so every device drops the item (it may be one of the built-in ones)
 router.delete('/:id', requireSuperAdmin, async (req, res) => {
   const id = checkId(req.params.id);
+  const existing = await col('menu_items').findOne({ id }, { projection: { _id: 0, name: 1 } });
   await col('menu_items').updateOne({ id }, { $set: { id, isDeleted: true, updatedAt: now() } }, { upsert: true });
+  const name = existing?.name || (typeof req.query.name === 'string' && req.query.name.trim().slice(0, 100)) || id;
+  await logActivity(req, { category: 'menu', summary: `removed ${name} from the menu` });
   res.json({ deleted: true });
 });
 

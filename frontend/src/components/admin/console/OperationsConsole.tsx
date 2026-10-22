@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ClipboardList, RotateCcw, UtensilsCrossed, BarChart3, CloudOff, ExternalLink, IdCard, LogOut, Lock, MapPin, MoreHorizontal, Settings, UserCog } from 'lucide-react';
+import { Activity, ClipboardList, LayoutDashboard, RotateCcw, UtensilsCrossed, BarChart3, CloudOff, ExternalLink, IdCard, LogOut, Lock, MapPin, MoreHorizontal, Settings, UserCog } from 'lucide-react';
 import { BranchId, Currency, OrderRecord } from '../../../types';
 import { AMORE_BRANCHES } from '../../../data/iceCreamData';
 import { isCapturedReturnedBill } from '../../../utils/orderStorage';
 import { isSoldOutAt } from '../../../utils/stock';
-import type { AdminProfile } from '../../../api';
+import { api, type AdminProfile } from '../../../api';
+import { startPolling } from '../../../utils/poll';
 import { AmoreLogo } from '../../AmoreLogo';
 import { Button, ConsoleUiProvider, cx, useConsoleUi } from './ui';
 import { BranchFilter, inBranch, useMenu, useNewOrderAlert, useOrders, usePendingWrites, useStoredState, chime } from './useConsoleData';
@@ -19,17 +20,23 @@ import { ReportsView } from './ReportsView';
 import { EmployeesView } from './EmployeesView';
 import { UsersView } from './UsersView';
 import { SettingsView } from './SettingsView';
+import { DashboardView } from './DashboardView';
+import { ActionCenterView } from './ActionCenterView';
 
-type Section = 'orders' | 'refunds' | 'menu' | 'reports' | 'employees' | 'users' | 'settings';
+type Section = 'dashboard' | 'activity' | 'orders' | 'refunds' | 'menu' | 'reports' | 'employees' | 'users' | 'settings';
 
-const ALL_SECTIONS: { id: Section; label: string; icon: React.ReactNode; title: string; group: string; superOnly?: boolean }[] = [
-  { id: 'orders', label: 'Orders', icon: <ClipboardList className="w-5 h-5" />, title: 'Orders', group: 'Daily work' },
-  { id: 'refunds', label: 'Refunds', icon: <RotateCcw className="w-5 h-5" />, title: 'Refunds', group: 'Daily work' },
-  { id: 'menu', label: 'Menu', icon: <UtensilsCrossed className="w-5 h-5" />, title: 'Menu & stock', group: 'Menu' },
+const ALL_SECTIONS: { id: Section; label: string; icon: React.ReactNode; title: string; group: string; superOnly?: boolean; phoneTab?: 'all' | 'super' | 'branch' }[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, title: 'Dashboard', group: 'Overview', phoneTab: 'all' },
+  { id: 'activity', label: 'Action Center', icon: <Activity className="w-5 h-5" />, title: 'Action Center', group: 'Overview', superOnly: true, phoneTab: 'super' },
+  { id: 'orders', label: 'Orders', icon: <ClipboardList className="w-5 h-5" />, title: 'Orders', group: 'Daily work', phoneTab: 'all' },
+  { id: 'refunds', label: 'Refunds', icon: <RotateCcw className="w-5 h-5" />, title: 'Refunds', group: 'Daily work', phoneTab: 'branch' },
+  { id: 'menu', label: 'Menu', icon: <UtensilsCrossed className="w-5 h-5" />, title: 'Menu & stock', group: 'Menu', phoneTab: 'all' },
   { id: 'reports', label: 'Reports', icon: <BarChart3 className="w-5 h-5" />, title: 'Reports', group: 'Insights' },
-  { id: 'employees', label: 'Staff', icon: <IdCard className="w-5 h-5" />, title: 'Employees', group: 'Team' },
+  { id: 'employees', label: 'Staff', icon: <IdCard className="w-5 h-5" />, title: 'Employees', group: 'Team', phoneTab: 'all' },
   { id: 'users', label: 'Users', icon: <UserCog className="w-5 h-5" />, title: 'Users & access', group: 'Team', superOnly: true },
 ];
+// When the Action Center was last looked at (on this device), for its "new" count
+const ACTIVITY_SEEN_KEY = 'amore_activity_seen_v1';
 // Settings sits at the bottom of the menu (and in "More" on phones), not with the work pages
 const SETTINGS_TITLE = 'Settings';
 
@@ -43,7 +50,9 @@ function sectionFromUrl(): Section {
   if (t === 'employees' || t === 'staff') return 'employees';
   if (t === 'users') return 'users';
   if (t === 'settings') return 'settings';
-  return 'orders';
+  if (t === 'orders') return 'orders';
+  if (t === 'activity' || t === 'action-center') return 'activity';
+  return 'dashboard';
 }
 
 interface Props {
@@ -75,7 +84,7 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
   const SECTIONS = ALL_SECTIONS.filter((s) => isSuper || !s.superOnly);
   const [section, setSection] = useState<Section>(() => {
     const s = sectionFromUrl();
-    return s === 'settings' || SECTIONS.some((x) => x.id === s) ? s : 'orders';
+    return s === 'settings' || SECTIONS.some((x) => x.id === s) ? s : 'dashboard';
   });
   const [pickedBranch, setBranch] = useStoredState<BranchFilter>('amore_console_branch', 'all');
   const branch: BranchFilter = lockedBranch ?? pickedBranch;
@@ -117,12 +126,45 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
     if (openRef && !openOrder) setOpenRef(null);
   }, [openRef, openOrder]);
 
-  const badges: Partial<Record<Section, { n: number; tone: string }>> = {
+  // Action Center: how much happened since it was last opened here (super admin)
+  const [unseenActivity, setUnseenActivity] = useState(0);
+  const markActivitySeen = () => {
+    try {
+      localStorage.setItem(ACTIVITY_SEEN_KEY, new Date().toISOString());
+    } catch {
+      /* storage blocked */
+    }
+    setUnseenActivity(0);
+  };
+  useEffect(() => {
+    if (!isSuper || section === 'activity') return;
+    return startPolling(
+      async () => {
+        let after: string | null = null;
+        try {
+          after = localStorage.getItem(ACTIVITY_SEEN_KEY);
+        } catch {
+          /* storage blocked */
+        }
+        // First time on this device: start counting from now, not from the whole history
+        if (!after) return markActivitySeen();
+        const { count } = await api<{ count: number }>(`/activity/count?after=${encodeURIComponent(after)}`, { as: 'admin' });
+        setUnseenActivity(count);
+      },
+      { visibleMs: 30_000, hiddenMs: 120_000 }
+    );
+  }, [isSuper, section]);
+
+  const badges: Partial<Record<Section, { n: number | string; tone: string }>> = {
+    activity: unseenActivity ? { n: unseenActivity > 99 ? '99+' : unseenActivity, tone: 'bg-red-600 text-white' } : undefined,
     orders: newCount ? { n: newCount, tone: 'bg-amber-500 text-white' } : undefined,
     refunds: refundCount ? { n: refundCount, tone: 'bg-red-600 text-white' } : undefined,
     menu: soldOut ? { n: soldOut, tone: 'bg-stone-400 text-white' } : undefined,
   };
   const title = section === 'settings' ? SETTINGS_TITLE : SECTIONS.find((s) => s.id === section)!.title;
+  // Phones: up to five pages as bottom tabs; the rest are in the "More" menu
+  const phoneTabs = SECTIONS.filter((s) => s.phoneTab === 'all' || s.phoneTab === (isSuper ? 'super' : 'branch'));
+  const moreSections = SECTIONS.filter((s) => !phoneTabs.includes(s));
 
   const changeSound = (on: boolean) => {
     setSoundOn(on);
@@ -264,6 +306,22 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
               <>
                 <button type="button" aria-label="Close menu" className="fixed inset-0 cursor-default" onClick={() => setMoreOpen(false)} />
                 <div className="absolute right-0 mt-2 w-60 bg-white rounded-2xl shadow-xl border border-[#EAE2D6] p-2 z-10 animate-scaleUp">
+                  {moreSections.map((s) => {
+                    const b = badges[s.id];
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => go(s.id)}
+                        className={cx('w-full flex items-center gap-3 h-11 px-3 rounded-xl text-sm hover:bg-[#F3EDE3] cursor-pointer', section === s.id && 'bg-[#81001E]/10 text-[#81001E] font-semibold')}
+                      >
+                        <span className="[&>svg]:w-4 [&>svg]:h-4">{s.icon}</span>
+                        <span className="flex-1 text-left">{s.title}</span>
+                        {b && <span className={cx('min-w-5 h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center', b.tone)}>{b.n}</span>}
+                      </button>
+                    );
+                  })}
+                  {moreSections.length > 0 && <div className="my-1.5 border-t border-[#F0E8DC]" />}
                   <button type="button" onClick={() => go('settings')} className="w-full flex items-center gap-3 h-11 px-3 rounded-xl text-sm hover:bg-[#F3EDE3] cursor-pointer">
                     <Settings className="w-4 h-4" /> {SETTINGS_TITLE}
                   </button>
@@ -286,6 +344,10 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
       </header>
 
       <main className="px-4 lg:px-8 py-5 lg:py-7 pb-28 lg:pb-10 max-w-[1500px]">
+        {section === 'dashboard' && (
+          <DashboardView admin={admin} orders={orders} menu={menu} branch={branch} onGo={go} onOpenOrder={setOpenRef} />
+        )}
+        {section === 'activity' && isSuper && <ActionCenterView branch={branch} onOpenOrder={setOpenRef} onSeen={markActivitySeen} />}
         {section === 'orders' && <OrdersView orders={orders} branch={branch} onOpenOrder={(o) => setOpenRef(o.orderReference)} onNewOrder={() => setNewOrderOpen(true)} />}
         {section === 'refunds' && <RefundsView orders={orders} branch={branch} lockedBranch={lockedBranch} />}
         {section === 'menu' && <MenuView menu={menu} branch={branch} canEdit={isSuper} />}
@@ -299,8 +361,8 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
 
       {/* Bottom tabs (phones / tablets) */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-[#EAE2D6] pb-safe" aria-label="Console">
-        <div className="grid h-16" style={{ gridTemplateColumns: `repeat(${SECTIONS.length}, minmax(0, 1fr))` }}>
-          {SECTIONS.map((s) => {
+        <div className="grid h-16" style={{ gridTemplateColumns: `repeat(${phoneTabs.length}, minmax(0, 1fr))` }}>
+          {phoneTabs.map((s) => {
             const b = badges[s.id];
             return (
               <button

@@ -6,6 +6,7 @@ import { isCapturedReturnedBill } from '../../../utils/orderStorage';
 import { formatPrice } from '../../../utils/currency';
 import { Card, cx } from './ui';
 import { BranchFilter, inBranch } from './useConsoleData';
+import { saleTime } from './orderMeta';
 
 const lkr = (n: number) => formatPrice(n, 'LKR');
 type Period = 'today' | 'week' | 'month' | 'all';
@@ -23,21 +24,6 @@ function periodStart(p: Period): number {
   if (p === 'week') d.setDate(d.getDate() - 6);
   if (p === 'month') d.setDate(d.getDate() - 29);
   return d.getTime();
-}
-
-/**
- * When an order counts as a sale (same rules as before the redesign):
- * a card delivery payment counts once the parlour accepts it (it is captured then);
- * cash and counter payments count once the order is delivered / collected.
- */
-function saleTime(o: OrderRecord): string | null {
-  if (o.orderReference.startsWith('RET-') || o.items.some((i) => i.itemId === 'returned-item-manual')) return null;
-  const card = o.paymentMethod === 'card' && o.orderType !== 'pickup';
-  if (card) {
-    const captured = ['confirmed', 'paid', 'preparing', 'on_the_way', 'delivered'].includes(o.status) || (o.status === 'cancelled' && !!o.confirmedAt);
-    return captured ? o.confirmedAt || o.createdAt : null;
-  }
-  return o.status === 'delivered' ? o.deliveredAt || o.createdAt : null;
 }
 
 const Stat: React.FC<{ label: string; value: string; sub?: string }> = ({ label, value, sub }) => (

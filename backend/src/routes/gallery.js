@@ -2,6 +2,7 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import { col, getSetting, now } from '../db.js';
 import { HttpError, requireAdmin, requireSuperAdmin } from '../auth.js';
+import { logActivity } from '../activity.js';
 
 /*
  * The photo gallery that menu photos are picked from. Amore's own photos ship with the
@@ -40,24 +41,28 @@ router.post('/', requireSuperAdmin, async (req, res) => {
   if (!GALLERY_CATEGORIES.includes(category)) throw new HttpError(400, 'Choose a category');
   const photo = { id: `gal_${crypto.randomBytes(8).toString('hex')}`, url, name: title, category, createdAt: now(), uploadedBy: req.admin.username };
   await col('gallery').insertOne({ ...photo });
+  await logActivity(req, { category: 'gallery', summary: `added the photo “${photo.name}” to the gallery` });
   res.status(201).json({ photo });
 });
 
 router.delete('/:id', requireSuperAdmin, async (req, res) => {
   const id = String(req.params.id);
   if (id.startsWith('gal_')) {
-    const { deletedCount } = await col('gallery').deleteOne({ id });
-    if (!deletedCount) throw new HttpError(404, 'Photo not found');
+    const photo = await col('gallery').findOneAndDelete({ id });
+    if (!photo) throw new HttpError(404, 'Photo not found');
+    await logActivity(req, { category: 'gallery', summary: `deleted the photo “${photo.name}” from the gallery` });
     return res.json({ deleted: true });
   }
   // One of Amore's own photos (built into the website): hide it from the gallery
   if (!/^[a-z0-9-]{2,60}$/.test(id)) throw new HttpError(404, 'Photo not found');
   await col('settings').updateOne({ key: HIDDEN_KEY }, { $addToSet: { value: id } }, { upsert: true });
+  await logActivity(req, { category: 'gallery', summary: `deleted one of Amore’s own photos (${id}) from the gallery` });
   res.json({ deleted: true, hidden: true });
 });
 
 router.post('/restore', requireSuperAdmin, async (req, res) => {
   await col('settings').updateOne({ key: HIDDEN_KEY }, { $set: { value: [] } }, { upsert: true });
+  await logActivity(req, { category: 'gallery', summary: 'restored Amore’s own photos in the gallery' });
   res.json({ restored: true });
 });
 
