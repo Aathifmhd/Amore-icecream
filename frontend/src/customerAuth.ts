@@ -51,7 +51,15 @@ interface GoogleIdApi {
   initialize(config: { client_id: string; callback: (r: { credential: string }) => void; ux_mode?: 'popup'; auto_select?: boolean }): void;
   renderButton(
     parent: HTMLElement,
-    options: { theme?: 'outline' | 'filled_blue'; size?: 'large' | 'medium'; text?: 'signin_with' | 'continue_with'; shape?: 'pill' | 'rectangular'; width?: number; logo_alignment?: 'left' | 'center' }
+    options: {
+      theme?: 'outline' | 'filled_blue';
+      size?: 'large' | 'medium';
+      text?: 'signin_with' | 'continue_with';
+      shape?: 'pill' | 'rectangular';
+      width?: number;
+      logo_alignment?: 'left' | 'center';
+      locale?: string;
+    }
   ): void;
   disableAutoSelect(): void;
 }
@@ -88,6 +96,10 @@ function loadGoogleScript(): Promise<void> {
   return scriptLoad;
 }
 
+// Google's library is set up once; each button that is shown says where its sign-in goes
+let initializedFor: string | null = null;
+let onSignIn: ((credential: string) => void) | null = null;
+
 /**
  * Shows Google's sign-in button inside `parent`. `onCredential` receives the signed sign-in
  * when the person picks their account. Throws GoogleSignInUnavailable if it can't be shown.
@@ -100,7 +112,11 @@ export async function renderGoogleButton(
   const [clientId] = await Promise.all([googleClientId(), loadGoogleScript()]);
   if (!clientId) throw new GoogleSignInUnavailable('Google sign-in is not set up yet. Please try again later.');
   const id = window.google!.accounts.id;
-  id.initialize({ client_id: clientId, callback: (r) => onCredential(r.credential), ux_mode: 'popup' });
+  onSignIn = onCredential;
+  if (initializedFor !== clientId) {
+    id.initialize({ client_id: clientId, callback: (r) => onSignIn?.(r.credential), ux_mode: 'popup' });
+    initializedFor = clientId;
+  }
   parent.replaceChildren();
   id.renderButton(parent, {
     theme: 'outline',
@@ -108,6 +124,7 @@ export async function renderGoogleButton(
     text,
     shape: 'pill',
     logo_alignment: 'center',
+    locale: 'en', // the site is in English
     width: Math.min(400, Math.max(200, Math.round(parent.clientWidth || 320))),
   });
 }
