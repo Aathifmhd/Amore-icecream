@@ -719,3 +719,19 @@ html {
 .amore-pin-map .leaflet-control-attribution a {
   color: inherit;
 }
+
+/* Parlour names next to their dots on the maps */
+.leaflet-tooltip.amore-parlour-label {
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: #8c102a;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.18);
+}
+.leaflet-tooltip.amore-parlour-label::before {
+  display: none;
+}

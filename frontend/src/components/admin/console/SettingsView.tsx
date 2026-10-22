@@ -3,7 +3,7 @@
  * the default prices for every branch and the photo gallery that menu photos are picked from.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Bell, ImagePlus, Images, KeyRound, Lock, RotateCcw, Tag, Trash2, Upload, UserCog, Volume2 } from 'lucide-react';
+import { Bell, ImagePlus, Images, KeyRound, Lock, MapPinned, RotateCcw, Tag, Trash2, Upload, UserCog, Volume2 } from 'lucide-react';
 import { ApiError, ADMIN_SESSION_EVENT, type AdminProfile } from '../../../api';
 import { getRememberedDevice, isValidCodeFormat, lockConsole, removeUserCode, setUserCode } from '../../../utils/adminAuth';
 import { Badge, Button, Card, EmptyState, Field, Popup, Switch, cx, inputClass, useConsoleUi } from './ui';
@@ -17,6 +17,7 @@ import {
   type GalleryPhoto,
 } from './gallery';
 import { DefaultPricesView } from './DefaultPricesView';
+import { ParlourLocationsView } from './ParlourLocationsView';
 import type { MenuData } from './useConsoleData';
 
 const BRANCH_NAME: Record<string, string> = { akurana: 'Akurana', colombo: 'Colombo', arugambay: 'Arugam Bay' };
@@ -389,7 +390,7 @@ const PhotoGallery: React.FC = () => {
 
 // ---- Page -------------------------------------------------------------------------
 
-type SectionId = 'sound' | 'code' | 'account' | 'prices' | 'gallery';
+type SectionId = 'sound' | 'code' | 'account' | 'prices' | 'gallery' | 'parlours';
 type Section = { id: SectionId; icon: React.ReactNode; label: string; desc: string; superOnly?: boolean };
 
 // The settings menu, grouped under headings (like Cargo POS)
@@ -416,6 +417,18 @@ const GROUPS: { heading: string; items: Section[] }[] = [
         superOnly: true,
       },
       { id: 'gallery', icon: <Images className="w-4 h-4" />, label: 'Photo gallery', desc: 'The photos menu items are picked from.', superOnly: true },
+    ],
+  },
+  {
+    heading: 'Parlours',
+    items: [
+      {
+        id: 'parlours',
+        icon: <MapPinned className="w-4 h-4" />,
+        label: 'Locations & delivery',
+        desc: 'Where each parlour is on the map, and how far from it we deliver.',
+        superOnly: true,
+      },
     ],
   },
 ];
@@ -516,6 +529,7 @@ export const SettingsView: React.FC<{
           {cur.id === 'account' && <AccountSettings admin={admin} onOpenUsers={onOpenUsers} />}
           {cur.id === 'prices' && isSuper && <DefaultPricesView menu={menu} />}
           {cur.id === 'gallery' && isSuper && <PhotoGallery />}
+          {cur.id === 'parlours' && isSuper && <ParlourLocationsView />}
         </div>
       </Card>
     </div>

@@ -4,7 +4,7 @@
  * New entries appear on their own while the page is open.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CircleSlash, ClipboardList, IdCard, Images, LogIn, RotateCcw, ShieldAlert, UserCog, UtensilsCrossed, Activity } from 'lucide-react';
+import { CircleSlash, ClipboardList, IdCard, Images, LogIn, MapPinned, RotateCcw, ShieldAlert, UserCog, UtensilsCrossed, Activity } from 'lucide-react';
 import { BranchId } from '../../../types';
 import { api, ApiError } from '../../../api';
 import { startPolling } from '../../../utils/poll';
@@ -12,7 +12,7 @@ import { Badge, Button, Card, EmptyState, cx } from './ui';
 import { BranchFilter } from './useConsoleData';
 import { clockTime, timeAgo } from './orderMeta';
 
-export type ActivityCategory = 'order' | 'refund' | 'stock' | 'menu' | 'staff' | 'users' | 'gallery' | 'signin';
+export type ActivityCategory = 'order' | 'refund' | 'stock' | 'menu' | 'staff' | 'users' | 'gallery' | 'parlours' | 'signin';
 
 export interface ActivityItem {
   id: string;
@@ -34,6 +34,7 @@ export const CATEGORY_META: Record<ActivityCategory, { label: string; icon: Reac
   staff: { label: 'Staff', icon: <IdCard className="w-4 h-4" />, tint: 'bg-sky-100 text-sky-700' },
   users: { label: 'Users', icon: <UserCog className="w-4 h-4" />, tint: 'bg-stone-200 text-stone-700' },
   gallery: { label: 'Photos', icon: <Images className="w-4 h-4" />, tint: 'bg-emerald-100 text-emerald-700' },
+  parlours: { label: 'Parlours', icon: <MapPinned className="w-4 h-4" />, tint: 'bg-orange-100 text-orange-700' },
   signin: { label: 'Sign-ins', icon: <LogIn className="w-4 h-4" />, tint: 'bg-indigo-100 text-indigo-700' },
 };
 

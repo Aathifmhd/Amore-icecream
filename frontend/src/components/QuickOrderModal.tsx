@@ -32,7 +32,7 @@ import {
 import { type User } from '../customerAuth';
 import { LocationPickerModal } from './LocationPickerModal';
 import { repriceForBranch } from '../utils/branchMenu';
-import { DELIVERY_RADIUS_KM, deliveryCheck, nearestBranch } from '../utils/branchLocation';
+import { deliveryCheck, deliveryRangeText, nearestBranch, useParlourZones } from '../utils/branchLocation';
 
 interface QuickOrderModalProps {
   isOpen: boolean;
@@ -252,8 +252,9 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
     }
   }, [deliveryAddress, city, deliveryCoords]);
 
-  // Parlours deliver only within DELIVERY_RADIUS_KM of the pin
-  const deliveryRange = deliveryCoords ? deliveryCheck(deliveryCoords) : null;
+  // Each parlour delivers only within its range of the pin (set in the console)
+  const zones = useParlourZones();
+  const deliveryRange = deliveryCoords ? deliveryCheck(deliveryCoords, undefined, zones) : null;
   const choosePickup = (branch: BranchId) => {
     setOrderType('pickup');
     setPickupBranchId(branch);
@@ -737,9 +738,9 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
                             We can’t deliver to this location
                           </p>
                           <p className="text-xs text-red-800/90 mt-1 leading-relaxed">
-                            We deliver within {DELIVERY_RADIUS_KM} km of our parlours. The nearest, Amore{' '}
-                            {AMORE_BRANCHES.find((b) => b.id === deliveryRange.branch)?.name}, is {deliveryRange.km.toFixed(1)} km away. You can pick up
-                            your order from the parlour instead.
+                            The nearest parlour, Amore {AMORE_BRANCHES.find((b) => b.id === deliveryRange.branch)?.name}, delivers within{' '}
+                            {deliveryRange.radiusKm} km and this pin is {deliveryRange.km.toFixed(1)} km away. You can pick up your order from the
+                            parlour instead.
                           </p>
                           <div className="mt-3 grid grid-cols-2 gap-2">
                             <button
@@ -794,7 +795,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
                       )}
                     </div>
                     {!deliveryCoords && (
-                      <p className="text-[11px] text-[#7A6458] mt-1.5">We deliver within {DELIVERY_RADIUS_KM} km of our parlours in Akurana, Colombo and Arugam Bay.</p>
+                      <p className="text-[11px] text-[#7A6458] mt-1.5">We deliver {deliveryRangeText(zones)}.</p>
                     )}
 
                     <div className="mt-3 space-y-2.5">

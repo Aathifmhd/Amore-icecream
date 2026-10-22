@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { col, now, PUBLIC } from '../db.js';
 import { HttpError, adminBranch, requireAdmin, requireCustomer } from '../auth.js';
 import { newCustomerOrder, newAdminOrder, orderUpdate, checkDelete, isRefundRecord } from '../orderRules.js';
+import { getParlours } from '../parlours.js';
 import { logActivity, lkr } from '../activity.js';
 
 const router = Router();
@@ -119,7 +120,7 @@ router.get('/:ref', async (req, res) => {
 
 router.post('/', async (req, res) => {
   if (!req.admin && !req.customer) throw new HttpError(401, 'Please sign in to place an order');
-  const order = req.admin ? newAdminOrder(req.body) : newCustomerOrder(req.body, req.customer);
+  const order = req.admin ? newAdminOrder(req.body) : newCustomerOrder(req.body, req.customer, await getParlours());
 
   const branch = adminBranch(req.admin);
   if (branch && order.branchId !== branch) throw new HttpError(403, 'You can only add orders for your own branch');
@@ -161,7 +162,7 @@ router.patch('/:ref', async (req, res) => {
   if (branch && req.body?.branchId !== undefined && req.body.branchId !== branch) {
     throw new HttpError(403, 'You can only keep orders in your own branch');
   }
-  const update = orderUpdate(req.body, existing, { admin: req.admin, customer: req.customer });
+  const update = orderUpdate(req.body, existing, { admin: req.admin, customer: req.customer, parlours: req.admin ? null : await getParlours() });
   const stamp = now();
   const order = await col('orders').findOneAndUpdate(
     { orderReference: existing.orderReference },

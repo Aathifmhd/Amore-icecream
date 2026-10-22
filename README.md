@@ -48,6 +48,7 @@ whole site (website + API) from the backend on one port.
 | `POST /api/images`, `GET /api/images/:id` | admin uploads, everyone views |
 | `/api/gallery` | admins see, super admin adds / removes photos in the photo gallery |
 | `/api/activity` | super admin — the Action Center log (what happened, who, which branch; kept 90 days) |
+| `GET /api/parlours`, `PUT /api/parlours/:id` | everyone reads / super admin sets — each parlour's map location and delivery distance |
 | `POST /api/orders` | signed-in customer (checked like the old Firestore rules) or admin |
 | `GET /api/orders/mine` | signed-in customer — their own orders |
 | `GET / PATCH / DELETE /api/orders/:ref` | the customer who placed it (limited) or admin |
@@ -146,11 +147,13 @@ customer, keeps the pin in the middle while they move the map, and looks up the 
 (`utils/branchLocation.ts`). The last order's name, phone and address are kept on that device for
 the same Google account, so the next checkout is already filled in.
 
-**Delivery range:** parlours deliver within 6 km (`DELIVERY_RADIUS_KM`). A delivery needs a map
-pin; a pin further than that shows "We can't deliver to this location" with a button to switch to
-pickup from the nearest parlour, and the backend refuses such orders and pin moves too
-(`backend/src/orderRules.js`). The parlour locations are in both `frontend/src/utils/branchLocation.ts`
-and `backend/src/orderRules.js`: change them together. Orders the console adds by hand are not checked.
+**Delivery range:** each parlour delivers within its own distance (6 km to start). The super admin
+sets each parlour's map location and distance in the console (Settings → Locations & delivery);
+they are kept in MongoDB (`backend/src/parlours.js`, the `parlour_locations` setting). The
+customer's map shows every parlour as a dot with its delivery area as a dashed circle. A delivery
+needs a map pin; a pin outside the range shows "We can't deliver to this location" with a button to
+switch to pickup from the nearest parlour, and the backend refuses such orders and pin moves too
+(`backend/src/orderRules.js`). Orders the console adds by hand are not checked.
 
 ## Deploy (Vercel)
 

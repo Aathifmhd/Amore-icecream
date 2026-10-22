@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AlertCircle, ArrowLeft, LocateFixed, Loader2, MapPin, Search, Store } from 'lucide-react';
 import { BranchId } from '../types';
 import { AMORE_BRANCHES } from '../data/iceCreamData';
-import { BRANCH_COORDS, DELIVERY_RADIUS_KM, deliveryCheck } from '../utils/branchLocation';
+import { deliveryCheck, useParlourZones } from '../utils/branchLocation';
+import { drawParlours, loadLeaflet } from '../utils/leaflet';
 
 interface LocationPickerModalProps {
   isOpen: boolean;
@@ -21,12 +22,6 @@ interface LocationPickerModalProps {
     city: string;
     coords: { lat: number; lng: number };
   }) => void;
-}
-
-declare global {
-  interface Window {
-    L: any;
-  }
 }
 
 type Coords = { lat: number; lng: number };
@@ -59,7 +54,8 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
   onChoosePickup,
   onSelectLocation,
 }) => {
-  const [coords, setCoords] = useState<Coords>(initialCoords || BRANCH_COORDS[fallbackBranch]);
+  const zones = useParlourZones();
+  const [coords, setCoords] = useState<Coords>(initialCoords || zones[fallbackBranch]);
   const [address, setAddress] = useState(initialAddress);
   const [city, setCity] = useState(initialCity);
   const [typed, setTyped] = useState(false);
@@ -71,13 +67,14 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
+  const parloursLayerRef = useRef<any>(null);
   const lookupRef = useRef(0);
   const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Start from what checkout already has each time the map opens
   useEffect(() => {
     if (!isOpen) return;
-    setCoords(initialCoords || BRANCH_COORDS[fallbackBranch]);
+    setCoords(initialCoords || zones[fallbackBranch]);
     setAddress(initialAddress);
     setCity(initialCity);
     setTyped(false);
@@ -86,25 +83,10 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
 
   // Leaflet is only loaded when someone opens the map
   useEffect(() => {
-    if (!isOpen || window.L) return;
-    if (!document.getElementById('leaflet-css')) {
-      const link = document.createElement('link');
-      link.id = 'leaflet-css';
-      link.rel = 'stylesheet';
-      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      document.head.appendChild(link);
-    }
-    const existing = document.getElementById('leaflet-js') as HTMLScriptElement | null;
-    if (existing) {
-      existing.addEventListener('load', () => setLeafletLoaded(true));
-      return;
-    }
-    const script = document.createElement('script');
-    script.id = 'leaflet-js';
-    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    script.async = true;
-    script.onload = () => setLeafletLoaded(true);
-    document.body.appendChild(script);
+    if (!isOpen || leafletLoaded) return;
+    loadLeaflet()
+      .then(() => setLeafletLoaded(true))
+      .catch(() => setNotice('The map could not load. Check your internet and try again.'));
   }, [isOpen]);
 
   // The street address under the pin (only the latest lookup counts)
@@ -155,15 +137,17 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
   useEffect(() => {
     if (!isOpen || !leafletLoaded || !mapContainerRef.current) return;
     const L = window.L;
-    const start = initialCoords || BRANCH_COORDS[fallbackBranch];
+    const start = initialCoords || zones[fallbackBranch];
     const map = L.map(mapContainerRef.current, {
       center: [start.lat, start.lng],
-      zoom: initialCoords ? 18 : 15,
+      // Without a pin yet, start wide enough to see the delivery area
+      zoom: initialCoords ? 17 : 12,
       zoomControl: false,
       attributionControl: false,
     });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
     L.control.attribution({ position: 'bottomleft', prefix: false }).addAttribution('© OpenStreetMap').addTo(map);
+    parloursLayerRef.current = L.layerGroup().addTo(map);
 
     map.on('movestart', () => {
       setMoving(true);
@@ -192,8 +176,19 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
       if (lookupTimer.current) clearTimeout(lookupTimer.current);
       map.remove();
       mapRef.current = null;
+      parloursLayerRef.current = null;
     };
   }, [isOpen, leafletLoaded]);
+
+  // The parlours as dots, each with its delivery area (redrawn if the settings change)
+  useEffect(() => {
+    if (!isOpen || !leafletLoaded || !parloursLayerRef.current) return;
+    drawParlours(
+      window.L,
+      parloursLayerRef.current,
+      AMORE_BRANCHES.filter((b) => !deliverFrom || b.id === deliverFrom).map((b) => ({ id: b.id, name: `Amore ${b.name}`, ...zones[b.id] }))
+    );
+  }, [isOpen, leafletLoaded, zones, deliverFrom]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -229,7 +224,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
 
   const shownAddress = typed || !city || address.includes(city) ? address : [address, city].filter(Boolean).join(', ');
   // Parlours deliver only within DELIVERY_RADIUS_KM
-  const range = deliveryCheck(coords, deliverFrom);
+  const range = deliveryCheck(coords, deliverFrom, zones);
   const tooFar = !range.ok && !moving && !locating;
   const rangeBranch = AMORE_BRANCHES.find((b) => b.id === range.branch);
   const canConfirm = Boolean(address.trim()) && !moving && range.ok;
@@ -277,6 +272,17 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
           >
             <ArrowLeft className="w-6 h-6" />
           </button>
+
+          <div className="absolute bottom-7 left-3 z-[600] px-3 py-1.5 rounded-full bg-white/95 shadow-[0_2px_10px_rgba(0,0,0,0.12)] flex items-center gap-3 text-[11px] font-semibold text-[#3D2C24] pointer-events-none">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#8C102A] ring-2 ring-white shadow" />
+              Parlour
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-3.5 h-3.5 rounded-full border-[1.5px] border-dashed border-[#8C102A] bg-[#8C102A]/10" />
+              We deliver here
+            </span>
+          </div>
 
           <button
             type="button"
@@ -338,8 +344,8 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
               </p>
               <p className="text-xs text-red-800/90 mt-1 leading-relaxed">
                 {deliverFrom
-                  ? `Amore ${rangeBranch?.name} delivers within ${DELIVERY_RADIUS_KM} km, and this pin is ${range.km.toFixed(1)} km away.`
-                  : `We deliver within ${DELIVERY_RADIUS_KM} km of our parlours. The nearest, Amore ${rangeBranch?.name}, is ${range.km.toFixed(1)} km from this pin.`}{' '}
+                  ? `Amore ${rangeBranch?.name} delivers within ${range.radiusKm} km, and this pin is ${range.km.toFixed(1)} km away.`
+                  : `The nearest parlour, Amore ${rangeBranch?.name}, delivers within ${range.radiusKm} km. This pin is ${range.km.toFixed(1)} km away.`}{' '}
                 {onChoosePickup ? 'You can pick up your order from the parlour instead.' : 'Move the pin closer, or cancel and order for parlour pickup.'}
               </p>
               {onChoosePickup && (
