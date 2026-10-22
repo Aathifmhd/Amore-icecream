@@ -3,6 +3,9 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
+// iPhones ignore user-scalable=no; their pinch gesture can still be cancelled
+document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

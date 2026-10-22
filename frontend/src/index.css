@@ -11,6 +11,14 @@
   --color-amore-wood: #2D1D18;
 }
 
+/* Phones: scroll in any direction, but no pinch or double-tap zoom. The delivery map sets its
+   own touch-action (Leaflet), so it still pinch-zooms. */
+html,
+body,
+* {
+  touch-action: pan-x pan-y;
+}
+
 html {
   scroll-behavior: smooth;
   font-family: 'Outfit', system-ui, -apple-system, sans-serif;
