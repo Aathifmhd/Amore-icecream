@@ -99,7 +99,7 @@ export const ReportsView: React.FC<{ orders: OrderRecord[]; branch: BranchFilter
             role="tab"
             aria-selected={period === p.id}
             onClick={() => setPeriod(p.id)}
-            className={cx('h-9 px-3.5 rounded-lg text-sm font-semibold cursor-pointer', period === p.id ? 'bg-white text-[#241A18] shadow-sm' : 'text-[#6B5A51] hover:text-[#241A18]')}
+            className={cx('h-9 px-3.5 rounded-lg text-sm font-semibold whitespace-nowrap cursor-pointer', period === p.id ? 'bg-white text-[#241A18] shadow-sm' : 'text-[#6B5A51] hover:text-[#241A18]')}
           >
             {p.label}
           </button>

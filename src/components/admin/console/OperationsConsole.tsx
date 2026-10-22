@@ -97,7 +97,7 @@ const ConsoleShell: React.FC<Props> = ({ onSignOut, signOutLabel = 'Sign Out', o
 
   const branchPicker = (
     <>
-      <div className="hidden md:inline-flex p-1 bg-[#F3EDE3] rounded-xl" role="radiogroup" aria-label="Branch">
+      <div className="hidden xl:inline-flex p-1 bg-[#F3EDE3] rounded-xl" role="radiogroup" aria-label="Branch">
         {(['all', ...AMORE_BRANCHES.map((b) => b.id)] as BranchFilter[]).map((b) => (
           <button
             key={b}
@@ -118,7 +118,7 @@ const ConsoleShell: React.FC<Props> = ({ onSignOut, signOutLabel = 'Sign Out', o
         value={branch}
         onChange={(e) => setBranch(e.target.value as BranchFilter)}
         aria-label="Branch"
-        className="md:hidden h-10 pl-3 pr-8 rounded-xl border border-[#E2D8CA] bg-white text-sm font-semibold text-[#241A18]"
+        className="xl:hidden h-10 pl-3 pr-8 rounded-xl border border-[#E2D8CA] bg-white text-sm font-semibold text-[#241A18] max-w-[11rem]"
       >
         <option value="all">All branches</option>
         {AMORE_BRANCHES.map((b) => (
@@ -131,12 +131,12 @@ const ConsoleShell: React.FC<Props> = ({ onSignOut, signOutLabel = 'Sign Out', o
   );
 
   return (
-    <div className="min-h-screen bg-[#F7F3EC] text-[#241A18] lg:pl-60">
+    <div className="min-h-screen bg-[#F7F3EC] text-[#241A18] lg:pl-20 xl:pl-60">
       {/* Sidebar (desktop) */}
-      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-60 flex-col bg-white border-r border-[#EAE2D6] z-30">
-        <div className="flex items-center gap-3 px-5 h-16 border-b border-[#F0E8DC]">
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-20 xl:w-60 flex-col bg-white border-r border-[#EAE2D6] z-30">
+        <div className="flex items-center justify-center xl:justify-start gap-3 px-5 h-16 border-b border-[#F0E8DC]">
           <AmoreLogo size="sm" showShadow={false} />
-          <div className="leading-tight">
+          <div className="leading-tight hidden xl:block">
             <p className="font-bold">Amore</p>
             <p className="text-xs text-[#8A7970]">Operations</p>
           </div>
@@ -150,28 +150,45 @@ const ConsoleShell: React.FC<Props> = ({ onSignOut, signOutLabel = 'Sign Out', o
                 type="button"
                 onClick={() => go(s.id)}
                 aria-current={section === s.id ? 'page' : undefined}
+                title={s.label}
                 className={cx(
-                  'w-full flex items-center gap-3 h-11 px-3 rounded-xl text-sm font-semibold cursor-pointer transition-colors',
+                  'relative w-full flex items-center justify-center xl:justify-start gap-3 h-11 px-3 rounded-xl text-sm font-semibold cursor-pointer transition-colors',
                   section === s.id ? 'bg-[#81001E] text-white' : 'text-[#3D2C24] hover:bg-[#F3EDE3]'
                 )}
               >
                 {s.icon}
-                <span className="flex-1 text-left">{s.label}</span>
-                {b && <span className={cx('min-w-6 h-6 px-1.5 rounded-full text-xs font-bold flex items-center justify-center', section === s.id ? 'bg-white text-[#81001E]' : b.tone)}>{b.n}</span>}
+                <span className="flex-1 text-left hidden xl:block">{s.label}</span>
+                {b && (
+                  <span
+                    className={cx(
+                      'min-w-5 h-5 xl:min-w-6 xl:h-6 px-1.5 rounded-full text-[11px] xl:text-xs font-bold flex items-center justify-center absolute top-0.5 right-1.5 xl:static',
+                      section === s.id ? 'bg-white text-[#81001E]' : b.tone
+                    )}
+                  >
+                    {b.n}
+                  </span>
+                )}
               </button>
             );
           })}
         </nav>
         <div className="p-3 border-t border-[#F0E8DC] space-y-1">
-          <button type="button" onClick={toggleSound} className="w-full flex items-center gap-3 h-10 px-3 rounded-xl text-sm text-[#3D2C24] hover:bg-[#F3EDE3] cursor-pointer">
+          <button
+            type="button"
+            onClick={toggleSound}
+            title={`New-order sound: ${soundOn ? 'On' : 'Off'}`}
+            className="w-full flex items-center justify-center xl:justify-start gap-3 h-10 px-3 rounded-xl text-sm text-[#3D2C24] hover:bg-[#F3EDE3] cursor-pointer"
+          >
             {soundOn ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
-            New-order sound: <strong>{soundOn ? 'On' : 'Off'}</strong>
+            <span className="hidden xl:inline">
+              New-order sound: <strong>{soundOn ? 'On' : 'Off'}</strong>
+            </span>
           </button>
-          <button type="button" onClick={onBackToStore} className="w-full flex items-center gap-3 h-10 px-3 rounded-xl text-sm text-[#3D2C24] hover:bg-[#F3EDE3] cursor-pointer">
-            <ExternalLink className="w-4 h-4" /> View website
+          <button type="button" onClick={onBackToStore} title="View website" className="w-full flex items-center justify-center xl:justify-start gap-3 h-10 px-3 rounded-xl text-sm text-[#3D2C24] hover:bg-[#F3EDE3] cursor-pointer">
+            <ExternalLink className="w-4 h-4" /> <span className="hidden xl:inline">View website</span>
           </button>
-          <button type="button" onClick={onSignOut} className="w-full flex items-center gap-3 h-10 px-3 rounded-xl text-sm text-red-700 hover:bg-red-50 cursor-pointer">
-            <SignOutIcon className="w-4 h-4" /> {signOutLabel}
+          <button type="button" onClick={onSignOut} title={signOutLabel} className="w-full flex items-center justify-center xl:justify-start gap-3 h-10 px-3 rounded-xl text-sm text-red-700 hover:bg-red-50 cursor-pointer">
+            <SignOutIcon className="w-4 h-4" /> <span className="hidden xl:inline">{signOutLabel}</span>
           </button>
         </div>
       </aside>

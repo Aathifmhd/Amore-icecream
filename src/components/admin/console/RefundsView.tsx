@@ -168,7 +168,7 @@ export const RefundsView: React.FC<{ orders: OrderRecord[]; branch: BranchFilter
               aria-selected={tab === t.id}
               onClick={() => setTab(t.id)}
               className={cx(
-                'h-9 px-3.5 rounded-lg text-sm font-semibold cursor-pointer',
+                'h-9 px-3.5 rounded-lg text-sm font-semibold whitespace-nowrap cursor-pointer',
                 tab === t.id ? 'bg-white text-[#241A18] shadow-sm' : 'text-[#6B5A51] hover:text-[#241A18]'
               )}
             >
