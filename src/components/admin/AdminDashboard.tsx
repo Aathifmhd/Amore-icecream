@@ -20,7 +20,7 @@ import {
   syncOrdersFromFirestore,
   mergeOrdersIntoStorage,
 } from '../../utils/orderStorage';
-import { auth, signOut, subscribeToAllOrders } from '../../firebase';
+import { subscribeToAllOrders } from '../../firebase';
 import { uploadProductImageToFirebase } from '../../firebaseStorage';
 import {
   getAllGelatoFlavours,
@@ -102,6 +102,8 @@ import {
 
 interface AdminDashboardProps {
   onSignOut: () => void;
+  /** "Lock" when this device has a user code (stays signed in), otherwise "Sign Out" */
+  signOutLabel?: string;
   onBackToStore: () => void;
   currency: Currency;
   onToggleCurrency: (c: Currency) => void;
@@ -510,6 +512,7 @@ const ProductImagePicker: React.FC<ProductImagePickerProps> = ({
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onSignOut,
+  signOutLabel = 'Sign Out',
   onBackToStore,
   currency,
   onToggleCurrency,
@@ -1132,14 +1135,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             {/* Sign Out Button */}
             <button
               type="button"
-              onClick={() => {
-                signOut(auth).finally(onSignOut);
-              }}
+              onClick={onSignOut}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold transition-all cursor-pointer active:scale-95"
-              title="Sign Out of Admin Console"
+              title={signOutLabel === 'Lock' ? 'Lock the console (unlock with your user code)' : 'Sign out of the admin console'}
             >
               <LogOut className="w-3.5 h-3.5" />
-              <span>Sign Out</span>
+              <span>{signOutLabel}</span>
             </button>
           </div>
         </div>

@@ -19,14 +19,28 @@ npm run dev        # http://localhost:3000
 | `/` | Home page |
 | `/?page=menu` | Full menu and ordering |
 | `/?confirmOrder=AMO-XXXXXX` | Order confirmation and live tracking |
-| `/?page=admin` | Admin console (orders, kitchen stages, refunds, menu editing) |
+| `/admin` | Admin console (orders, kitchen stages, refunds, menu editing) |
 
 ## Admin access
 
-Admins sign in with Google. Only the emails listed in **three places** get in, and
-these must be kept in sync:
+The console is at **/admin** (it is not linked from the storefront).
 
-- `src/config.ts` → `ADMIN_EMAILS` (controls what the website shows)
+**Name + password.** Each admin sign-in name maps to a Firebase email/password
+account in `ADMIN_ACCOUNTS` (`src/config.ts`), e.g. `Admin` →
+`admin@amore-icecream.web.app`. The password is set only in the Firebase console
+(Authentication → Users), never in this code.
+
+**User code.** After signing in with name + password on a device, an admin can set
+a 4–6 digit code; next time that device opens the console with just the code.
+"Lock" keeps the device signed in behind the code. Five wrong codes sign the device
+out, so the full name + password is needed again. "Forget this device" removes the
+code and signs out.
+
+**Owner.** The owner's Google account can also sign in ("Owner? Sign in with Google").
+
+Admin accounts are listed in **three places** that must stay in sync:
+
+- `src/config.ts` → `ADMIN_EMAILS` (Google) and `ADMIN_ACCOUNTS` (name + password)
 - `firestore.rules` → `isAdmin()` (protects orders and the menu)
 - `storage.rules` → `isAdmin()` (protects menu photo uploads)
 

@@ -11,11 +11,11 @@ import { EdibleBiscuitCupSpotlight } from './components/EdibleBiscuitCupSpotligh
 import { BranchShowcase } from './components/BranchShowcase';
 import { ParlourExperience } from './components/ParlourExperience';
 import { Footer } from './components/Footer';
-import { isAdminUser } from './utils/adminAuth';
+import { isAdminUser, getAdminGate, hasUserCode, lockConsole } from './utils/adminAuth';
 import { AmoreLogo } from './components/AmoreLogo';
 import { OverflowRibbon } from './components/BrandFlourish';
 import { Reveal } from './components/Reveal';
-import { auth, onAuthStateChanged, type User } from './firebase';
+import { auth, onAuthStateChanged, signOut, type User } from './firebase';
 import { Currency, BranchId, ScoopItem, MenuItem, SelectedOrderItem, ServingFormat, MenuTab } from './types';
 import { useIsMobile } from './components/mobile/mobileHooks';
 import { ALL_20_FLAVOURS } from './data/iceCreamData';
@@ -64,6 +64,17 @@ const PageLoader = () => (
     <span className="loader-bar" />
   </div>
 );
+
+// /admin (or the old ?tab=returns style links) is the console; ?page=menu is the menu
+function pageFromLocation(): 'home' | 'menu' | 'admin' {
+  const path = window.location.pathname.replace(/\/+$/, '');
+  const params = new URLSearchParams(window.location.search);
+  const tab = params.get('tab') || params.get('section');
+  if (path === '/admin' || params.get('page') === 'admin') return 'admin';
+  if (tab === 'returns' || tab === 'orders' || tab === 'history' || tab === 'order-history') return 'admin';
+  if (params.get('page') === 'menu') return 'menu';
+  return 'home';
+}
 
 export default function App() {
   // Global State
@@ -134,17 +145,22 @@ export default function App() {
     (o) => o.status !== 'cancelled' && o.status !== 'delivered'
   ).length;
 
-  // Admin access comes from the signed-in Google account (enforced again by Firestore rules)
+  // Admin access comes from Firebase Auth (enforced again by the Firestore rules)
   const isAdminLoggedIn = isAdminUser(currentUser);
+  // Bumped whenever sign-in / unlock / lock changes what /admin should show
+  const [, setAdminGateVersion] = useState(0);
+  const refreshAdminGate = () => setAdminGateVersion((v) => v + 1);
 
-  // Mobile / Dedicated Page State (reads ?page=admin, ?tab=returns, etc.)
+  // Which page the URL points at: /admin is the console, ?page=menu the full menu
   const [currentPage, setCurrentPage] = useState<'home' | 'menu' | 'admin'>(() => {
-    const params = new URLSearchParams(window.location.search);
-    const p = params.get('page');
-    const tab = params.get('tab') || params.get('section');
-    if (p === 'admin' || tab === 'returns' || tab === 'orders' || tab === 'history' || tab === 'order-history') return 'admin';
-    if (p === 'menu') return 'menu';
-    return 'home';
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('page') === 'admin') {
+      // Old ?page=admin links → /admin
+      url.searchParams.delete('page');
+      url.pathname = '/admin';
+      window.history.replaceState({}, '', url.toString());
+    }
+    return pageFromLocation();
   });
 
   // Dedicated Order Confirmation Portal Router (reads ?confirmOrder=...)
@@ -157,15 +173,7 @@ export default function App() {
     const handleLocationChange = () => {
       const params = new URLSearchParams(window.location.search);
       setConfirmOrderRef(params.get('confirmOrder'));
-      const p = params.get('page');
-      const tab = params.get('tab') || params.get('section');
-      setCurrentPage(
-        p === 'admin' || tab === 'returns' || tab === 'orders' || tab === 'history' || tab === 'order-history'
-          ? 'admin'
-          : p === 'menu'
-          ? 'menu'
-          : 'home'
-      );
+      setCurrentPage(pageFromLocation());
     };
 
     window.addEventListener('popstate', handleLocationChange);
@@ -174,6 +182,7 @@ export default function App() {
 
   const handleNavigateToMenu = () => {
     const url = new URL(window.location.href);
+    url.pathname = '/';
     url.searchParams.set('page', 'menu');
     window.history.pushState({}, '', url.toString());
     setCurrentPage('menu');
@@ -181,16 +190,15 @@ export default function App() {
   };
 
   const handleNavigateToAdmin = () => {
-    const url = new URL(window.location.href);
-    url.searchParams.set('page', 'admin');
-    window.history.pushState({}, '', url.toString());
+    window.history.pushState({}, '', '/admin');
     setCurrentPage('admin');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleNavigateToHome = () => {
     const url = new URL(window.location.href);
-    url.searchParams.delete('page');
+    url.pathname = '/';
+    ['page', 'tab', 'section'].forEach((k) => url.searchParams.delete(k));
     window.history.pushState({}, '', url.toString());
     setCurrentPage('home');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -370,20 +378,32 @@ export default function App() {
     );
   }
 
-  // Dedicated Amore Operations & Admin Console (?page=admin)
+  // Amore Operations & Admin Console (/admin)
   if (currentPage === 'admin') {
     if (!isAuthReady) return <PageLoader />;
+    const gate = getAdminGate(currentUser);
+    const codeOnThisDevice = Boolean(currentUser && hasUserCode(currentUser.uid));
     return (
       <Suspense fallback={<PageLoader />}>
-        {isAdminLoggedIn ? (
+        {gate === 'open' ? (
           <AdminDashboard
-            onSignOut={handleNavigateToHome}
+            // With a user code set, "Lock" keeps the device signed in behind the code;
+            // otherwise this is a full sign-out.
+            signOutLabel={codeOnThisDevice ? 'Lock' : 'Sign Out'}
+            onSignOut={() => {
+              if (codeOnThisDevice) {
+                lockConsole();
+                refreshAdminGate();
+              } else {
+                signOut(auth).finally(handleNavigateToHome);
+              }
+            }}
             onBackToStore={handleNavigateToHome}
             currency={currency}
             onToggleCurrency={setCurrency}
           />
         ) : (
-          <AdminLogin currentUser={currentUser} onBackToStore={handleNavigateToHome} />
+          <AdminLogin currentUser={currentUser} gate={gate} onChange={refreshAdminGate} onBackToStore={handleNavigateToHome} />
         )}
       </Suspense>
     );
@@ -659,7 +679,7 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <Footer onNavigateToAdmin={handleNavigateToAdmin} />
+      <Footer />
 
       {/* Product Detail Modal */}
       {detailItem && (

@@ -2,17 +2,13 @@ import React from 'react';
 import { AmoreLogo } from './AmoreLogo';
 import { Reveal } from './Reveal';
 import { AMORE_BRANCHES } from '../data/iceCreamData';
-import { Instagram, Phone, Heart, ArrowUp, MessageCircle, Lock, Navigation, Clock } from 'lucide-react';
-
-interface FooterProps {
-  onNavigateToAdmin?: () => void;
-}
+import { Instagram, Phone, Heart, ArrowUp, MessageCircle, Navigation, Clock } from 'lucide-react';
 
 const SOCIAL_BUTTON =
   'w-11 h-11 rounded-full bg-white/10 hover:bg-white hover:text-[#81001E] text-white flex items-center justify-center transition-all duration-300 hover:-translate-y-1';
 
 /** Crimson brand footer with the official logo, branches and contact links. */
-export const Footer: React.FC<FooterProps> = ({ onNavigateToAdmin }) => {
+export const Footer: React.FC = () => {
   const flagship = AMORE_BRANCHES[0];
 
   return (
@@ -97,23 +93,6 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateToAdmin }) => {
           </span>
 
           <div className="flex items-center gap-4">
-            {onNavigateToAdmin ? (
-              <button
-                type="button"
-                onClick={onNavigateToAdmin}
-                className="inline-flex items-center gap-1 font-semibold hover:text-white transition-colors cursor-pointer"
-                title="Amore staff admin portal"
-              >
-                <Lock className="w-3 h-3" />
-                <span>Admin Portal</span>
-              </button>
-            ) : (
-              <a href="?page=admin" className="inline-flex items-center gap-1 font-semibold hover:text-white transition-colors">
-                <Lock className="w-3 h-3" />
-                <span>Admin Portal</span>
-              </a>
-            )}
-
             <button
               type="button"
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
