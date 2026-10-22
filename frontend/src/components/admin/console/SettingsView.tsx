@@ -3,11 +3,19 @@
  * the photo gallery that menu photos are picked from.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Bell, ImagePlus, Images, KeyRound, Lock, ShieldCheck, Trash2, Upload, UserCog, Volume2 } from 'lucide-react';
+import { Bell, ImagePlus, Images, KeyRound, Lock, RotateCcw, ShieldCheck, Trash2, Upload, UserCog, Volume2 } from 'lucide-react';
 import { ApiError, ADMIN_SESSION_EVENT, type AdminProfile } from '../../../api';
 import { getRememberedDevice, isValidCodeFormat, lockConsole, removeUserCode, setUserCode } from '../../../utils/adminAuth';
 import { Badge, Button, Card, EmptyState, Field, Popup, Switch, cx, inputClass, useConsoleUi } from './ui';
-import { addGalleryPhoto, GALLERY_CATEGORIES, removeGalleryPhoto, useGallery, type GalleryCategory } from './gallery';
+import {
+  addGalleryPhoto,
+  GALLERY_CATEGORIES,
+  removeGalleryPhoto,
+  restoreBuiltInPhotos,
+  useGallery,
+  type GalleryCategory,
+  type GalleryPhoto,
+} from './gallery';
 
 const BRANCH_NAME: Record<string, string> = { akurana: 'Akurana', colombo: 'Colombo', arugambay: 'Arugam Bay' };
 const errorText = (err: unknown, fallback: string) => (err instanceof ApiError ? err.message : fallback);
@@ -275,27 +283,39 @@ const AddPhotoPopup: React.FC<{ onClose: () => void; onAdded: () => void }> = ({
 
 const PhotoGallery: React.FC = () => {
   const { confirm, toast } = useConsoleUi();
-  const { photos, loading, error, reload } = useGallery();
+  const { photos, hiddenCount, loading, error, reload } = useGallery();
   const [category, setCategory] = useState<'all' | GalleryCategory>('all');
   const [adding, setAdding] = useState(false);
 
   const shown = useMemo(() => photos.filter((p) => category === 'all' || p.category === category), [photos, category]);
   const count = (c: 'all' | GalleryCategory) => (c === 'all' ? photos.length : photos.filter((p) => p.category === c).length);
 
-  const remove = async (id: string, name: string) => {
+  const remove = async (photo: GalleryPhoto) => {
     const ok = await confirm({
-      title: `Remove “${name}” from the gallery?`,
-      message: 'Menu items already using this photo keep it.',
-      confirmLabel: 'Remove',
+      title: `Delete “${photo.name}” from the gallery?`,
+      message: photo.builtIn
+        ? 'This is one of Amore’s own photos, so you can bring it back later with “Restore Amore’s photos”. Menu items already using it keep it.'
+        : 'Menu items already using this photo keep it.',
+      confirmLabel: 'Delete',
       danger: true,
     });
     if (!ok) return;
     try {
-      await removeGalleryPhoto(id);
-      toast(`${name} removed`);
+      await removeGalleryPhoto(photo.id);
+      toast(`${photo.name} deleted`);
       reload();
     } catch (err) {
-      toast(errorText(err, 'Could not remove the photo'), 'error');
+      toast(errorText(err, 'Could not delete the photo'), 'error');
+    }
+  };
+
+  const restore = async () => {
+    try {
+      await restoreBuiltInPhotos();
+      toast(`${hiddenCount} photo${hiddenCount === 1 ? '' : 's'} restored`);
+      reload();
+    } catch (err) {
+      toast(errorText(err, 'Could not restore the photos'), 'error');
     }
   };
 
@@ -325,6 +345,14 @@ const PhotoGallery: React.FC = () => {
       </div>
 
       {error && <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">{error} Showing Amore's built-in photos.</p>}
+      {hiddenCount > 0 && (
+        <p className="flex flex-wrap items-center gap-2 text-sm text-[#6B5A51]">
+          {hiddenCount} of Amore’s own photos {hiddenCount === 1 ? 'is' : 'are'} deleted from the gallery.
+          <Button size="sm" variant="ghost" icon={<RotateCcw className="w-4 h-4" />} onClick={restore}>
+            Restore Amore’s photos
+          </Button>
+        </p>
+      )}
       {loading && <p className="text-sm text-[#8A7970]">Loading uploaded photos…</p>}
 
       {shown.length === 0 ? (
@@ -339,25 +367,26 @@ const PhotoGallery: React.FC = () => {
             <figure key={p.id} className="group bg-white rounded-2xl border border-[#EAE2D6] overflow-hidden shadow-xs">
               <div className="relative aspect-square bg-[#F3EDE3] overflow-hidden">
                 <img src={p.url} alt={p.name} loading="lazy" referrerPolicy="no-referrer" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]" />
-                {!p.builtIn && (
-                  <button
-                    type="button"
-                    onClick={() => remove(p.id, p.name)}
-                    aria-label={`Remove ${p.name}`}
-                    className="absolute top-2 right-2 w-9 h-9 rounded-full bg-white/90 text-red-700 shadow flex items-center justify-center cursor-pointer opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity hover:bg-white"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
               </div>
-              <figcaption className="px-3 py-2.5">
-                <p className="font-semibold text-sm text-[#241A18] truncate" title={p.name}>
-                  {p.name}
-                </p>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <span className="text-xs text-[#8A7970] truncate flex-1">{p.category}</span>
-                  {p.builtIn ? <Badge tone="grey">Built in</Badge> : <Badge tone="green">Uploaded</Badge>}
+              <figcaption className="flex items-start gap-2 px-3 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-sm text-[#241A18] truncate" title={p.name}>
+                    {p.name}
+                  </p>
+                  <div className="flex items-center gap-1.5 mt-1 min-w-0">
+                    <span className="text-xs text-[#8A7970] truncate">{p.category}</span>
+                    {p.builtIn ? <Badge tone="grey">Built in</Badge> : <Badge tone="green">Uploaded</Badge>}
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => remove(p)}
+                  aria-label={`Delete ${p.name}`}
+                  title="Delete from the gallery"
+                  className="w-8 h-8 -mr-1 shrink-0 rounded-full flex items-center justify-center text-[#8A7970] hover:text-red-700 hover:bg-red-50 cursor-pointer transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </figcaption>
             </figure>
           ))}

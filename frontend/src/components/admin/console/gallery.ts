@@ -15,22 +15,29 @@ export interface GalleryPhoto {
   name: string;
   category: GalleryCategory;
   url: string;
-  /** Built into the website (can't be removed here); otherwise uploaded by the super admin. */
+  /** Built into the website (deleting one only hides it); otherwise uploaded by the super admin. */
   builtIn: boolean;
   createdAt?: string;
 }
 
 const BUILT_IN: GalleryPhoto[] = CATALOG_PRESET_IMAGES.map((p) => ({ id: p.id, name: p.name, category: p.category, url: p.url, builtIn: true }));
 
-/** Every gallery photo: uploaded ones first (newest first), then the built-in ones. */
+/**
+ * Every gallery photo: uploaded ones first (newest first), then the built-in ones
+ * (minus any the super admin deleted, which are only hidden).
+ */
 export function useGallery() {
   const [uploaded, setUploaded] = useState<GalleryPhoto[] | null>(null);
+  const [hidden, setHidden] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     setError(null);
-    api<{ photos: Omit<GalleryPhoto, 'builtIn'>[] }>('/gallery', { as: 'admin' })
-      .then((r) => setUploaded(r.photos.map((p) => ({ ...p, builtIn: false }))))
+    api<{ photos: Omit<GalleryPhoto, 'builtIn'>[]; hidden: string[] }>('/gallery', { as: 'admin' })
+      .then((r) => {
+        setUploaded(r.photos.map((p) => ({ ...p, builtIn: false })));
+        setHidden(r.hidden || []);
+      })
       .catch(() => {
         // The built-in photos still work without the server
         setUploaded([]);
@@ -40,7 +47,8 @@ export function useGallery() {
 
   useEffect(reload, [reload]);
 
-  return { photos: [...(uploaded || []), ...BUILT_IN], loading: uploaded === null, error, reload };
+  const builtIn = BUILT_IN.filter((p) => !hidden.includes(p.id));
+  return { photos: [...(uploaded || []), ...builtIn], hiddenCount: BUILT_IN.length - builtIn.length, loading: uploaded === null, error, reload };
 }
 
 /** Upload a photo and add it to the gallery (super admin). */
@@ -54,6 +62,12 @@ export async function addGalleryPhoto(file: File, name: string, category: Galler
   return { ...photo, builtIn: false };
 }
 
+/** Delete a photo from the gallery (one of Amore's own photos is hidden instead). */
 export async function removeGalleryPhoto(id: string): Promise<void> {
   await api(`/gallery/${encodeURIComponent(id)}`, { method: 'DELETE', as: 'admin' });
+}
+
+/** Bring back every deleted built-in photo. */
+export async function restoreBuiltInPhotos(): Promise<void> {
+  await api('/gallery/restore', { method: 'POST', as: 'admin' });
 }
