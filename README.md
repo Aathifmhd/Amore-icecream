@@ -89,7 +89,9 @@ Prices, photos and text can differ per branch. A branch admin's menu edits apply
 branch (stored as `branchOverrides.<branch>`, holding just the fields that differ); the super
 admin's item stays the standard everywhere else. With **All branches** picked, the super admin's
 Menu page lists every item a branch sells differently ("Durian · Colombo: cone LKR 900 (standard
-LKR 850)"), and each item's editor can reset a branch to the standard. Customers see, and are
+LKR 850)"); each item's price line shows a branch's own price beside the standard
+("Cone LKR 850 (Colombo LKR 900)"), and its editor can reset a branch to the standard. Looking at
+one branch, a price of its own shows with the standard struck through. Customers see, and are
 charged, the version of the branch they order from.
 
 - **Name + password** — stored in MongoDB as salted hashes. The super admin adds branch

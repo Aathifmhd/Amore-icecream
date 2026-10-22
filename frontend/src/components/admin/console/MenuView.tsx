@@ -492,8 +492,60 @@ export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; isSuper:
     toast(`${i.name} ${inStock ? 'back in stock' : 'marked sold out'} at ${BRANCH_SHORT[b]}`);
   };
 
-  const priceText = (i: ScoopItem | MenuItem) =>
-    isScoop(i) ? `Cone ${lkr(i.conePriceLKR)} · Cup ${lkr(i.biscuitCupPriceLKR)}` : lkr(i.priceLKR);
+  /**
+   * An item's prices, with any branch price that differs from the standard right beside it:
+   * all branches → "Cone LKR 850 (Colombo LKR 900)"; one branch → "Cone LKR 900 LKR 850" (standard struck through).
+   */
+  const priceLine = (raw: ScoopItem | MenuItem) => {
+    const parts: { label: string; key: BranchField }[] = isScoop(raw)
+      ? [
+          { label: 'Cone', key: 'conePriceLKR' },
+          { label: 'Cup', key: 'biscuitCupPriceLKR' },
+        ]
+      : [{ label: '', key: 'priceLKR' }];
+    const std = raw as unknown as Record<string, number>;
+    return parts.map(({ label, key }, n) => {
+      const own = (b: BranchId) => branchChanges(raw, b)[key] as number | undefined;
+      let price: React.ReactNode;
+      if (editBranch) {
+        const here = own(editBranch);
+        price =
+          here === undefined ? (
+            lkr(std[key])
+          ) : (
+            <span title={`${BRANCH_SHORT[editBranch]}'s price · standard ${lkr(std[key])}`}>
+              <span className="font-semibold text-amber-800">{lkr(here)}</span> <s className="text-[#A8988B]">{lkr(std[key])}</s>
+            </span>
+          );
+      } else {
+        const others = AMORE_BRANCHES.filter((b) => own(b.id) !== undefined);
+        price = (
+          <>
+            {lkr(std[key])}
+            {others.length > 0 && (
+              <span className="text-amber-800">
+                {' ('}
+                {others.map((b, k) => (
+                  <React.Fragment key={b.id}>
+                    {k > 0 && ', '}
+                    {BRANCH_SHORT[b.id]} <span className="font-semibold">{lkr(own(b.id)!)}</span>
+                  </React.Fragment>
+                ))}
+                )
+              </span>
+            )}
+          </>
+        );
+      }
+      return (
+        <React.Fragment key={key}>
+          {n > 0 && ' · '}
+          {label && `${label} `}
+          {price}
+        </React.Fragment>
+      );
+    });
+  };
 
   return (
     <div className="space-y-5">
@@ -607,8 +659,6 @@ export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; isSuper:
         ) : (
           shown.map((raw) => {
             const i = editBranch ? forBranch(raw, editBranch) : raw;
-            const ownHere = editBranch ? Object.keys(branchChanges(raw, editBranch)).length > 0 : false;
-            const differentAt = editBranch ? [] : AMORE_BRANCHES.map((b) => b.id).filter((b) => Object.keys(branchChanges(raw, b)).length > 0);
             const soldOutAt = soldOutWhere(raw);
             // In the all-branches view an item only looks unavailable when every branch is out of it
             const available = branch === 'all' ? soldOutAt.length < AMORE_BRANCHES.length : !soldOutAt.includes(branch);
@@ -632,10 +682,8 @@ export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; isSuper:
                     <span className={cx('font-semibold truncate', 'group-hover:underline', available ? 'text-[#241A18]' : 'text-[#8A7970]')}>{i.name}</span>
                     {branch !== 'all' && !available && <Badge tone="grey">Sold out</Badge>}
                     {branch === 'all' && soldOutAt.length > 0 && <Badge tone="red">Sold out at {whereText(soldOutAt)}</Badge>}
-                    {ownHere && <Badge tone="amber">{BRANCH_SHORT[editBranch!]}'s own</Badge>}
-                    {differentAt.length > 0 && <Badge tone="amber">Different at {whereText(differentAt)}</Badge>}
                   </span>
-                  <span className="block text-sm text-[#7A6458] truncate">{priceText(i)}</span>
+                  <span className="block text-sm text-[#7A6458]">{priceLine(raw)}</span>
                 </span>
               </>
             );
