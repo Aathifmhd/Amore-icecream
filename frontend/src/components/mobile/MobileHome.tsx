@@ -206,9 +206,11 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
               See all
             </button>
           </div>
-          <div className="flex gap-3 overflow-x-auto no-scrollbar px-4 snap-x snap-mandatory pb-1">
-            {favourites.map((s, i) => (
-              <Reveal key={s.id} delay={Math.min(i, 3) * 110} className="snap-start shrink-0">
+          {/* The row rises in as one: cards that animated on their own jumped up as they were swiped in.
+              scroll-px-4 lines each card up with the page edge when the swipe settles. */}
+          <div className="flex gap-3 overflow-x-auto overscroll-x-contain no-scrollbar px-4 scroll-px-4 snap-x snap-mandatory pb-1">
+            {favourites.map((s) => (
+              <div key={s.id} className="snap-start shrink-0">
               <button
                 type="button"
                 onClick={() => onOpenItem(s)}
@@ -232,7 +234,7 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
                   </span>
                 </span>
               </button>
-              </Reveal>
+              </div>
             ))}
           </div>
         </Reveal>
