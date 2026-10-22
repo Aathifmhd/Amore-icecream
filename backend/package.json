@@ -1,0 +1,20 @@
+{
+  "name": "amore-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Amore API — orders, menu changes, photos and admin sign-in, data in MongoDB",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js --port=4100",
+    "set-admin": "node src/scripts/set-admin.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "jose": "^6.1.0",
+    "mongodb": "^6.21.0"
+  }
+}

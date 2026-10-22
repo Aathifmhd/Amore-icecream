@@ -1,9 +1,11 @@
 node_modules/
+frontend/dist/
 build/
-dist/
 coverage/
 .DS_Store
 *.log
-.env*
+.env
+.env.*
 !.env.example
 .firebase/
+.vercel/

@@ -1,16 +1,31 @@
 # Amore — Speciality Ice Cream, Coffee & Cakes
 
 Storefront, online ordering and admin console for Amore's three parlours
-(Akurana, Colombo, Arugam Bay). React 19 + Vite + Tailwind, hosted on Firebase.
+(Akurana, Colombo, Arugam Bay).
+
+```
+frontend/   the website — React 19 + Vite + Tailwind
+backend/    the API — Node + Express, data in MongoDB
+```
+
+| Piece | What it holds |
+| --- | --- |
+| **MongoDB** (`backend/`) | orders, menu changes, menu photos, admin logins, user codes |
+| **Firebase Authentication** | customer sign-in only (Google / email) |
+| **Built into the website** | the standard menu (`frontend/src/data/iceCreamData.ts`); the database only stores the admin's changes to it |
 
 ## Run locally
 
 ```bash
-npm install
-npm run dev        # http://localhost:3000
+npm run setup                    # installs root, backend and frontend packages
+cp backend/.env.example backend/.env
+# put your MongoDB Atlas connection string in backend/.env (MONGODB_URI)
+npm run set-admin -- Admin       # create the admin login (asks for the password)
+npm run dev                      # API on :4100, website on http://localhost:3000
 ```
 
-`npm run build` writes the production site to `dist/`.
+`npm run build` builds the website into `frontend/dist`; `npm start` then serves the
+whole site (website + API) from the backend on one port.
 
 ## Pages
 
@@ -21,42 +36,66 @@ npm run dev        # http://localhost:3000
 | `/?confirmOrder=AMO-XXXXXX` | Order confirmation and live tracking |
 | `/admin` | Admin console (orders, kitchen stages, refunds, menu editing) |
 
+## API (`backend/src`)
+
+| Route | Who |
+| --- | --- |
+| `GET /api/menu` | everyone — the admin's menu changes |
+| `PUT / DELETE /api/menu/:id` | admin |
+| `POST /api/images`, `GET /api/images/:id` | admin uploads, everyone views |
+| `POST /api/orders` | signed-in customer (checked like the old Firestore rules) or admin |
+| `GET /api/orders/mine` | signed-in customer — their own orders |
+| `GET / PATCH / DELETE /api/orders/:ref` | the customer who placed it (limited) or admin |
+| `GET /api/orders?since=…` | admin — every order, or what changed since the last check |
+| `/api/admin/…` | admin sign-in, user codes (see `routes/admin.js`) |
+
+Screens stay up to date by asking for changes every few seconds (orders in the console
+every 5 s, a customer's order every 6–8 s, the menu every minute). Changes made in the
+console show at once and are sent in the background; if the connection drops they wait
+on the device and go through when it is back ("Saving N changes…" in the top bar).
+
 ## Admin access
 
 The console is at **/admin** (it is not linked from the storefront).
 
-**Name + password.** Each admin sign-in name maps to a Firebase email/password
-account in `ADMIN_ACCOUNTS` (`src/config.ts`), e.g. `Admin` →
-`admin@amore-icecream.web.app`. The password is set only in the Firebase console
-(Authentication → Users), never in this code.
+- **Name + password** — stored in MongoDB as salted hashes. Create the login or change a
+  password with `npm run set-admin -- Admin` (typing is hidden). Changing a password signs
+  that admin out on every device. Eight wrong passwords lock the login for 15 minutes.
+- **User code** — after signing in on a device, an admin can set a 4–6 digit code; next
+  time that device opens the console with just the code. The server checks the code, and
+  five wrong tries make the device forget it (name + password needed again). "Lock" closes
+  the console until the code is entered; "Forget this device" removes the code.
+- **Owner** — Google accounts listed in `OWNER_EMAILS` (backend settings) can also sign in
+  ("Owner? Sign in with Google").
 
-**User code.** After signing in with name + password on a device, an admin can set
-a 4–6 digit code; next time that device opens the console with just the code.
-"Lock" keeps the device signed in behind the code. Five wrong codes sign the device
-out, so the full name + password is needed again. "Forget this device" removes the
-code and signs out.
+## Settings (`backend/.env`, or Vercel → Settings → Environment Variables)
 
-**Owner.** The owner's Google account can also sign in ("Owner? Sign in with Google").
+| Name | |
+| --- | --- |
+| `MONGODB_URI` | MongoDB Atlas connection string |
+| `MONGODB_DB` | database name (default `amore`) |
+| `FIREBASE_PROJECT_ID` | `amore-icecream` — used to check customer sign-ins |
+| `OWNER_EMAILS` | Google accounts allowed into the console |
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | optional: creates the first admin on first start |
+| `SESSION_SECRET` | optional: signs admin sessions (otherwise one is generated and kept in the database) |
 
-Admin accounts are listed in **three places** that must stay in sync:
+## Deploy (Vercel)
 
-- `src/config.ts` → `ADMIN_EMAILS` (Google) and `ADMIN_ACCOUNTS` (name + password)
-- `firestore.rules` → `isAdmin()` (protects orders and the menu)
-- `storage.rules` → `isAdmin()` (protects menu photo uploads)
-
-The rules are what actually protect the data; after editing them, deploy with
-`firebase deploy --only firestore,storage`.
+`vercel.json` deploys both parts as one project: `/api/*` goes to the backend, everything
+else to the website. In the Vercel project add the settings above, then deploy from the
+repository root. In Firebase → Authentication → Settings → Authorized domains, add the
+Vercel domain so customer Google sign-in works there.
 
 ## Payments
 
 Online card payment is switched off (`ONLINE_CARD_PAYMENTS_ENABLED` in
-`src/config.ts`) until a real payment gateway such as PayHere is connected.
-Customers can pay cash on delivery or pay at the parlour. Turning card payments
-back on also requires allowing `'card'` as a payment method in `firestore.rules`.
+`frontend/src/config.ts`) until a real payment gateway such as PayHere is connected.
+Customers can pay cash on delivery or pay at the parlour; the backend refuses card orders
+too (`backend/src/orderRules.js`).
 
-## Deploy
+## Old Firebase setup
 
-```bash
-npm run build
-firebase deploy
-```
+Before the move to MongoDB, orders and the menu were in Cloud Firestore and the site was on
+Firebase Hosting (`firebase.json`, `firestore.rules`, `storage.rules`). Those files are kept
+until the Vercel site is live; after that, Firestore can be locked down and the old address
+pointed at the new site.
