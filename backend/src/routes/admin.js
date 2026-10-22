@@ -13,7 +13,7 @@ import {
 /*
  * Admin console sign-in.
  *   POST /login           name + password            → session
- *   POST /google          Google ID token (Bearer)   → session, for owners in OWNER_EMAILS
+ *   POST /google          { credential } from "Sign in with Google" → session, for owners in OWNER_EMAILS
  *   GET  /me              who this session belongs to
  *   POST /device          set a user code for this device (signed in)  → device id + secret
  *   POST /device/unlock   device id + secret + code  → session
@@ -30,7 +30,7 @@ router.post('/login', async (req, res) => {
 });
 
 router.post('/google', async (req, res) => {
-  res.json(await googleOwnerLogin(req.customer));
+  res.json(await googleOwnerLogin(req.body?.credential));
 });
 
 router.get('/me', requireAdmin, (req, res) => {

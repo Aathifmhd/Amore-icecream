@@ -11,7 +11,7 @@ import {
   pauseOrderGracePeriod,
   resumeOrderGracePeriod,
 } from '../utils/orderStorage';
-import { type User } from '../firebase';
+import { type User } from '../customerAuth';
 import { formatPrice } from '../utils/currency';
 import { AMORE_BRANCHES } from '../data/iceCreamData';
 import {

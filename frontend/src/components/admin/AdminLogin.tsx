@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AmoreLogo } from '../AmoreLogo';
-import { auth, googleProvider, signInWithPopup } from '../../firebase';
 import { ApiError } from '../../api';
+import { renderGoogleButton } from '../../customerAuth';
 import {
   AdminGate,
   forgetThisDevice,
   isValidCodeFormat,
   setUserCode,
-  signInWithGoogleToken,
+  signInOwnerWithGoogle,
   signInWithPassword,
   skipUserCode,
   unlockWithCode,
@@ -44,6 +44,8 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ gate, deviceName, onBack
   const [confirmCode, setConfirmCode] = useState('');
 
   const codeRef = useRef<HTMLInputElement>(null);
+  const googleRef = useRef<HTMLDivElement>(null);
+  const [showGoogle, setShowGoogle] = useState(false);
   const showCodeScreen = gate === 'needs-code' && !usePassword;
 
   useEffect(() => {
@@ -65,21 +67,29 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ gate, deviceName, onBack
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setError(null);
-    setBusy(true);
-    try {
-      const cred = await signInWithPopup(auth, googleProvider);
-      await signInWithGoogleToken(await cred.user.getIdToken());
-      setUsePassword(false);
-    } catch (err: any) {
-      if (err?.code !== 'auth/popup-closed-by-user' && err?.code !== 'auth/cancelled-popup-request') {
-        setError(message(err, 'Google sign-in failed. Please try again.'));
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
+  // "Owner? Sign in with Google" shows Google's own button
+  useEffect(() => {
+    if (!showGoogle || !googleRef.current) return;
+    renderGoogleButton(
+      googleRef.current,
+      async (credential) => {
+        setError(null);
+        setBusy(true);
+        try {
+          await signInOwnerWithGoogle(credential);
+          setUsePassword(false);
+        } catch (err) {
+          setError(message(err, 'Google sign-in failed. Please try again.'));
+        } finally {
+          setBusy(false);
+        }
+      },
+      { text: 'signin_with' }
+    ).catch((err) => {
+      setShowGoogle(false);
+      setError(err?.message || 'Google sign-in is not available right now.');
+    });
+  }, [showGoogle]);
 
   const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -282,10 +292,13 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ gate, deviceName, onBack
           ) : (
             <span />
           )}
-          <button type="button" onClick={handleGoogleSignIn} className="text-[11px] font-semibold text-[#8A7970] hover:text-[#241A18] cursor-pointer">
-            Owner? Sign in with Google
-          </button>
+          {!showGoogle && (
+            <button type="button" onClick={() => setShowGoogle(true)} className="text-[11px] font-semibold text-[#8A7970] hover:text-[#241A18] cursor-pointer">
+              Owner? Sign in with Google
+            </button>
+          )}
         </div>
+        {showGoogle && <div ref={googleRef} className="flex justify-center pt-1 min-h-[44px]" />}
       </form>
     );
   }

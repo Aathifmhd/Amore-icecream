@@ -4,7 +4,7 @@ import { Currency, BranchId, SelectedOrderItem } from '../types';
 import { AMORE_BRANCHES } from '../data/iceCreamData';
 import { CurrencyToggle } from './CurrencyToggle';
 import { Menu, X, MapPin, Phone, ShoppingBag, LogIn, User as UserIcon, Clock, ShieldCheck } from 'lucide-react';
-import { type User } from '../firebase';
+import { type User } from '../customerAuth';
 
 interface NavbarProps {
   currency: Currency;

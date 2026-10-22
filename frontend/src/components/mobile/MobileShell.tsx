@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BranchId, Currency, MenuItem, MenuTab, ScoopItem, SelectedOrderItem } from '../../types';
-import { type User } from '../../firebase';
+import { type User } from '../../customerAuth';
 import { MobileHome } from './MobileHome';
 import { MobileMenu } from './MobileMenu';
 import { ItemSheet } from './ItemSheet';

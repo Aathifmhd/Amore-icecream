@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Home, UtensilsCrossed, ShoppingBag, Clock, User as UserIcon } from 'lucide-react';
 import { Currency } from '../../types';
 import { formatPrice } from '../../utils/currency';
-import { type User } from '../../firebase';
+import { type User } from '../../customerAuth';
 
 interface MobileTabBarProps {
   active: 'home' | 'menu';

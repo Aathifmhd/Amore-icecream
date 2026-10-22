@@ -26,7 +26,7 @@ import {
   Navigation,
   Store,
 } from 'lucide-react';
-import { type User } from '../firebase';
+import { type User } from '../customerAuth';
 import { LocationPickerModal } from './LocationPickerModal';
 
 interface QuickOrderModalProps {

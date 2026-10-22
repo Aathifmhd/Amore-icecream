@@ -7,6 +7,7 @@ import orders from './routes/orders.js';
 import menu from './routes/menu.js';
 import images from './routes/images.js';
 import admin from './routes/admin.js';
+import customerAuth from './routes/auth.js';
 
 export function createApp() {
   const app = express();
@@ -23,6 +24,7 @@ export function createApp() {
     await (await connect()).command({ ping: 1 });
     res.json({ ok: true, database: DB_LABEL });
   });
+  app.use('/api/auth', customerAuth);
   app.use('/api/admin', admin);
   app.use('/api/orders', orders);
   app.use('/api/menu', menu);

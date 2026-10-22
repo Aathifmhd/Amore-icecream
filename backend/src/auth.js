@@ -6,25 +6,24 @@ import { col, getSetting, setSetting, now } from './db.js';
 /*
  * Who is calling?
  *
- *   Customers   sign in with Google / email through Firebase Authentication in the browser and
- *               send their Firebase ID token. We check its signature against Google's public keys.
+ *   Customers   sign in with Google ("Sign in with Google" button in the browser). The browser
+ *               sends us Google's signed sign-in (an ID token); we check it against Google's
+ *               public keys and our GOOGLE_CLIENT_ID, then hand out our own customer session.
  *   Admins      sign in with name + password (stored in the `admins` collection as salted scrypt
- *               hashes) or, for owners listed in OWNER_EMAILS, with Google. They get a signed
- *               session token from us.
+ *               hashes) or, for owners listed in OWNER_EMAILS, with Google. They get an admin session.
  *   User code   an admin can set a 4–6 digit code on a device. The code is checked here, with a
  *               limit on wrong tries, so it can't be guessed offline.
  *
- * Every request sends `Authorization: Bearer <token>`; admin tokens start with "adm.".
+ * Every request sends `Authorization: Bearer <session>`: admin sessions start with "adm.",
+ * customer sessions with "cus.".
  */
 
 const scrypt = promisify(crypto.scrypt);
 
-const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'amore-icecream';
-// Overridable only so the tests can sign their own tokens
-const JWKS_URL =
-  process.env.FIREBASE_JWKS_URL ||
-  'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
-const jwks = createRemoteJWKSet(new URL(JWKS_URL));
+export const googleClientId = () => process.env.GOOGLE_CLIENT_ID || '';
+// Overridable only so the tests can sign their own Google tokens
+const GOOGLE_KEYS_URL = process.env.GOOGLE_JWKS_URL || 'https://www.googleapis.com/oauth2/v3/certs';
+const googleKeys = createRemoteJWKSet(new URL(GOOGLE_KEYS_URL));
 
 const ownerEmails = () =>
   (process.env.OWNER_EMAILS || '')
@@ -33,6 +32,7 @@ const ownerEmails = () =>
     .filter(Boolean);
 
 export const SESSION_DAYS = 30;
+const CUSTOMER_SESSION_DAYS = 60;
 const MAX_LOGIN_FAILURES = 8;
 const LOGIN_LOCK_MINUTES = 15;
 export const MAX_CODE_ATTEMPTS = 5;
@@ -110,16 +110,17 @@ async function sessionSecret() {
 
 const b64url = (buf) => Buffer.from(buf).toString('base64url');
 
-async function sign(payload) {
+// The kind of session ("adm" / "cus") is part of what is signed, so one can't pass for the other
+async function sign(kind, payload) {
   const body = b64url(JSON.stringify(payload));
-  const mac = crypto.createHmac('sha256', await sessionSecret()).update(body).digest('base64url');
-  return `adm.${body}.${mac}`;
+  const mac = crypto.createHmac('sha256', await sessionSecret()).update(`${kind}.${body}`).digest('base64url');
+  return `${kind}.${body}.${mac}`;
 }
 
-async function readAdminToken(token) {
-  const [, body, mac] = token.split('.');
+async function readToken(token) {
+  const [kind, body, mac] = token.split('.');
   if (!body || !mac) return null;
-  const expected = crypto.createHmac('sha256', await sessionSecret()).update(body).digest();
+  const expected = crypto.createHmac('sha256', await sessionSecret()).update(`${kind}.${body}`).digest();
   const given = Buffer.from(mac, 'base64url');
   if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) return null;
   try {
@@ -134,6 +135,7 @@ async function readAdminToken(token) {
 export async function issueAdminSession(admin) {
   const exp = Date.now() + SESSION_DAYS * 24 * 3600 * 1000;
   const token = await sign(
+    'adm',
     admin.google
       ? { sub: `google:${admin.email}`, exp }
       : { sub: admin.username, ver: admin.sessionVersion ?? 0, exp }
@@ -147,7 +149,7 @@ export const publicAdmin = (admin) =>
     : { username: admin.username, displayName: admin.displayName || admin.username, google: false };
 
 async function adminFromToken(token) {
-  const payload = await readAdminToken(token);
+  const payload = await readToken(token);
   if (!payload) return null;
   if (payload.sub.startsWith('google:')) {
     const email = payload.sub.slice('google:'.length);
@@ -158,25 +160,45 @@ async function adminFromToken(token) {
   return admin;
 }
 
-// ---- Firebase (customer) tokens ---------------------------------------------
+// ---- Google sign-in & customer sessions ---------------------------------------
 
-async function customerFromToken(token) {
+/** Checks a Google sign-in (the ID token from the "Sign in with Google" button). */
+export async function verifyGoogleCredential(credential) {
+  if (!googleClientId()) throw new HttpError(503, 'Google sign-in is not set up yet (GOOGLE_CLIENT_ID is missing).');
+  if (typeof credential !== 'string' || !credential) throw new HttpError(400, 'Missing Google sign-in');
   try {
-    const { payload } = await jwtVerify(token, jwks, {
-      issuer: `https://securetoken.google.com/${PROJECT_ID}`,
-      audience: PROJECT_ID,
+    const { payload } = await jwtVerify(credential, googleKeys, {
+      issuer: ['accounts.google.com', 'https://accounts.google.com'],
+      audience: googleClientId(),
       algorithms: ['RS256'],
     });
-    if (!payload.sub) return null;
+    if (!payload.sub) throw new Error('no subject');
+    const str = (v) => (typeof v === 'string' ? v : null);
     return {
-      uid: payload.sub,
-      email: typeof payload.email === 'string' ? payload.email.toLowerCase() : null,
+      sub: payload.sub,
+      email: str(payload.email)?.toLowerCase() ?? null,
       emailVerified: payload.email_verified === true,
-      name: typeof payload.name === 'string' ? payload.name : null,
+      name: str(payload.name),
+      picture: str(payload.picture),
     };
   } catch {
-    return null;
+    throw new HttpError(401, 'Google sign-in could not be checked. Please try again.');
   }
+}
+
+export const publicCustomer = (c) => ({ uid: c.uid, email: c.email, displayName: c.name, photoURL: c.picture });
+
+/** A customer session after a Google sign-in. Orders are kept under uid "google:<Google account id>". */
+export async function issueCustomerSession(google) {
+  const exp = Date.now() + CUSTOMER_SESSION_DAYS * 24 * 3600 * 1000;
+  const customer = { uid: `google:${google.sub}`, email: google.email, name: google.name, picture: google.picture };
+  const token = await sign('cus', { ...customer, exp });
+  return { token, expiresAt: new Date(exp).toISOString(), customer: publicCustomer(customer) };
+}
+
+async function customerFromToken(token) {
+  const payload = await readToken(token);
+  return payload?.uid ? { uid: payload.uid, email: payload.email, name: payload.name, picture: payload.picture } : null;
 }
 
 // ---- Middleware --------------------------------------------------------------
@@ -186,7 +208,7 @@ export async function identify(req, res, next) {
   const header = req.get('authorization') || '';
   const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
   if (token.startsWith('adm.')) req.admin = await adminFromToken(token);
-  else if (token) req.customer = await customerFromToken(token);
+  else if (token.startsWith('cus.')) req.customer = await customerFromToken(token);
   next();
 }
 
@@ -228,9 +250,9 @@ export async function passwordLogin(username, password) {
   return issueAdminSession(admin);
 }
 
-/** `user` is the checked Google sign-in (req.customer). */
-export async function googleOwnerLogin(user) {
-  if (!user) throw new HttpError(401, 'Google sign-in could not be checked. Please try again.');
+/** Owner sign-in with Google: `credential` is the ID token from the "Sign in with Google" button. */
+export async function googleOwnerLogin(credential) {
+  const user = await verifyGoogleCredential(credential);
   if (!user.emailVerified || !ownerEmails().includes(user.email)) {
     throw new HttpError(403, 'This Google account is not an Amore admin');
   }

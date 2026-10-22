@@ -15,7 +15,7 @@ import { hasAdminSession, lockConsole, signOutAdmin, useAdminGate } from './util
 import { AmoreLogo } from './components/AmoreLogo';
 import { OverflowRibbon } from './components/BrandFlourish';
 import { Reveal } from './components/Reveal';
-import { auth, onAuthStateChanged, type User } from './firebase';
+import { useCurrentUser } from './customerAuth';
 import { Currency, BranchId, ScoopItem, MenuItem, SelectedOrderItem, ServingFormat, MenuTab } from './types';
 import { useIsMobile } from './components/mobile/mobileHooks';
 import { ALL_20_FLAVOURS } from './data/iceCreamData';
@@ -132,15 +132,8 @@ export default function App() {
   const [highlightOrderRef, setHighlightOrderRef] = useState<string | null>(null);
 
   // Authentication State & Sign-In Modal
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const currentUser = useCurrentUser();
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-    });
-    return () => unsubscribe();
-  }, []);
 
   // Warm up the menu page in the background so "View Full Menu" opens instantly
   useEffect(() => {

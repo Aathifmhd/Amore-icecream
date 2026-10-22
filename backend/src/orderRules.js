@@ -197,12 +197,14 @@ export function orderUpdate(body, existing, { admin, customer }) {
     const next = { ...existing, ...set };
     for (const k of unset) delete next[k];
 
+    if (changed.includes('paymentMethod') && !CUSTOMER_PAYMENTS.includes(next.paymentMethod)) {
+      throw bad('Card payments are not available yet');
+    }
     const historyHide = changed.every((k) => HISTORY_HIDE_FIELDS.includes(k));
     const pendingEdit =
       existing.status === 'pending_confirmation' &&
       changed.every((k) => CUSTOMER_EDIT_FIELDS.includes(k)) &&
-      (next.status === 'pending_confirmation' || (next.status === 'cancelled' && next.cancelledBy === 'customer')) &&
-      (!changed.includes('paymentMethod') || CUSTOMER_PAYMENTS.includes(next.paymentMethod));
+      (next.status === 'pending_confirmation' || (next.status === 'cancelled' && next.cancelledBy === 'customer'));
     if (!historyHide && !pendingEdit) {
       throw new HttpError(403, 'This order can no longer be changed. Please call the parlour.');
     }

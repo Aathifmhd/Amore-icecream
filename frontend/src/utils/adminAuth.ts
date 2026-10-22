@@ -84,9 +84,9 @@ export async function signInWithPassword(username: string, password: string): Pr
   startSession(session);
 }
 
-/** Owner sign-in: `idToken` is a fresh Google sign-in (Firebase ID token). */
-export async function signInWithGoogleToken(idToken: string): Promise<void> {
-  const session = await api<AdminSession>('/admin/google', { method: 'POST', token: idToken });
+/** Owner sign-in: `credential` comes from Google's "Sign in with Google" button. */
+export async function signInOwnerWithGoogle(credential: string): Promise<void> {
+  const session = await api<AdminSession>('/admin/google', { method: 'POST', body: { credential }, as: 'none' });
   if (!getRememberedDevice()) store.set(sessionStorage, OFFER_KEY, '1');
   startSession(session);
 }

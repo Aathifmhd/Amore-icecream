@@ -27,20 +27,20 @@ function askHidden(question) {
     process.stdin.setRawMode(true);
     process.stdin.resume();
     process.stdin.setEncoding('utf8');
-    const onData = (ch) => {
-      if (ch === '\r' || ch === '\n') {
-        process.stdin.setRawMode(false);
-        process.stdin.pause();
-        process.stdin.off('data', onData);
-        process.stdout.write('\n');
-        resolve(value);
-      } else if (ch === '\u0003') {
-        process.stdin.setRawMode(false);
-        reject(new Error('Cancelled'));
-      } else if (ch === '\u007f' || ch === '\b') {
-        value = value.slice(0, -1);
-      } else {
-        value += ch;
+    const finish = (fn) => {
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+      process.stdin.off('data', onData);
+      process.stdout.write('\n');
+      fn();
+    };
+    // Typed keys usually arrive one by one, but a pasted password arrives in one piece
+    const onData = (chunk) => {
+      for (const ch of chunk) {
+        if (ch === '\r' || ch === '\n') return finish(() => resolve(value));
+        if (ch === '\u0003') return finish(() => reject(new Error('Cancelled')));
+        if (ch === '\u007f' || ch === '\b') value = value.slice(0, -1);
+        else if (ch >= ' ') value += ch;
       }
     };
     process.stdin.on('data', onData);

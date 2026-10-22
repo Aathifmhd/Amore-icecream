@@ -11,7 +11,7 @@ backend/    the API — Node + Express, data in MongoDB
 | Piece | What it holds |
 | --- | --- |
 | **MongoDB** (`backend/`) | orders, menu changes, menu photos, admin logins, user codes |
-| **Firebase Authentication** | customer sign-in only (Google / email) |
+| **Google sign-in** | customers sign in with Google; the backend checks the sign-in and gives them a session |
 | **Built into the website** | the standard menu (`frontend/src/data/iceCreamData.ts`); the database only stores the admin's changes to it |
 
 ## Run locally
@@ -40,6 +40,7 @@ whole site (website + API) from the backend on one port.
 
 | Route | Who |
 | --- | --- |
+| `GET /api/auth/config`, `POST /api/auth/google` | customer Google sign-in |
 | `GET /api/menu` | everyone — the admin's menu changes |
 | `PUT / DELETE /api/menu/:id` | admin |
 | `POST /api/images`, `GET /api/images/:id` | admin uploads, everyone views |
@@ -74,17 +75,29 @@ The console is at **/admin** (it is not linked from the storefront).
 | --- | --- |
 | `MONGODB_URI` | MongoDB Atlas connection string |
 | `MONGODB_DB` | database name (default `amore`) |
-| `FIREBASE_PROJECT_ID` | `amore-icecream` — used to check customer sign-ins |
+| `GOOGLE_CLIENT_ID` | OAuth client ID for "Sign in with Google" (see below) |
 | `OWNER_EMAILS` | Google accounts allowed into the console |
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD` | optional: creates the first admin on first start |
 | `SESSION_SECRET` | optional: signs admin sessions (otherwise one is generated and kept in the database) |
 
+## Customer sign-in (Google)
+
+Customers sign in with Google's own "Sign in with Google" button. It needs an OAuth client
+ID from Google Cloud (APIs & Services → Credentials → Create credentials → OAuth client ID →
+Web application) with these **Authorized JavaScript origins**:
+
+- `https://amore-icecream.vercel.app` (and any other address the site runs on)
+- `http://localhost:3000` (for running it locally)
+
+Put the client ID in `GOOGLE_CLIENT_ID` (Vercel settings and `backend/.env`). The client
+secret is not needed. The OAuth consent screen must be published ("In production") so any
+Google account can sign in, not only test users.
+
 ## Deploy (Vercel)
 
 `vercel.json` deploys both parts as one project: `/api/*` goes to the backend, everything
-else to the website. In the Vercel project add the settings above, then deploy from the
-repository root. In Firebase → Authentication → Settings → Authorized domains, add the
-Vercel domain so customer Google sign-in works there.
+else to the website. Vercel builds and deploys every push to `main`. After changing a
+setting in Vercel, redeploy so it takes effect.
 
 ## Payments
 
@@ -92,10 +105,3 @@ Online card payment is switched off (`ONLINE_CARD_PAYMENTS_ENABLED` in
 `frontend/src/config.ts`) until a real payment gateway such as PayHere is connected.
 Customers can pay cash on delivery or pay at the parlour; the backend refuses card orders
 too (`backend/src/orderRules.js`).
-
-## Old Firebase setup
-
-Before the move to MongoDB, orders and the menu were in Cloud Firestore and the site was on
-Firebase Hosting (`firebase.json`, `firestore.rules`, `storage.rules`). Those files are kept
-until the Vercel site is live; after that, Firestore can be locked down and the old address
-pointed at the new site.

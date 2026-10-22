@@ -1,10 +1,9 @@
 /**
  * Talks to the Amore backend (/api — see backend/ in this repository).
  *
- * Customers are identified by their Firebase sign-in (Google / email); admins by the
- * session the backend hands out at /admin. Each request sends the matching token.
+ * Customers and admins each get a session from the backend when they sign in (customers
+ * with Google, admins at /admin). Each request sends the matching session.
  */
-import { auth } from './firebase';
 
 export class ApiError extends Error {
   constructor(
@@ -32,9 +31,9 @@ export interface AdminSession {
 const SESSION_KEY = 'amore_admin_session_v1';
 export const ADMIN_SESSION_EVENT = 'amore_admin_session_changed';
 
-function readSession(storage: Storage): AdminSession | null {
+function readSession(storage: Storage, key = SESSION_KEY): AdminSession | CustomerSession | null {
   try {
-    const s = JSON.parse(storage.getItem(SESSION_KEY) || 'null') as AdminSession | null;
+    const s = JSON.parse(storage.getItem(key) || 'null') as AdminSession | CustomerSession | null;
     return s && s.token && Date.parse(s.expiresAt) > Date.now() ? s : null;
   } catch {
     return null;
@@ -44,7 +43,7 @@ function readSession(storage: Storage): AdminSession | null {
 /** The admin session in this browser, if any (a code-protected device keeps it for this visit only). */
 export function getAdminSession(): AdminSession | null {
   if (typeof window === 'undefined') return null;
-  return readSession(sessionStorage) || readSession(localStorage);
+  return (readSession(sessionStorage) || readSession(localStorage)) as AdminSession | null;
 }
 
 /** `thisVisitOnly`: forget it when the browser closes (used when the device has a user code). */
@@ -68,23 +67,59 @@ export function clearAdminSession(notify = true): void {
   if (notify) window.dispatchEvent(new CustomEvent(ADMIN_SESSION_EVENT));
 }
 
+// ---- Customer session ------------------------------------------------------
+
+/** A signed-in customer (field names match what the site already used). */
+export interface User {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+}
+export interface CustomerSession {
+  token: string;
+  expiresAt: string;
+  customer: User;
+}
+
+const CUSTOMER_KEY = 'amore_customer_session_v1';
+export const CUSTOMER_SESSION_EVENT = 'amore_customer_session_changed';
+
+export function getCustomerSession(): CustomerSession | null {
+  if (typeof window === 'undefined') return null;
+  return readSession(localStorage, CUSTOMER_KEY) as CustomerSession | null;
+}
+
+export function saveCustomerSession(session: CustomerSession): void {
+  try {
+    localStorage.setItem(CUSTOMER_KEY, JSON.stringify(session));
+  } catch {
+    /* storage blocked */
+  }
+  window.dispatchEvent(new CustomEvent(CUSTOMER_SESSION_EVENT));
+}
+
+export function clearCustomerSession(): void {
+  try {
+    localStorage.removeItem(CUSTOMER_KEY);
+  } catch {
+    /* storage blocked */
+  }
+  window.dispatchEvent(new CustomEvent(CUSTOMER_SESSION_EVENT));
+}
+
 // ---- Requests ----------------------------------------------------------------
 
 /** Which sign-in to send: 'auto' = the admin session if there is one, else the customer's. */
 export type Caller = 'auto' | 'admin' | 'customer' | 'none';
 
-async function customerToken(): Promise<string | null> {
-  await auth.authStateReady();
-  return auth.currentUser ? auth.currentUser.getIdToken() : null;
-}
-
-async function tokenFor(caller: Caller): Promise<string | null> {
+function tokenFor(caller: Caller): string | null {
   if (caller === 'none') return null;
   if (caller !== 'customer') {
     const session = getAdminSession();
     if (session || caller === 'admin') return session?.token ?? null;
   }
-  return customerToken();
+  return getCustomerSession()?.token ?? null;
 }
 
 export interface ApiOptions {
@@ -93,13 +128,11 @@ export interface ApiOptions {
   /** Send a file (e.g. a photo) as the request body instead of JSON. */
   file?: Blob;
   as?: Caller;
-  /** Send this token instead (e.g. a fresh Google sign-in for the owner login). */
-  token?: string;
 }
 
 export async function api<T = any>(path: string, opts: ApiOptions = {}): Promise<T> {
   const headers: Record<string, string> = {};
-  const token = opts.token ?? (await tokenFor(opts.as ?? 'auto'));
+  const token = tokenFor(opts.as ?? 'auto');
   if (token) headers.Authorization = `Bearer ${token}`;
 
   let body: BodyInit | undefined;
@@ -119,8 +152,9 @@ export async function api<T = any>(path: string, opts: ApiOptions = {}): Promise
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    // The admin session ran out or was revoked (e.g. password changed): back to the sign-in screen
+    // The session ran out or was revoked (e.g. admin password changed): sign in again
     if (res.status === 401 && token?.startsWith('adm.')) clearAdminSession();
+    if (res.status === 401 && token?.startsWith('cus.')) clearCustomerSession();
     throw new ApiError(res.status, data.error || `Request failed (${res.status})`, data);
   }
   return data as T;

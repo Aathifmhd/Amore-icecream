@@ -18,7 +18,6 @@ export default defineConfig(() => {
           // Libraries change rarely, so ship them as separate long-cached files
           manualChunks: {
             react: ['react', 'react-dom'],
-            firebase: ['firebase/app', 'firebase/auth'],
           },
         },
       },

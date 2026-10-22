@@ -29,7 +29,7 @@ import {
   Clock,
   AlertCircle,
 } from 'lucide-react';
-import { type User } from '../firebase';
+import { type User } from '../customerAuth';
 
 interface MenuOrderingPageProps {
   currency: Currency;
