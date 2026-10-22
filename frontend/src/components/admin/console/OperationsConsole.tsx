@@ -350,7 +350,7 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
         {section === 'activity' && isSuper && <ActionCenterView branch={branch} onOpenOrder={setOpenRef} onSeen={markActivitySeen} />}
         {section === 'orders' && <OrdersView orders={orders} branch={branch} onOpenOrder={(o) => setOpenRef(o.orderReference)} onNewOrder={() => setNewOrderOpen(true)} />}
         {section === 'refunds' && <RefundsView orders={orders} branch={branch} lockedBranch={lockedBranch} />}
-        {section === 'menu' && <MenuView menu={menu} branch={branch} canEdit={isSuper} />}
+        {section === 'menu' && <MenuView menu={menu} branch={branch} isSuper={isSuper} />}
         {section === 'reports' && <ReportsView orders={orders} branch={branch} />}
         {section === 'employees' && <EmployeesView branch={branch} lockedBranch={lockedBranch} />}
         {section === 'users' && isSuper && <UsersView me={admin} />}

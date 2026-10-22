@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { MenuItem, ScoopItem } from '../../types';
 import {
   getAllGelatoFlavours,
@@ -6,6 +6,7 @@ import {
   getAllCakeItems,
   MENU_UPDATED_EVENT,
 } from '../../utils/menuStorage';
+import { useForBranch } from '../../utils/branchMenu';
 
 const MOBILE_QUERY = '(max-width: 767px)';
 
@@ -40,7 +41,12 @@ export function useMenuItems() {
       window.removeEventListener('storage', refresh);
     };
   }, []);
-  return menu;
+  // As sold at the branch the customer has picked (its own prices, photos and text)
+  const forBranch = useForBranch();
+  return useMemo(
+    () => ({ scoops: menu.scoops.map(forBranch), coffee: menu.coffee.map(forBranch), cakes: menu.cakes.map(forBranch) }),
+    [menu, forBranch]
+  );
 }
 
 export const isScoop = (item: ScoopItem | MenuItem): item is ScoopItem => 'tastingNotes' in item;

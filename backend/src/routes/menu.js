@@ -10,14 +10,51 @@ import { branchName, logActivity } from '../activity.js';
  *
  * Stock is kept per branch: `soldOutAt` lists the branches where an item is sold out.
  * (`isAvailable: false` from before then meant sold out everywhere.)
- * Only the super admin edits items; each branch admin switches stock for their own branch.
+ *
+ * The super admin's version of an item is the standard for every branch. A branch can use
+ * its own prices, photos and text: `branchOverrides.<branch>` holds only what differs.
+ * Branch admins change their own branch's version and stock; only the super admin adds,
+ * removes or edits the standard item.
  */
 const router = Router();
 
 const ITEM_TYPES = ['scoop', 'coffee', 'cake'];
 const MAX_ITEM_BYTES = 50_000;
 // Fields an item save never touches: stock has its own route, so saving an item can't undo a branch's switch
-const NOT_SAVED = ['_id', 'id', 'isDeleted', 'soldOutAt', 'isAvailable'];
+const NOT_SAVED = ['_id', 'id', 'isDeleted', 'soldOutAt', 'isAvailable', 'branchOverrides'];
+
+// What a branch may change for itself, and how each value is checked
+const text = (max) => (v) => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
+const photo = (v) => typeof v === 'string' && v.length <= 2000 && !v.startsWith('data:');
+const price = (v) => Number.isInteger(v) && v >= 0 && v <= 1_000_000;
+const OVERRIDE_FIELDS = {
+  name: text(80),
+  tagline: text(200),
+  description: text(1500),
+  portionOrTemp: text(80),
+  image: photo,
+  coneImage: photo,
+  conePriceLKR: price,
+  biscuitCupPriceLKR: price,
+  doubleConePriceLKR: price,
+  doubleCupPriceLKR: price,
+  priceLKR: price,
+};
+const FIELD_LABEL = {
+  conePriceLKR: 'cone',
+  biscuitCupPriceLKR: 'cup',
+  doubleConePriceLKR: 'double cone',
+  doubleCupPriceLKR: 'double cup',
+  priceLKR: 'price',
+};
+
+/** The branch this admin may change the menu for. */
+function editableBranch(req, branchId) {
+  if (!BRANCHES.includes(branchId)) throw new HttpError(400, 'Choose a branch');
+  const own = adminBranch(req.admin);
+  if (own && own !== branchId) throw new HttpError(403, 'You can only change the menu for your own branch');
+  return branchId;
+}
 
 function checkId(id) {
   if (!/^[A-Za-z0-9_-]{1,80}$/.test(id)) throw new HttpError(400, 'Invalid item id');
@@ -90,6 +127,54 @@ router.put('/:id/stock', requireAdmin, async (req, res) => {
     branchId,
   });
   res.json({ item });
+});
+
+// A branch's own version of an item: { fields: {...only what differs}, itemType, itemName }
+router.put('/:id/branch/:branchId', requireAdmin, async (req, res) => {
+  const id = checkId(req.params.id);
+  const branchId = editableBranch(req, req.params.branchId);
+  const { fields, itemType, itemName } = req.body || {};
+  if (!ITEM_TYPES.includes(itemType)) throw new HttpError(400, 'Invalid itemType');
+  if (!fields || typeof fields !== 'object' || Array.isArray(fields)) throw new HttpError(400, 'Expected the changed fields');
+
+  const clean = {};
+  for (const [key, value] of Object.entries(fields)) {
+    const check = OVERRIDE_FIELDS[key];
+    if (!check) throw new HttpError(400, `${key} can't be changed per branch`);
+    if (!check(value)) throw new HttpError(400, `Invalid value for ${key}`);
+    clean[key] = typeof value === 'string' ? value.trim() : value;
+  }
+
+  const path = `branchOverrides.${branchId}`;
+  const update = Object.keys(clean).length
+    ? { $set: { [path]: { ...clean, updatedAt: now(), updatedBy: req.admin.username }, updatedAt: now() }, $setOnInsert: { id, itemType } }
+    : { $unset: { [path]: '' }, $set: { updatedAt: now() }, $setOnInsert: { id, itemType } };
+  const item = await col('menu_items').findOneAndUpdate({ id }, update, { upsert: true, returnDocument: 'after', projection: { _id: 0 } });
+
+  const name = clean.name || item.name || (typeof itemName === 'string' && itemName.trim().slice(0, 100)) || id;
+  const prices = Object.keys(FIELD_LABEL).filter((k) => k in clean).map((k) => `${FIELD_LABEL[k]} LKR ${clean[k].toLocaleString('en-US')}`);
+  const other = [
+    (clean.image || clean.coneImage) && 'photo',
+    (clean.name || clean.tagline || clean.description || clean.portionOrTemp) && 'text',
+  ].filter(Boolean);
+  const what = [prices.length && `prices: ${prices.join(' · ')}`, ...other].filter(Boolean).join(', ');
+  await logActivity(req, {
+    category: 'menu',
+    summary: what ? `set ${branchName(branchId)}'s own ${name} (${what})` : `set ${name} back to the standard menu at ${branchName(branchId)}`,
+    branchId,
+  });
+  res.json({ item });
+});
+
+// Back to the standard version at this branch
+router.delete('/:id/branch/:branchId', requireAdmin, async (req, res) => {
+  const id = checkId(req.params.id);
+  const branchId = editableBranch(req, req.params.branchId);
+  const existing = await col('menu_items').findOne({ id }, { projection: { _id: 0, name: 1 } });
+  await col('menu_items').updateOne({ id }, { $unset: { [`branchOverrides.${branchId}`]: '' }, $set: { updatedAt: now() } });
+  const name = existing?.name || (typeof req.query.name === 'string' && req.query.name.trim().slice(0, 100)) || id;
+  await logActivity(req, { category: 'menu', summary: `set ${name} back to the standard menu at ${branchName(branchId)}`, branchId });
+  res.json({ ok: true });
 });
 
 // Delete: keep a marker so every device drops the item (it may be one of the built-in ones)

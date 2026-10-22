@@ -30,6 +30,7 @@ import {
   subscribeToRealtimeMenu,
 } from './utils/menuStorage';
 import { scoopPhoto } from './utils/menuPhotos';
+import { forBranch } from './utils/branchMenu';
 
 // Screens and popups that aren't needed for the first paint are split out so the
 // storefront loads faster. The menu chunk is prefetched once the home page is idle.
@@ -334,7 +335,7 @@ export default function App() {
   // Quick Order Durian Scoop
   const handleOrderDurian = () => {
     const scoops = getAllGelatoFlavours();
-    const durian = scoops.find((f) => f.id === 'durian-best') || scoops[0];
+    const durian = forBranch(scoops.find((f) => f.id === 'durian-best') || scoops[0], selectedBranch);
     const newOrderItem: SelectedOrderItem = {
       itemId: durian.id,
       name: durian.name,
@@ -353,7 +354,7 @@ export default function App() {
     if (orderItems.length === 0) {
       // If empty tray, pre-add the iconic Durian in Biscuit Cup
       const scoops = getAllGelatoFlavours();
-      const durian = scoops.find((f) => f.id === 'durian-best') || scoops[0];
+      const durian = forBranch(scoops.find((f) => f.id === 'durian-best') || scoops[0], branchId);
       setOrderItems([
         {
           itemId: durian.id,

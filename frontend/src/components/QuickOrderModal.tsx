@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { SelectedOrderItem, BranchId, Currency, OrderRecord } from '../types';
 import { AMORE_BRANCHES } from '../data/iceCreamData';
 import { formatPrice } from '../utils/currency';
@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { type User } from '../customerAuth';
 import { LocationPickerModal } from './LocationPickerModal';
+import { repriceForBranch } from '../utils/branchMenu';
 
 interface QuickOrderModalProps {
   isOpen: boolean;
@@ -221,7 +222,9 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
   };
 
   // Pricing calculations
-  const subtotalLKR = items.reduce((acc, it) => acc + it.priceLKR * it.quantity, 0);
+  // Each branch can set its own prices: price the tray for the branch that will make the order
+  const pricedItems = useMemo(() => items.map((it) => repriceForBranch(it, assignedBranch.id)), [items, assignedBranch.id]);
+  const subtotalLKR = pricedItems.reduce((acc, it) => acc + it.priceLKR * it.quantity, 0);
   const deliveryFeeLKR = orderType === 'delivery' ? (subtotalLKR >= 3000 ? 0 : 250) : 0;
   const grandTotalLKR = subtotalLKR + deliveryFeeLKR;
 
@@ -336,7 +339,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
       branchId: assignedBranch.id,
       branchName: assignedBranch.name,
       branchCity: assignedBranch.city,
-      items: [...items],
+      items: pricedItems,
       subtotalLKR,
       deliveryFeeLKR,
       grandTotalLKR,
@@ -535,7 +538,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
                 </div>
               ) : (
                 <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1">
-                  {items.map((it, idx) => (
+                  {pricedItems.map((it, idx) => (
                     <div
                       key={idx}
                       className="p-2.5 rounded-xl bg-[#FAF7F2] border border-[#E8DFC8] flex items-center justify-between gap-2.5 text-xs"

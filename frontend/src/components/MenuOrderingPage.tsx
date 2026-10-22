@@ -32,6 +32,7 @@ import {
 import { type User } from '../customerAuth';
 import { useIsSoldOut } from '../utils/stock';
 import { cardPhoto } from '../utils/menuPhotos';
+import { useForBranch } from '../utils/branchMenu';
 
 interface MenuOrderingPageProps {
   currency: Currency;
@@ -73,9 +74,14 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
   const [preferredFormat, setPreferredFormat] = useState<'both' | 'biscuit-cup' | 'waffle-cone'>('both');
 
   // Dynamic Real-time Menu State from Storage
-  const [allScoops, setAllScoops] = useState<ScoopItem[]>(() => getAllGelatoFlavours());
-  const [allCoffee, setAllCoffee] = useState<MenuItem[]>(() => getAllCoffeeItems());
-  const [allCakes, setAllCakes] = useState<MenuItem[]>(() => getAllCakeItems());
+  const [rawScoops, setAllScoops] = useState<ScoopItem[]>(() => getAllGelatoFlavours());
+  const [rawCoffee, setAllCoffee] = useState<MenuItem[]>(() => getAllCoffeeItems());
+  const [rawCakes, setAllCakes] = useState<MenuItem[]>(() => getAllCakeItems());
+  // The menu as sold at the branch the customer has picked (its own prices, photos and text)
+  const forBranch = useForBranch();
+  const allScoops = useMemo(() => rawScoops.map(forBranch), [rawScoops, forBranch]);
+  const allCoffee = useMemo(() => rawCoffee.map(forBranch), [rawCoffee, forBranch]);
+  const allCakes = useMemo(() => rawCakes.map(forBranch), [rawCakes, forBranch]);
 
   useEffect(() => {
     const handleMenuSync = () => {

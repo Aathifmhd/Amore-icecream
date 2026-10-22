@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { useIsSoldOut } from '../utils/stock';
 import { scoopPhoto } from '../utils/menuPhotos';
+import { useForBranch } from '../utils/branchMenu';
 
 interface MobileFullMenuPageProps {
   currency: Currency;
@@ -66,9 +67,14 @@ export const MobileFullMenuPage: React.FC<MobileFullMenuPageProps> = ({
   const [justAddedId, setJustAddedId] = useState<string | null>(null);
 
   // Menu from local storage, kept up to date with the admin's changes on the server
-  const [allScoops, setAllScoops] = useState<ScoopItem[]>(() => getAllGelatoFlavours());
-  const [allCoffee, setAllCoffee] = useState<MenuItem[]>(() => getAllCoffeeItems());
-  const [allCakes, setAllCakes] = useState<MenuItem[]>(() => getAllCakeItems());
+  const [rawScoops, setAllScoops] = useState<ScoopItem[]>(() => getAllGelatoFlavours());
+  const [rawCoffee, setAllCoffee] = useState<MenuItem[]>(() => getAllCoffeeItems());
+  const [rawCakes, setAllCakes] = useState<MenuItem[]>(() => getAllCakeItems());
+  // The menu as sold at the branch the customer has picked (its own prices, photos and text)
+  const forBranch = useForBranch();
+  const allScoops = useMemo(() => rawScoops.map(forBranch), [rawScoops, forBranch]);
+  const allCoffee = useMemo(() => rawCoffee.map(forBranch), [rawCoffee, forBranch]);
+  const allCakes = useMemo(() => rawCakes.map(forBranch), [rawCakes, forBranch]);
 
   // Scroll to top on mount
   useEffect(() => {

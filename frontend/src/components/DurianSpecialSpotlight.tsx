@@ -9,6 +9,7 @@ import {
 } from '../utils/menuStorage';
 import { Sparkles, Star, CheckCircle, Flame, MapPin, Award, Cookie, ShoppingBag } from 'lucide-react';
 import { useIsSoldOut } from '../utils/stock';
+import { useForBranch } from '../utils/branchMenu';
 
 interface DurianSpecialSpotlightProps {
   currency: Currency;
@@ -23,10 +24,13 @@ export const DurianSpecialSpotlight: React.FC<DurianSpecialSpotlightProps> = ({
 }) => {
   // Sold out at the branch the customer has picked
   const soldOutHere = useIsSoldOut();
-  const [durianItem, setDurianItem] = useState<ScoopItem>(() => {
+  const [rawDurian, setDurianItem] = useState<ScoopItem>(() => {
     const list = getAllGelatoFlavours();
     return list.find((f) => f.id === 'durian-best') || list[0] || ALL_20_FLAVOURS[0];
   });
+  // As sold at the branch the customer has picked
+  const forBranch = useForBranch();
+  const durianItem = forBranch(rawDurian);
 
   const [activeSlide, setActiveSlide] = useState(0);
   const [prevSlide, setPrevSlide] = useState<number | null>(null);

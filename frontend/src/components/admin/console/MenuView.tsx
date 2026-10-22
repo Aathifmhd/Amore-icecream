@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Plus, Search, Pencil, Trash2, Upload, Images, X, ImageOff, Check, CircleSlash } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Upload, Images, X, ImageOff, Check, CircleSlash, RotateCcw, Tag } from 'lucide-react';
 import { BranchId, MenuItem, ScoopItem } from '../../../types';
 import { AMORE_BRANCHES } from '../../../data/iceCreamData';
 import {
@@ -10,6 +10,7 @@ import {
   deleteCoffeeItem,
   deleteScoopItem,
   setItemStock,
+  setBranchVersion,
   updateCakeItem,
   updateCoffeeItem,
   updateScoopItem,
@@ -19,6 +20,7 @@ import { Badge, Button, Card, Popup, EmptyState, Field, Switch, cx, inputClass, 
 import { BranchFilter, MenuData } from './useConsoleData';
 import { isSoldOutAt } from '../../../utils/stock';
 import { useGallery } from './gallery';
+import { branchChanges, forBranch, type BranchField } from '../../../utils/branchMenu';
 import { uploadMenuPhoto } from '../../../utils/imageUpload';
 import { ApiError } from '../../../api';
 
@@ -165,17 +167,84 @@ const toDraft = (item?: ScoopItem | MenuItem): Draft => {
 };
 
 const num = (s: string) => Math.max(0, Math.round(Number(s) || 0));
+const lkrOrDash = (n?: number) => (n || n === 0 ? lkr(n) : '—');
 
-const ItemEditor: React.FC<{ kind: Kind; item?: ScoopItem | MenuItem; onClose: () => void }> = ({ kind, item, onClose }) => {
+/** What a branch has changed on an item, in words: "cone LKR 800 (standard LKR 750)", "photo"… */
+export function describeBranchChanges(item: ScoopItem | MenuItem, b: BranchId): string[] {
+  const changes = branchChanges(item, b);
+  const std = item as unknown as Record<string, number | string | undefined>;
+  const priceLabel: Partial<Record<BranchField, string>> = {
+    conePriceLKR: 'cone',
+    biscuitCupPriceLKR: 'cup',
+    doubleConePriceLKR: 'double cone',
+    doubleCupPriceLKR: 'double cup',
+    priceLKR: 'price',
+  };
+  const out: string[] = [];
+  for (const [key, label] of Object.entries(priceLabel) as [BranchField, string][]) {
+    if (key in changes) out.push(`${label} ${lkr(changes[key] as number)} (standard ${lkrOrDash(std[key] as number)})`);
+  }
+  if ('image' in changes) out.push('photo');
+  if ('coneImage' in changes) out.push('cone photo');
+  if ('name' in changes) out.push(`name “${changes.name}”`);
+  if ('tagline' in changes || 'portionOrTemp' in changes) out.push(isScoop(item) ? 'short line' : 'size');
+  if ('description' in changes) out.push('description');
+  return out;
+}
+
+const ItemEditor: React.FC<{
+  kind: Kind;
+  item?: ScoopItem | MenuItem;
+  /** Edit this branch's own version (null = the standard item, super admin only) */
+  branchId: BranchId | null;
+  onClose: () => void;
+}> = ({ kind, item, branchId, onClose }) => {
   const { confirm, toast } = useConsoleUi();
-  const [d, setD] = useState<Draft>(() => toDraft(item));
+  const forBranchMode = Boolean(branchId && item);
+  const shown = item && branchId ? forBranch(item, branchId) : item;
+  const [d, setD] = useState<Draft>(() => toDraft(shown));
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((prev) => ({ ...prev, [k]: v }));
   const scoop = kind === 'scoops';
+  const branchName = branchId ? BRANCH_SHORT[branchId] : '';
+  const hasOwnVersion = Boolean(item && branchId && Object.keys(branchChanges(item, branchId)).length);
+  const otherBranches = item && !branchId ? AMORE_BRANCHES.map((b) => ({ id: b.id, changes: describeBranchChanges(item, b.id) })).filter((b) => b.changes.length) : [];
 
   const valid = d.name.trim() && (scoop ? num(d.cone) > 0 && num(d.cup) > 0 : num(d.price) > 0);
 
+  /** A branch saves only what differs from the standard item. */
+  const saveBranchVersion = () => {
+    if (!item || !branchId) return;
+    const std = toDraft(item);
+    const fields: Record<string, string | number> = {};
+    const text = (key: keyof Draft, field: BranchField) => {
+      const v = (d[key] as string).trim();
+      if (v && v !== (std[key] as string).trim()) fields[field] = v;
+    };
+    const price = (key: keyof Draft, field: BranchField) => {
+      const v = (d[key] as string).trim();
+      if (v !== '' && num(v) !== num(std[key] as string)) fields[field] = num(v);
+    };
+    text('name', 'name');
+    text('tagline', scoop ? 'tagline' : 'portionOrTemp');
+    text('description', 'description');
+    if (d.image && d.image !== std.image) fields.image = d.image;
+    if (scoop && d.coneImage && d.coneImage !== std.coneImage) fields.coneImage = d.coneImage;
+    if (scoop) {
+      price('cone', 'conePriceLKR');
+      price('cup', 'biscuitCupPriceLKR');
+      price('doubleCone', 'doubleConePriceLKR');
+      price('doubleCup', 'doubleCupPriceLKR');
+    } else {
+      price('price', 'priceLKR');
+    }
+    setBranchVersion(item.id, kind, branchId, fields);
+    toast(Object.keys(fields).length ? `Saved for ${branchName}` : `${item.name} follows the standard menu at ${branchName}`);
+    onClose();
+  };
+
   const save = () => {
     if (!valid) return;
+    if (forBranchMode) return saveBranchVersion();
     const image = d.image || (item?.image ?? '');
     if (scoop) {
       const cone = num(d.cone), cup = num(d.cup);
@@ -223,6 +292,19 @@ const ItemEditor: React.FC<{ kind: Kind; item?: ScoopItem | MenuItem; onClose: (
     onClose();
   };
 
+  const resetToStandard = async (b: BranchId) => {
+    if (!item) return;
+    const ok = await confirm({
+      title: `Use the standard ${item.name} at ${BRANCH_SHORT[b]}?`,
+      message: `${BRANCH_SHORT[b]}'s own prices, photos and text for this item are removed; it follows the standard menu again.`,
+      confirmLabel: 'Use the standard menu',
+    });
+    if (!ok) return;
+    setBranchVersion(item.id, kind, b, null);
+    toast(`${item.name} follows the standard menu at ${BRANCH_SHORT[b]}`);
+    if (forBranchMode) onClose();
+  };
+
   const remove = async () => {
     if (!item) return;
     const ok = await confirm({
@@ -237,8 +319,18 @@ const ItemEditor: React.FC<{ kind: Kind; item?: ScoopItem | MenuItem; onClose: (
     onClose();
   };
 
+  // In branch mode, each field says what the standard is when this branch differs
+  const std = item ? toDraft(item) : null;
+  const stdHint = (key: keyof Draft, asPrice = false) => {
+    if (!forBranchMode || !std) return undefined;
+    const a = (d[key] as string).trim();
+    const b = (std[key] as string).trim();
+    if (asPrice ? num(a) === num(b) : a === b) return undefined;
+    return asPrice ? `Standard: ${lkrOrDash(num(b))}` : `Standard: ${b.length > 60 ? `${b.slice(0, 60)}…` : b || '—'}`;
+  };
+
   const priceInput = (k: keyof Draft, label: string) => (
-    <Field label={label}>
+    <Field label={label} hint={stdHint(k, true)}>
       <input value={d[k] as string} onChange={(e) => set(k, e.target.value.replace(/[^\d]/g, '') as never)} inputMode="numeric" className={inputClass} placeholder="LKR" />
     </Field>
   );
@@ -247,12 +339,17 @@ const ItemEditor: React.FC<{ kind: Kind; item?: ScoopItem | MenuItem; onClose: (
     <Popup
       open
       onClose={onClose}
-      title={item ? item.name : `New ${kind === 'scoops' ? 'ice cream flavour' : kind === 'coffee' ? 'coffee' : 'cake'}`}
+      title={item ? (forBranchMode ? `${item.name} · ${branchName}` : item.name) : `New ${kind === 'scoops' ? 'ice cream flavour' : kind === 'coffee' ? 'coffee' : 'cake'}`}
       footer={
         <>
-          {item && (
+          {item && !forBranchMode && (
             <Button variant="danger" icon={<Trash2 className="w-4 h-4" />} onClick={remove}>
               Remove
+            </Button>
+          )}
+          {forBranchMode && hasOwnVersion && (
+            <Button variant="ghost" icon={<RotateCcw className="w-4 h-4" />} onClick={() => resetToStandard(branchId!)}>
+              Use the standard menu
             </Button>
           )}
           <span className="flex-1" />
@@ -260,15 +357,38 @@ const ItemEditor: React.FC<{ kind: Kind; item?: ScoopItem | MenuItem; onClose: (
             Cancel
           </Button>
           <Button variant="primary" onClick={save} disabled={!valid}>
-            {item ? 'Save' : 'Add to menu'}
+            {item ? (forBranchMode ? `Save for ${branchName}` : 'Save') : 'Add to menu'}
           </Button>
         </>
       }
     >
       <div className="space-y-5">
-        <p className="text-xs text-[#7A6458] rounded-xl bg-[#F7F3EC] px-4 py-3">
-          Changes here apply to all three branches. Each branch switches its own stock (in stock / sold out) in the list.
-        </p>
+        {forBranchMode ? (
+          <p className="text-xs text-[#5C2A0A] rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
+            <strong>Changes here apply only to {branchName}.</strong> Prices, photos and text you leave the same as the standard menu keep following it.
+            {hasOwnVersion && ' This item already has its own version here.'}
+          </p>
+        ) : (
+          <p className="text-xs text-[#7A6458] rounded-xl bg-[#F7F3EC] px-4 py-3">
+            This is the standard item for every branch. Branches can set their own prices, photos and text; each branch switches its own stock in the list.
+          </p>
+        )}
+
+        {otherBranches.length > 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 space-y-2">
+            <p className="text-sm font-semibold text-[#241A18]">Different at branches</p>
+            {otherBranches.map((b) => (
+              <div key={b.id} className="flex items-start justify-between gap-3 text-sm">
+                <span className="text-[#3D2C24]">
+                  <strong>{BRANCH_SHORT[b.id]}:</strong> {b.changes.join(' · ')}
+                </span>
+                <Button size="sm" variant="ghost" onClick={() => resetToStandard(b.id)}>
+                  Reset
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {scoop ? (
           <div className="space-y-5">
@@ -280,7 +400,7 @@ const ItemEditor: React.FC<{ kind: Kind; item?: ScoopItem | MenuItem; onClose: (
             <div>
               <p className="text-sm font-semibold text-[#3D2C24]">Waffle cone photo</p>
               <p className="text-xs text-[#8A7970] mb-2">Shown when a customer picks a waffle cone. Without one, the biscuit cup photo is used.</p>
-              <PhotoPicker value={d.coneImage} onChange={(url) => set('coneImage', url)} onClear={() => set('coneImage', '')} />
+              <PhotoPicker value={d.coneImage} onChange={(url) => set('coneImage', url)} onClear={forBranchMode ? undefined : () => set('coneImage', '')} />
             </div>
           </div>
         ) : (
@@ -288,19 +408,22 @@ const ItemEditor: React.FC<{ kind: Kind; item?: ScoopItem | MenuItem; onClose: (
             <PhotoPicker value={d.image} onChange={(url) => set('image', url)} />
           </Field>
         )}
-        <Field label="Name">
+        <Field label="Name" hint={stdHint('name')}>
           <input value={d.name} onChange={(e) => set('name', e.target.value)} className={inputClass} />
         </Field>
-        <Field label={scoop ? 'Short line under the name' : 'Size / serving'} hint={scoop ? 'e.g. Sun-ripened Alphonso mango' : 'e.g. Hot · 8 oz, or 1 slice'}>
+        <Field
+          label={scoop ? 'Short line under the name' : 'Size / serving'}
+          hint={stdHint('tagline') || (forBranchMode ? undefined : scoop ? 'e.g. Sun-ripened Alphonso mango' : 'e.g. Hot · 8 oz, or 1 slice')}
+        >
           <input value={d.tagline} onChange={(e) => set('tagline', e.target.value)} className={inputClass} />
         </Field>
-        <Field label="Description">
+        <Field label="Description" hint={stdHint('description')}>
           <textarea value={d.description} onChange={(e) => set('description', e.target.value)} rows={3} className={cx(inputClass, 'h-auto py-2.5')} />
         </Field>
 
         {scoop ? (
           <div>
-            <p className="text-sm font-semibold text-[#3D2C24] mb-2">Prices (LKR)</p>
+            <p className="text-sm font-semibold text-[#3D2C24] mb-2">Prices (LKR){forBranchMode ? ` at ${branchName}` : ''}</p>
             <div className="grid grid-cols-2 gap-3">
               {priceInput('cone', 'Waffle cone')}
               {priceInput('cup', 'Biscuit cup')}
@@ -309,22 +432,24 @@ const ItemEditor: React.FC<{ kind: Kind; item?: ScoopItem | MenuItem; onClose: (
             </div>
           </div>
         ) : (
-          priceInput('price', 'Price (LKR)')
+          priceInput('price', forBranchMode ? `Price (LKR) at ${branchName}` : 'Price (LKR)')
         )}
 
-        <div className="space-y-2">
-          <p className="text-sm font-semibold text-[#3D2C24]">Labels on the website</p>
-          <label className="flex items-center justify-between rounded-xl bg-white border border-[#EAE2D6] px-4 py-3 cursor-pointer">
-            <span className="text-sm text-[#241A18]">“Popular”</span>
-            <Switch checked={d.popular} onChange={(v) => set('popular', v)} label="Popular" />
-          </label>
-          {scoop && (
+        {!forBranchMode && (
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-[#3D2C24]">Labels on the website</p>
             <label className="flex items-center justify-between rounded-xl bg-white border border-[#EAE2D6] px-4 py-3 cursor-pointer">
-              <span className="text-sm text-[#241A18]">“Signature” (our best flavour)</span>
-              <Switch checked={d.signature} onChange={(v) => set('signature', v)} label="Signature" />
+              <span className="text-sm text-[#241A18]">“Popular”</span>
+              <Switch checked={d.popular} onChange={(v) => set('popular', v)} label="Popular" />
             </label>
-          )}
-        </div>
+            {scoop && (
+              <label className="flex items-center justify-between rounded-xl bg-white border border-[#EAE2D6] px-4 py-3 cursor-pointer">
+                <span className="text-sm text-[#241A18]">“Signature” (our best flavour)</span>
+                <Switch checked={d.signature} onChange={(v) => set('signature', v)} label="Signature" />
+              </label>
+            )}
+          </div>
+        )}
       </div>
     </Popup>
   );
@@ -333,10 +458,12 @@ const ItemEditor: React.FC<{ kind: Kind; item?: ScoopItem | MenuItem; onClose: (
 // ---- List ----
 
 /**
- * The menu and its stock. The super admin edits items (for all branches); each branch admin
- * only switches stock for their own branch. `branch` is the branch being looked at.
+ * The menu and its stock. Looking at one branch (always, for a branch admin) shows and edits
+ * that branch's own version of each item; "All branches" (super admin) edits the standard
+ * items and shows where branches differ. `branch` is the branch being looked at.
  */
-export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; canEdit: boolean }> = ({ menu, branch, canEdit }) => {
+export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; isSuper: boolean }> = ({ menu, branch, isSuper }) => {
+  const editBranch: BranchId | null = branch === 'all' ? null : branch;
   const { toast } = useConsoleUi();
   const [kind, setKind] = useState<Kind>('scoops');
   const [query, setQuery] = useState('');
@@ -354,6 +481,10 @@ export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; canEdit:
   const whereText = (where: BranchId[]) =>
     where.length === AMORE_BRANCHES.length ? 'all branches' : where.map((b) => BRANCH_SHORT[b]).join(' & ');
   const where = branch === 'all' ? '' : ` at ${BRANCH_SHORT[branch]}`;
+  // Items a branch sells with its own prices, photos or text (super admin, all branches)
+  const differentNow = [...menu.scoops, ...menu.coffee, ...menu.cakes]
+    .map((i) => ({ item: i, branches: AMORE_BRANCHES.map((b) => ({ id: b.id, changes: describeBranchChanges(i, b.id) })).filter((x) => x.changes.length) }))
+    .filter((x) => x.branches.length > 0);
 
   const switchStock = (i: ScoopItem | MenuItem, b: BranchId) => {
     const inStock = isSoldOutAt(i, b);
@@ -400,13 +531,41 @@ export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; canEdit:
               </button>
             )}
           </div>
-          {canEdit && (
+          {isSuper && (
             <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setEditor({})}>
               <span className="hidden sm:inline">Add item</span>
             </Button>
           )}
         </div>
       </div>
+
+      {branch === 'all' && differentNow.length > 0 && (
+        <Card className="p-4 border-amber-200 bg-amber-50/50">
+          <p className="text-sm font-semibold text-[#241A18] mb-2.5 flex items-center gap-2">
+            <Tag className="w-4 h-4 text-amber-700" /> Different at branches
+          </p>
+          <ul className="space-y-1.5">
+            {differentNow.map(({ item, branches }) => (
+              <li key={item.id} className="text-sm text-[#3D2C24]">
+                <strong className="text-[#241A18]">{item.name}</strong>
+                {branches.map((b) => (
+                  <span key={b.id}>
+                    {' '}
+                    · <span className="font-semibold">{BRANCH_SHORT[b.id]}:</span> {b.changes.join(', ')}
+                  </span>
+                ))}
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-[#8A7970] mt-2.5">Open an item to see or reset a branch's own version. Pick a branch at the top to edit it.</p>
+        </Card>
+      )}
+
+      {editBranch && (
+        <p className="text-xs text-[#5C2A0A] rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5">
+          Showing the menu as sold at <strong>{BRANCH_SHORT[editBranch]}</strong>. Changing an item here sets {BRANCH_SHORT[editBranch]}'s own prices, photos or text.
+        </p>
+      )}
 
       {branch === 'all' ? (
         soldOutNow.length > 0 ? (
@@ -446,8 +605,11 @@ export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; canEdit:
         {shown.length === 0 ? (
           <EmptyState title="No items found" />
         ) : (
-          shown.map((i) => {
-            const soldOutAt = soldOutWhere(i);
+          shown.map((raw) => {
+            const i = editBranch ? forBranch(raw, editBranch) : raw;
+            const ownHere = editBranch ? Object.keys(branchChanges(raw, editBranch)).length > 0 : false;
+            const differentAt = editBranch ? [] : AMORE_BRANCHES.map((b) => b.id).filter((b) => Object.keys(branchChanges(raw, b)).length > 0);
+            const soldOutAt = soldOutWhere(raw);
             // In the all-branches view an item only looks unavailable when every branch is out of it
             const available = branch === 'all' ? soldOutAt.length < AMORE_BRANCHES.length : !soldOutAt.includes(branch);
             const details = (
@@ -467,9 +629,11 @@ export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; canEdit:
                 </span>
                 <span className="min-w-0">
                   <span className="flex items-center gap-2">
-                    <span className={cx('font-semibold truncate', canEdit && 'group-hover:underline', available ? 'text-[#241A18]' : 'text-[#8A7970]')}>{i.name}</span>
+                    <span className={cx('font-semibold truncate', 'group-hover:underline', available ? 'text-[#241A18]' : 'text-[#8A7970]')}>{i.name}</span>
                     {branch !== 'all' && !available && <Badge tone="grey">Sold out</Badge>}
                     {branch === 'all' && soldOutAt.length > 0 && <Badge tone="red">Sold out at {whereText(soldOutAt)}</Badge>}
+                    {ownHere && <Badge tone="amber">{BRANCH_SHORT[editBranch!]}'s own</Badge>}
+                    {differentAt.length > 0 && <Badge tone="amber">Different at {whereText(differentAt)}</Badge>}
                   </span>
                   <span className="block text-sm text-[#7A6458] truncate">{priceText(i)}</span>
                 </span>
@@ -477,13 +641,9 @@ export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; canEdit:
             );
             return (
               <div key={i.id} className="flex flex-wrap sm:flex-nowrap items-center gap-3 px-3 sm:px-4 py-3">
-                {canEdit ? (
-                  <button type="button" onClick={() => setEditor({ item: i })} className="flex items-center gap-3 min-w-0 flex-1 text-left cursor-pointer group">
-                    {details}
-                  </button>
-                ) : (
-                  <div className="flex items-center gap-3 min-w-0 flex-1">{details}</div>
-                )}
+                <button type="button" onClick={() => setEditor({ item: raw })} className="flex items-center gap-3 min-w-0 flex-1 text-left cursor-pointer group">
+                  {details}
+                </button>
                 {branch === 'all' ? (
                   // One chip per branch: green = selling there, red = sold out there
                   <div className="flex flex-wrap gap-1.5 w-full sm:w-auto" role="group" aria-label={`${i.name} stock by branch`}>
@@ -495,7 +655,7 @@ export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; canEdit:
                           type="button"
                           aria-pressed={!out}
                           title={`${BRANCH_SHORT[b.id]}: ${out ? 'sold out — tap when back in stock' : 'in stock — tap to mark sold out'}`}
-                          onClick={() => switchStock(i, b.id)}
+                          onClick={() => switchStock(raw, b.id)}
                           className={cx(
                             'inline-flex items-center gap-1 h-8 px-2.5 rounded-full text-xs font-semibold border cursor-pointer whitespace-nowrap transition-colors',
                             out ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
@@ -511,21 +671,21 @@ export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; canEdit:
                 ) : (
                   <>
                     <span className="hidden sm:block text-sm w-20 text-right text-[#5C4D44]">{available ? 'In stock' : 'Sold out'}</span>
-                    <Switch checked={available} label={`${i.name} in stock at ${BRANCH_SHORT[branch]}`} onChange={() => switchStock(i, branch)} />
+                    <Switch checked={available} label={`${i.name} in stock at ${BRANCH_SHORT[branch]}`} onChange={() => switchStock(raw, branch)} />
                   </>
                 )}
-                {canEdit && (
-                  <Button size="sm" variant="ghost" aria-label={`Edit ${i.name}`} onClick={() => setEditor({ item: i })} icon={<Pencil className="w-4 h-4" />}>
-                    <span className="hidden md:inline">Edit</span>
-                  </Button>
-                )}
+                <Button size="sm" variant="ghost" aria-label={`Edit ${i.name}`} onClick={() => setEditor({ item: raw })} icon={<Pencil className="w-4 h-4" />}>
+                  <span className="hidden md:inline">Edit</span>
+                </Button>
               </div>
             );
           })
         )}
       </Card>
 
-      {canEdit && editor && <ItemEditor kind={kind} item={editor.item} onClose={() => setEditor(null)} />}
+      {editor && (isSuper || editor.item) && (
+        <ItemEditor kind={kind} item={editor.item} branchId={editor.item ? editBranch : null} onClose={() => setEditor(null)} />
+      )}
     </div>
   );
 };

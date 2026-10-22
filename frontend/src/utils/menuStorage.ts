@@ -316,6 +316,48 @@ export function setItemStock(itemId: string, itemType: 'scoops' | 'coffee' | 'ca
 }
 
 // ----------------------------------------------------
+// A BRANCH'S OWN VERSION OF AN ITEM
+// ----------------------------------------------------
+
+/**
+ * Save a branch's own prices / photos / text for an item (`fields` = only what differs from
+ * the standard item; empty or null = follow the standard again).
+ */
+export function setBranchVersion(
+  itemId: string,
+  itemType: 'scoops' | 'coffee' | 'cakes',
+  branchId: BranchId,
+  fields: Record<string, string | number> | null
+): void {
+  const [list, save] =
+    itemType === 'scoops'
+      ? [getAllGelatoFlavours(), saveAllGelatoFlavours as (items: any[]) => void]
+      : itemType === 'coffee'
+      ? [getAllCoffeeItems(), saveAllCoffeeItems as (items: any[]) => void]
+      : [getAllCakeItems(), saveAllCakeItems as (items: any[]) => void];
+  const idx = list.findIndex((i) => i.id === itemId);
+  if (idx === -1) return;
+  const item = list[idx];
+  const overrides = { ...(item.branchOverrides || {}) };
+  const keep = fields && Object.keys(fields).length > 0;
+  if (keep) overrides[branchId] = { ...fields, updatedAt: new Date().toISOString() };
+  else delete overrides[branchId];
+  const updated = [...list];
+  updated[idx] = { ...item, branchOverrides: overrides };
+  save(updated);
+  const path = `${menuPath(itemId)}/branch/${branchId}`;
+  if (keep) {
+    queueWrite({
+      method: 'PUT',
+      path,
+      body: { fields, itemName: item.name, itemType: itemType === 'scoops' ? 'scoop' : itemType === 'coffee' ? 'coffee' : 'cake' },
+    });
+  } else {
+    queueWrite({ method: 'DELETE', path: `${path}?name=${encodeURIComponent(item.name)}` });
+  }
+}
+
+// ----------------------------------------------------
 // RESET TO ARTISANAL DEFAULTS
 // ----------------------------------------------------
 
@@ -379,7 +421,7 @@ export function mergeServerMenuItems(items: any[]): void {
     const idx = list.findIndex((x) => x.id === item.id);
     const merged = idx > -1 ? { ...list[idx], ...item } : { ...item };
     // Stock comes from the server as it is (an item back in stock everywhere has no soldOutAt)
-    for (const key of ['isAvailable', 'soldOutAt']) if (!(key in item)) delete merged[key];
+    for (const key of ['isAvailable', 'soldOutAt', 'branchOverrides']) if (!(key in item)) delete merged[key];
     if (idx > -1 && JSON.stringify(merged) === JSON.stringify(list[idx])) return;
     if (idx > -1) list[idx] = merged;
     else list.unshift(merged);

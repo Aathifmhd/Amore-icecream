@@ -44,6 +44,7 @@ whole site (website + API) from the backend on one port.
 | `GET /api/menu` | everyone — the admin's menu changes and stock |
 | `PUT / DELETE /api/menu/:id` | super admin — edit / remove an item |
 | `PUT /api/menu/:id/stock` | super admin (any branch) or branch admin (own branch) — in stock / sold out |
+| `PUT / DELETE /api/menu/:id/branch/:branch` | super admin (any branch) or branch admin (own branch) — that branch's own prices, photos and text / back to the standard |
 | `POST /api/images`, `GET /api/images/:id` | admin uploads, everyone views |
 | `/api/gallery` | admins see, super admin adds / removes photos in the photo gallery |
 | `/api/activity` | super admin — the Action Center log (what happened, who, which branch; kept 90 days) |
@@ -72,7 +73,7 @@ The console is at **/admin** (it is not linked from the storefront).
 | Dashboard | today for all branches (or one), each branch, latest activity | today for own branch |
 | Action Center | everything that happens at every branch | — |
 | Orders, refunds, reports | all branches | own branch only |
-| Menu | edit items, prices, photos; stock at any branch | stock (sold out / in stock) at own branch |
+| Menu | add, edit, remove items (the standard for all branches); any branch's own version; stock at any branch | own branch's prices, photos and text; stock at own branch |
 | Employees | every branch | own branch |
 | Users (admin logins) | add, change, reset passwords, remove | — |
 | Settings | sound, user code, account, **photo gallery** | sound, user code, account |
@@ -83,6 +84,13 @@ files in `frontend/src/assets/images`), and the super admin can upload more.
 
 Stock is per branch: customers see an item as sold out only at the branch they order from,
 and the server refuses an order with an item sold out at that branch.
+
+Prices, photos and text can differ per branch. A branch admin's menu edits apply only to their
+branch (stored as `branchOverrides.<branch>`, holding just the fields that differ); the super
+admin's item stays the standard everywhere else. With **All branches** picked, the super admin's
+Menu page lists every item a branch sells differently ("Durian · Colombo: cone LKR 900 (standard
+LKR 850)"), and each item's editor can reset a branch to the standard. Customers see, and are
+charged, the version of the branch they order from.
 
 - **Name + password** — stored in MongoDB as salted hashes. The super admin adds branch
   admins on the console's **Users** page. `npm run set-admin -- Admin` (typing is hidden)

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Minus, Plus, Trash2 } from 'lucide-react';
 import { BranchId, MenuItem, ScoopItem, SelectedOrderItem, ServingFormat } from '../../../types';
 import { AMORE_BRANCHES } from '../../../data/iceCreamData';
@@ -8,6 +8,7 @@ import { Button, Dialog, Field, cx, inputClass, useConsoleUi } from './ui';
 import { formatLabel, shortRef } from './orderMeta';
 import { MenuData } from './useConsoleData';
 import { scoopPhoto } from '../../../utils/menuPhotos';
+import { forBranch, repriceForBranch } from '../../../utils/branchMenu';
 
 const lkr = (n: number) => formatPrice(n, 'LKR');
 const DELIVERY_FEE = 250;
@@ -41,14 +42,19 @@ export const NewOrderDialog: React.FC<{
   const [pickKey, setPickKey] = useState('');
   const [format, setFormat] = useState<ServingFormat>('waffle-cone');
 
+  // Items as sold at the order's branch (a branch can have its own prices, photos and text)
   const picks: Pick[] = useMemo(
     () => [
-      ...menu.scoops.map((s) => ({ key: `s:${s.id}`, item: s, kind: 'scoop' as const })),
-      ...menu.coffee.map((c) => ({ key: `c:${c.id}`, item: c, kind: 'coffee' as const })),
-      ...menu.cakes.map((c) => ({ key: `k:${c.id}`, item: c, kind: 'cake' as const })),
+      ...menu.scoops.map((s) => ({ key: `s:${s.id}`, item: forBranch(s, branch), kind: 'scoop' as const })),
+      ...menu.coffee.map((c) => ({ key: `c:${c.id}`, item: forBranch(c, branch), kind: 'coffee' as const })),
+      ...menu.cakes.map((c) => ({ key: `k:${c.id}`, item: forBranch(c, branch), kind: 'cake' as const })),
     ],
-    [menu]
+    [menu, branch]
   );
+  // Changing the branch re-prices what is already on the order
+  useEffect(() => {
+    setLines((prev) => prev.map((l) => repriceForBranch(l, branch)));
+  }, [branch]);
   const picked = picks.find((p) => p.key === pickKey);
   const scoopPrice = (s: ScoopItem, f: ServingFormat) =>
     f === 'biscuit-cup' ? s.biscuitCupPriceLKR : f === 'double-cone' ? s.doubleConePriceLKR : f === 'double-biscuit-cup' ? s.doubleCupPriceLKR : s.conePriceLKR;

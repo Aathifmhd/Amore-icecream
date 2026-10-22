@@ -20,6 +20,26 @@ export interface BranchInfo {
   description: string;
 }
 
+/**
+ * A branch's own version of a menu item: only the fields that differ from the standard
+ * (the super admin's) item. Set by that branch's admin or the super admin.
+ */
+export interface BranchOverride {
+  name?: string;
+  tagline?: string;
+  description?: string;
+  portionOrTemp?: string;
+  image?: string;
+  coneImage?: string;
+  conePriceLKR?: number;
+  biscuitCupPriceLKR?: number;
+  doubleConePriceLKR?: number;
+  doubleCupPriceLKR?: number;
+  priceLKR?: number;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
 export type FlavorCategory = 
   | 'all' 
   | 'signature' 
@@ -59,6 +79,8 @@ export interface ScoopItem {
   isAvailable?: boolean;
   /** Branches where this item is sold out right now. */
   soldOutAt?: BranchId[];
+  /** Each branch's own prices, photos or text, where they differ from the standard item. */
+  branchOverrides?: Partial<Record<BranchId, BranchOverride>>;
 }
 
 export type MenuTab = 'all' | 'scoops' | 'coffee' | 'cakes' | 'tourist-specials';
@@ -77,6 +99,8 @@ export interface MenuItem {
   isAvailable?: boolean;
   /** Branches where this item is sold out right now. */
   soldOutAt?: BranchId[];
+  /** Each branch's own prices, photos or text, where they differ from the standard item. */
+  branchOverrides?: Partial<Record<BranchId, BranchOverride>>;
 }
 
 export interface SelectedOrderItem {
