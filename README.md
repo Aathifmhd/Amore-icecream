@@ -76,7 +76,7 @@ The console is at **/admin** (it is not linked from the storefront).
 | Menu | add, edit, remove items (the standard for all branches); any branch's own version; stock at any branch | own branch's prices, photos and text; stock at own branch |
 | Employees | every branch | own branch |
 | Users (admin logins) | add, change, reset passwords, remove | — |
-| Settings | sound, user code, account, **photo gallery** | sound, user code, account |
+| Settings | sound, user code, account, **default prices**, **photo gallery** | sound, user code, account |
 
 The **photo gallery** (Settings → Photo gallery) is what menu photos are picked from: Amore's
 own photos are built into the website (`CATALOG_PRESET_IMAGES` in `frontend/src/data/iceCreamData.ts`,
@@ -87,12 +87,15 @@ and the server refuses an order with an item sold out at that branch.
 
 Prices, photos and text can differ per branch. A branch admin's menu edits apply only to their
 branch (stored as `branchOverrides.<branch>`, holding just the fields that differ); the super
-admin's item stays the standard everywhere else. With **All branches** picked, the super admin's
-Menu page lists every item a branch sells differently ("Durian · Colombo: cone LKR 900 (standard
-LKR 850)"); each item's price line shows a branch's own price beside the standard
-("Cone LKR 850 (Colombo LKR 900)"), and its editor can reset a branch to the standard. Looking at
-one branch, a price of its own shows with the standard struck through. Customers see, and are
+admin's item is the default everywhere else. With **All branches** picked, the Menu page shows the
+default price and names any branch that charges differently ("Cone LKR 850 (price different at
+Colombo)"), and lists every item a branch sells differently; each item's editor can reset a branch
+to the default. Looking at one branch shows that branch's prices only. Customers see, and are
 charged, the version of the branch they order from.
+
+**Settings → Default prices** (super admin) lists every item's default prices in one table: change
+any of them, or set a whole column at once ("Set every biscuit cup to LKR 800"), then save. A
+branch with its own price for an item keeps it.
 
 - **Name + password** — stored in MongoDB as salted hashes. The super admin adds branch
   admins on the console's **Users** page. `npm run set-admin -- Admin` (typing is hidden)

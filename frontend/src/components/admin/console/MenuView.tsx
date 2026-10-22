@@ -169,7 +169,7 @@ const toDraft = (item?: ScoopItem | MenuItem): Draft => {
 const num = (s: string) => Math.max(0, Math.round(Number(s) || 0));
 const lkrOrDash = (n?: number) => (n || n === 0 ? lkr(n) : '—');
 
-/** What a branch has changed on an item, in words: "cone LKR 800 (standard LKR 750)", "photo"… */
+/** What a branch has changed on an item, in words: "cone LKR 800 (default LKR 750)", "photo"… */
 export function describeBranchChanges(item: ScoopItem | MenuItem, b: BranchId): string[] {
   const changes = branchChanges(item, b);
   const std = item as unknown as Record<string, number | string | undefined>;
@@ -182,7 +182,7 @@ export function describeBranchChanges(item: ScoopItem | MenuItem, b: BranchId): 
   };
   const out: string[] = [];
   for (const [key, label] of Object.entries(priceLabel) as [BranchField, string][]) {
-    if (key in changes) out.push(`${label} ${lkr(changes[key] as number)} (standard ${lkrOrDash(std[key] as number)})`);
+    if (key in changes) out.push(`${label} ${lkr(changes[key] as number)} (default ${lkrOrDash(std[key] as number)})`);
   }
   if ('image' in changes) out.push('photo');
   if ('coneImage' in changes) out.push('cone photo');
@@ -195,7 +195,7 @@ export function describeBranchChanges(item: ScoopItem | MenuItem, b: BranchId): 
 const ItemEditor: React.FC<{
   kind: Kind;
   item?: ScoopItem | MenuItem;
-  /** Edit this branch's own version (null = the standard item, super admin only) */
+  /** Edit this branch's own version (null = the default item, super admin only) */
   branchId: BranchId | null;
   onClose: () => void;
 }> = ({ kind, item, branchId, onClose }) => {
@@ -211,7 +211,7 @@ const ItemEditor: React.FC<{
 
   const valid = d.name.trim() && (scoop ? num(d.cone) > 0 && num(d.cup) > 0 : num(d.price) > 0);
 
-  /** A branch saves only what differs from the standard item. */
+  /** A branch saves only what differs from the default item. */
   const saveBranchVersion = () => {
     if (!item || !branchId) return;
     const std = toDraft(item);
@@ -238,7 +238,7 @@ const ItemEditor: React.FC<{
       price('price', 'priceLKR');
     }
     setBranchVersion(item.id, kind, branchId, fields);
-    toast(Object.keys(fields).length ? `Saved for ${branchName}` : `${item.name} follows the standard menu at ${branchName}`);
+    toast(Object.keys(fields).length ? `Saved for ${branchName}` : `${item.name} follows the default menu at ${branchName}`);
     onClose();
   };
 
@@ -295,13 +295,13 @@ const ItemEditor: React.FC<{
   const resetToStandard = async (b: BranchId) => {
     if (!item) return;
     const ok = await confirm({
-      title: `Use the standard ${item.name} at ${BRANCH_SHORT[b]}?`,
-      message: `${BRANCH_SHORT[b]}'s own prices, photos and text for this item are removed; it follows the standard menu again.`,
-      confirmLabel: 'Use the standard menu',
+      title: `Use the default ${item.name} at ${BRANCH_SHORT[b]}?`,
+      message: `${BRANCH_SHORT[b]}'s own prices, photos and text for this item are removed; it follows the default menu again.`,
+      confirmLabel: 'Use the default menu',
     });
     if (!ok) return;
     setBranchVersion(item.id, kind, b, null);
-    toast(`${item.name} follows the standard menu at ${BRANCH_SHORT[b]}`);
+    toast(`${item.name} follows the default menu at ${BRANCH_SHORT[b]}`);
     if (forBranchMode) onClose();
   };
 
@@ -319,14 +319,14 @@ const ItemEditor: React.FC<{
     onClose();
   };
 
-  // In branch mode, each field says what the standard is when this branch differs
+  // In branch mode, each field says what the default is when this branch differs
   const std = item ? toDraft(item) : null;
   const stdHint = (key: keyof Draft, asPrice = false) => {
     if (!forBranchMode || !std) return undefined;
     const a = (d[key] as string).trim();
     const b = (std[key] as string).trim();
     if (asPrice ? num(a) === num(b) : a === b) return undefined;
-    return asPrice ? `Standard: ${lkrOrDash(num(b))}` : `Standard: ${b.length > 60 ? `${b.slice(0, 60)}…` : b || '—'}`;
+    return asPrice ? `Default: ${lkrOrDash(num(b))}` : `Default: ${b.length > 60 ? `${b.slice(0, 60)}…` : b || '—'}`;
   };
 
   const priceInput = (k: keyof Draft, label: string) => (
@@ -349,7 +349,7 @@ const ItemEditor: React.FC<{
           )}
           {forBranchMode && hasOwnVersion && (
             <Button variant="ghost" icon={<RotateCcw className="w-4 h-4" />} onClick={() => resetToStandard(branchId!)}>
-              Use the standard menu
+              Use the default menu
             </Button>
           )}
           <span className="flex-1" />
@@ -365,12 +365,12 @@ const ItemEditor: React.FC<{
       <div className="space-y-5">
         {forBranchMode ? (
           <p className="text-xs text-[#5C2A0A] rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
-            <strong>Changes here apply only to {branchName}.</strong> Prices, photos and text you leave the same as the standard menu keep following it.
+            <strong>Changes here apply only to {branchName}.</strong> Prices, photos and text you leave the same as the default menu keep following it.
             {hasOwnVersion && ' This item already has its own version here.'}
           </p>
         ) : (
           <p className="text-xs text-[#7A6458] rounded-xl bg-[#F7F3EC] px-4 py-3">
-            This is the standard item for every branch. Branches can set their own prices, photos and text; each branch switches its own stock in the list.
+            This is the default item for every branch. Branches can set their own prices, photos and text; each branch switches its own stock in the list.
           </p>
         )}
 
@@ -493,55 +493,26 @@ export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; isSuper:
   };
 
   /**
-   * An item's prices, with any branch price that differs from the standard right beside it:
-   * all branches → "Cone LKR 850 (Colombo LKR 900)"; one branch → "Cone LKR 900 LKR 850" (standard struck through).
+   * An item's prices. All branches: the default price, naming any branch that charges
+   * differently, "Cone LKR 850 (price different at Colombo)". One branch: that branch's price.
    */
   const priceLine = (raw: ScoopItem | MenuItem) => {
+    const shownItem = editBranch ? forBranch(raw, editBranch) : raw;
     const parts: { label: string; key: BranchField }[] = isScoop(raw)
       ? [
           { label: 'Cone', key: 'conePriceLKR' },
           { label: 'Cup', key: 'biscuitCupPriceLKR' },
         ]
       : [{ label: '', key: 'priceLKR' }];
-    const std = raw as unknown as Record<string, number>;
+    const prices = shownItem as unknown as Record<string, number>;
     return parts.map(({ label, key }, n) => {
-      const own = (b: BranchId) => branchChanges(raw, b)[key] as number | undefined;
-      let price: React.ReactNode;
-      if (editBranch) {
-        const here = own(editBranch);
-        price =
-          here === undefined ? (
-            lkr(std[key])
-          ) : (
-            <span title={`${BRANCH_SHORT[editBranch]}'s price · standard ${lkr(std[key])}`}>
-              <span className="font-semibold text-amber-800">{lkr(here)}</span> <s className="text-[#A8988B]">{lkr(std[key])}</s>
-            </span>
-          );
-      } else {
-        const others = AMORE_BRANCHES.filter((b) => own(b.id) !== undefined);
-        price = (
-          <>
-            {lkr(std[key])}
-            {others.length > 0 && (
-              <span className="text-amber-800">
-                {' ('}
-                {others.map((b, k) => (
-                  <React.Fragment key={b.id}>
-                    {k > 0 && ', '}
-                    {BRANCH_SHORT[b.id]} <span className="font-semibold">{lkr(own(b.id)!)}</span>
-                  </React.Fragment>
-                ))}
-                )
-              </span>
-            )}
-          </>
-        );
-      }
+      const differentAt = editBranch ? [] : AMORE_BRANCHES.map((b) => b.id).filter((b) => key in branchChanges(raw, b));
       return (
         <React.Fragment key={key}>
           {n > 0 && ' · '}
           {label && `${label} `}
-          {price}
+          {lkr(prices[key])}
+          {differentAt.length > 0 && <span className="text-amber-800"> (price different at {whereText(differentAt)})</span>}
         </React.Fragment>
       );
     });

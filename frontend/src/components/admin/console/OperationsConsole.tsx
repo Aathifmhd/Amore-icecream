@@ -355,7 +355,7 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
         {section === 'employees' && <EmployeesView branch={branch} lockedBranch={lockedBranch} />}
         {section === 'users' && isSuper && <UsersView me={admin} />}
         {section === 'settings' && (
-          <SettingsView admin={admin} soundOn={soundOn} onSoundChange={changeSound} onTestSound={chime} onOpenUsers={() => go('users')} />
+          <SettingsView admin={admin} menu={menu} soundOn={soundOn} onSoundChange={changeSound} onTestSound={chime} onOpenUsers={() => go('users')} />
         )}
       </main>
 

@@ -160,7 +160,7 @@ router.put('/:id/branch/:branchId', requireAdmin, async (req, res) => {
   const what = [prices.length && `prices: ${prices.join(' · ')}`, ...other].filter(Boolean).join(', ');
   await logActivity(req, {
     category: 'menu',
-    summary: what ? `set ${branchName(branchId)}'s own ${name} (${what})` : `set ${name} back to the standard menu at ${branchName(branchId)}`,
+    summary: what ? `set ${branchName(branchId)}'s own ${name} (${what})` : `set ${name} back to the default menu at ${branchName(branchId)}`,
     branchId,
   });
   res.json({ item });
@@ -173,7 +173,7 @@ router.delete('/:id/branch/:branchId', requireAdmin, async (req, res) => {
   const existing = await col('menu_items').findOne({ id }, { projection: { _id: 0, name: 1 } });
   await col('menu_items').updateOne({ id }, { $unset: { [`branchOverrides.${branchId}`]: '' }, $set: { updatedAt: now() } });
   const name = existing?.name || (typeof req.query.name === 'string' && req.query.name.trim().slice(0, 100)) || id;
-  await logActivity(req, { category: 'menu', summary: `set ${name} back to the standard menu at ${branchName(branchId)}`, branchId });
+  await logActivity(req, { category: 'menu', summary: `set ${name} back to the default menu at ${branchName(branchId)}`, branchId });
   res.json({ ok: true });
 });
 

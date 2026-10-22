@@ -1,6 +1,6 @@
 /**
  * Settings: new-order sound, this device's user code, the signed-in account, and (super admin)
- * the photo gallery that menu photos are picked from.
+ * the default prices for every branch and the photo gallery that menu photos are picked from.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, ImagePlus, Images, KeyRound, Lock, RotateCcw, ShieldCheck, Trash2, Upload, UserCog, Volume2 } from 'lucide-react';
@@ -16,6 +16,8 @@ import {
   type GalleryCategory,
   type GalleryPhoto,
 } from './gallery';
+import { DefaultPricesView } from './DefaultPricesView';
+import type { MenuData } from './useConsoleData';
 
 const BRANCH_NAME: Record<string, string> = { akurana: 'Akurana', colombo: 'Colombo', arugambay: 'Arugam Bay' };
 const errorText = (err: unknown, fallback: string) => (err instanceof ApiError ? err.message : fallback);
@@ -130,6 +132,7 @@ const UserCodeCard: React.FC = () => {
 
 const GeneralSettings: React.FC<{
   admin: AdminProfile;
+  menu: MenuData;
   soundOn: boolean;
   onSoundChange: (on: boolean) => void;
   onTestSound: () => void;
@@ -400,23 +403,27 @@ const PhotoGallery: React.FC = () => {
 
 // ---- Page -------------------------------------------------------------------------
 
+type Tab = 'general' | 'prices' | 'gallery';
+
 export const SettingsView: React.FC<{
   admin: AdminProfile;
+  menu: MenuData;
   soundOn: boolean;
   onSoundChange: (on: boolean) => void;
   onTestSound: () => void;
   onOpenUsers: () => void;
 }> = (props) => {
   const isSuper = props.admin.role !== 'branch';
-  const [tab, setTab] = useState<'general' | 'gallery'>(() =>
-    isSuper && new URLSearchParams(window.location.search).get('view') === 'gallery' ? 'gallery' : 'general'
-  );
+  const [tab, setTab] = useState<Tab>(() => {
+    const view = new URLSearchParams(window.location.search).get('view');
+    return isSuper && (view === 'gallery' || view === 'prices') ? view : 'general';
+  });
 
-  const choose = (t: 'general' | 'gallery') => {
+  const choose = (t: Tab) => {
     setTab(t);
     const url = new URL(window.location.href);
-    if (t === 'gallery') url.searchParams.set('view', 'gallery');
-    else url.searchParams.delete('view');
+    if (t === 'general') url.searchParams.delete('view');
+    else url.searchParams.set('view', t);
     window.history.replaceState({}, '', url.toString());
   };
 
@@ -427,6 +434,7 @@ export const SettingsView: React.FC<{
           {(
             [
               ['general', 'General'],
+              ['prices', 'Default prices'],
               ['gallery', 'Photo gallery'],
             ] as const
           ).map(([id, label]) => (
@@ -446,7 +454,7 @@ export const SettingsView: React.FC<{
           ))}
         </div>
       )}
-      {tab === 'gallery' && isSuper ? <PhotoGallery /> : <GeneralSettings {...props} />}
+      {tab === 'gallery' && isSuper ? <PhotoGallery /> : tab === 'prices' && isSuper ? <DefaultPricesView menu={props.menu} /> : <GeneralSettings {...props} />}
     </div>
   );
 };
