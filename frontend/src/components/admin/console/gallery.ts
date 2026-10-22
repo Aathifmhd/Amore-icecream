@@ -29,14 +29,16 @@ const BUILT_IN: GalleryPhoto[] = CATALOG_PRESET_IMAGES.map((p) => ({ id: p.id, n
 export function useGallery() {
   const [uploaded, setUploaded] = useState<GalleryPhoto[] | null>(null);
   const [hidden, setHidden] = useState<string[]>([]);
+  const [waiting, setWaiting] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     setError(null);
-    api<{ photos: Omit<GalleryPhoto, 'builtIn'>[]; hidden: string[] }>('/gallery', { as: 'admin' })
+    api<{ photos: Omit<GalleryPhoto, 'builtIn'>[]; hidden: string[]; waiting?: number }>('/gallery', { as: 'admin' })
       .then((r) => {
         setUploaded(r.photos.map((p) => ({ ...p, builtIn: false })));
         setHidden(r.hidden || []);
+        setWaiting(r.waiting || 0);
       })
       .catch(() => {
         // The built-in photos still work without the server
@@ -48,7 +50,15 @@ export function useGallery() {
   useEffect(reload, [reload]);
 
   const builtIn = BUILT_IN.filter((p) => !hidden.includes(p.id));
-  return { photos: [...(uploaded || []), ...builtIn], hiddenCount: BUILT_IN.length - builtIn.length, loading: uploaded === null, error, reload };
+  return {
+    photos: [...(uploaded || []), ...builtIn],
+    hiddenCount: BUILT_IN.length - builtIn.length,
+    // Photos uploaded for menu items that aren't in the gallery yet
+    waiting,
+    loading: uploaded === null,
+    error,
+    reload,
+  };
 }
 
 /** Upload a photo and add it to the gallery (super admin). */
@@ -60,6 +70,16 @@ export async function addGalleryPhoto(file: File, name: string, category: Galler
     as: 'admin',
   });
   return { ...photo, builtIn: false };
+}
+
+/** Put a photo already uploaded (e.g. for a menu item) into the gallery (super admin). */
+export async function addUploadToGallery(url: string, name: string, category: GalleryCategory): Promise<void> {
+  await api('/gallery', { method: 'POST', body: { url, name: name.trim().slice(0, 80) || 'Menu photo', category }, as: 'admin' });
+}
+
+/** Add every photo uploaded for menu items that isn't in the gallery yet (repeats are skipped). */
+export async function addMenuUploadsToGallery(): Promise<{ added: number; skipped: number }> {
+  return api('/gallery/add-uploads', { method: 'POST', as: 'admin' });
 }
 
 /** Delete a photo from the gallery (one of Amore's own photos is hidden instead). */

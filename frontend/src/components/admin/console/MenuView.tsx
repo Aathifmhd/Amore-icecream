@@ -19,7 +19,7 @@ import { formatPrice } from '../../../utils/currency';
 import { Badge, Button, Card, Popup, EmptyState, Field, Switch, cx, inputClass, useConsoleUi } from './ui';
 import { BranchFilter, MenuData } from './useConsoleData';
 import { isSoldOutAt } from '../../../utils/stock';
-import { useGallery } from './gallery';
+import { addUploadToGallery, useGallery, type GalleryCategory } from './gallery';
 import { branchChanges, forBranch, type BranchField } from '../../../utils/branchMenu';
 import { uploadMenuPhoto } from '../../../utils/imageUpload';
 import { ApiError } from '../../../api';
@@ -36,7 +36,13 @@ const BRANCH_SHORT: Record<BranchId, string> = { akurana: 'Akurana', colombo: 'C
 
 // ---- Photo picker ----
 
-const PhotoPicker: React.FC<{ value: string; onChange: (url: string) => void; onClear?: () => void }> = ({ value, onChange, onClear }) => {
+const PhotoPicker: React.FC<{
+  value: string;
+  onChange: (url: string) => void;
+  onClear?: () => void;
+  /** A newly uploaded photo also goes into the gallery under this name (super admin) */
+  gallery?: { name: string; category: GalleryCategory };
+}> = ({ value, onChange, onClear, gallery }) => {
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
@@ -46,7 +52,10 @@ const PhotoPicker: React.FC<{ value: string; onChange: (url: string) => void; on
     setBusy(true);
     setNote(null);
     try {
-      onChange(await uploadMenuPhoto(file));
+      const url = await uploadMenuPhoto(file);
+      onChange(url);
+      // Best effort: if it fails, opening the gallery adds it later
+      if (gallery) addUploadToGallery(url, gallery.name, gallery.category).catch(() => {});
     } catch (err) {
       setNote(err instanceof ApiError && err.status === 0 ? err.message : 'Could not use that photo. Try another one (JPEG, PNG or WebP).');
     } finally {
@@ -189,8 +198,10 @@ const ItemEditor: React.FC<{
   item?: ScoopItem | MenuItem;
   /** Edit this branch's own version (null = the default item, super admin only) */
   branchId: BranchId | null;
+  /** Photos the super admin uploads here also go into the gallery */
+  isSuper: boolean;
   onClose: () => void;
-}> = ({ kind, item, branchId, onClose }) => {
+}> = ({ kind, item, branchId, isSuper, onClose }) => {
   const { confirm, toast } = useConsoleUi();
   const forBranchMode = Boolean(branchId && item);
   const shown = item && branchId ? forBranch(item, branchId) : item;
@@ -317,6 +328,12 @@ const ItemEditor: React.FC<{
     return asPrice ? `Default: ${lkrOrDash(num(b))}` : `Default: ${b.length > 60 ? `${b.slice(0, 60)}…` : b || '—'}`;
   };
 
+  const galleryFor = (cone: boolean): { name: string; category: GalleryCategory } | undefined => {
+    if (!isSuper) return undefined;
+    const name = [d.name.trim() || item?.name || 'Menu photo', forBranchMode ? branchName : '', cone ? 'waffle cone' : ''].filter(Boolean).join(' – ');
+    return { name, category: kind === 'coffee' ? 'Specialty Coffee' : kind === 'cakes' ? 'Artisan Cakes' : 'Ice Cream Flavours' };
+  };
+
   const priceInput = (k: keyof Draft, label: string) => (
     <Field label={label} hint={stdHint(k, true)}>
       <input value={d[k] as string} onChange={(e) => set(k, e.target.value.replace(/[^\d]/g, '') as never)} inputMode="numeric" className={inputClass} placeholder="LKR" />
@@ -383,17 +400,22 @@ const ItemEditor: React.FC<{
             <div>
               <p className="text-sm font-semibold text-[#3D2C24]">Biscuit cup photo</p>
               <p className="text-xs text-[#8A7970] mb-2">The main photo, shown on the menu by default.</p>
-              <PhotoPicker value={d.image} onChange={(url) => set('image', url)} />
+              <PhotoPicker value={d.image} onChange={(url) => set('image', url)} gallery={galleryFor(false)} />
             </div>
             <div>
               <p className="text-sm font-semibold text-[#3D2C24]">Waffle cone photo</p>
               <p className="text-xs text-[#8A7970] mb-2">Shown when a customer picks a waffle cone. Without one, the biscuit cup photo is used.</p>
-              <PhotoPicker value={d.coneImage} onChange={(url) => set('coneImage', url)} onClear={forBranchMode ? undefined : () => set('coneImage', '')} />
+              <PhotoPicker
+                value={d.coneImage}
+                onChange={(url) => set('coneImage', url)}
+                onClear={forBranchMode ? undefined : () => set('coneImage', '')}
+                gallery={galleryFor(true)}
+              />
             </div>
           </div>
         ) : (
           <Field label="Photo">
-            <PhotoPicker value={d.image} onChange={(url) => set('image', url)} />
+            <PhotoPicker value={d.image} onChange={(url) => set('image', url)} gallery={galleryFor(false)} />
           </Field>
         )}
         <Field label="Name" hint={stdHint('name')}>
@@ -663,7 +685,7 @@ export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; isSuper:
       </Card>
 
       {editor && (isSuper || editor.item) && (
-        <ItemEditor kind={kind} item={editor.item} branchId={editor.item ? editBranch : null} onClose={() => setEditor(null)} />
+        <ItemEditor kind={kind} item={editor.item} branchId={editor.item ? editBranch : null} isSuper={isSuper} onClose={() => setEditor(null)} />
       )}
     </div>
   );

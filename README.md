@@ -85,7 +85,11 @@ is super admin only), the open section on the right, and `?view=<section>` links
 
 The **photo gallery** (Settings → Photo gallery) is what menu photos are picked from: Amore's
 own photos are built into the website (`CATALOG_PRESET_IMAGES` in `frontend/src/data/iceCreamData.ts`,
-files in `frontend/src/assets/images`), and the super admin can upload more.
+files in `frontend/src/assets/images`), and the super admin can upload more. Photos uploaded for
+a menu item go into the gallery too, named after the item: at once when the super admin uploads
+them, and otherwise the next time the gallery is opened (`POST /api/gallery/add-uploads`; the same
+picture uploaded twice is added once, by its `sha256` fingerprint, and a photo deleted from the
+gallery doesn't come back).
 
 Stock is per branch: customers see an item as sold out only at the branch they order from,
 and the server refuses an order with an item sold out at that branch.

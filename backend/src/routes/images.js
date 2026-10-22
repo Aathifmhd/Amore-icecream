@@ -22,6 +22,8 @@ router.post('/', requireAdmin, express.raw({ type: TYPES, limit: '4mb' }), async
     id,
     contentType: req.get('content-type').split(';')[0].trim().toLowerCase(),
     size: req.body.length,
+    // The same photo uploaded twice has the same fingerprint (the gallery skips repeats)
+    sha256: crypto.createHash('sha256').update(req.body).digest('hex'),
     data: new Binary(req.body),
     uploadedBy: req.admin.username,
     createdAt: now(),

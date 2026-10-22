@@ -9,6 +9,7 @@ import { getRememberedDevice, isValidCodeFormat, lockConsole, removeUserCode, se
 import { Badge, Button, Card, EmptyState, Field, Popup, Switch, cx, inputClass, useConsoleUi } from './ui';
 import {
   addGalleryPhoto,
+  addMenuUploadsToGallery,
   GALLERY_CATEGORIES,
   removeGalleryPhoto,
   restoreBuiltInPhotos,
@@ -273,9 +274,30 @@ const AddPhotoPopup: React.FC<{ onClose: () => void; onAdded: () => void }> = ({
 
 const PhotoGallery: React.FC = () => {
   const { confirm, toast } = useConsoleUi();
-  const { photos, hiddenCount, loading, error, reload } = useGallery();
+  const { photos, hiddenCount, waiting, loading, error, reload } = useGallery();
   const [category, setCategory] = useState<'all' | GalleryCategory>('all');
   const [adding, setAdding] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const importing = useRef(false);
+
+  // Photos uploaded for menu items join the gallery when it is opened (each picture once)
+  const addMenuUploads = async () => {
+    if (importing.current) return;
+    importing.current = true;
+    setImportError(null);
+    try {
+      const { added } = await addMenuUploadsToGallery();
+      if (added) toast(`Added ${added} photo${added === 1 ? '' : 's'} uploaded for menu items`);
+      reload();
+    } catch (err) {
+      setImportError(errorText(err, 'Could not add the photos uploaded for menu items.'));
+    } finally {
+      importing.current = false;
+    }
+  };
+  useEffect(() => {
+    if (waiting > 0 && !importError) addMenuUploads();
+  }, [waiting]);
 
   const shown = useMemo(() => photos.filter((p) => category === 'all' || p.category === category), [photos, category]);
   const count = (c: 'all' | GalleryCategory) => (c === 'all' ? photos.length : photos.filter((p) => p.category === c).length);
@@ -344,6 +366,14 @@ const PhotoGallery: React.FC = () => {
         </p>
       )}
       {loading && <p className="text-sm text-[#8A7970]">Loading uploaded photos…</p>}
+      {importError && (
+        <p className="flex flex-wrap items-center gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          {importError}
+          <Button size="sm" variant="ghost" icon={<RotateCcw className="w-4 h-4" />} onClick={addMenuUploads}>
+            Try again
+          </Button>
+        </p>
+      )}
 
       {shown.length === 0 ? (
         <Card>
