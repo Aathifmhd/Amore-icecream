@@ -10,7 +10,7 @@ backend/    the API — Node + Express, data in MongoDB
 
 | Piece | What it holds |
 | --- | --- |
-| **MongoDB** (`backend/`) | orders, menu changes, menu photos, admin logins, user codes |
+| **MongoDB** (`backend/`) | orders, menu changes and stock per branch, menu photos, admin logins, user codes, employee records |
 | **Google sign-in** | customers sign in with Google; the backend checks the sign-in and gives them a session |
 | **Built into the website** | the standard menu (`frontend/src/data/iceCreamData.ts`); the database only stores the admin's changes to it |
 
@@ -41,14 +41,17 @@ whole site (website + API) from the backend on one port.
 | Route | Who |
 | --- | --- |
 | `GET /api/auth/config`, `POST /api/auth/google` | customer Google sign-in |
-| `GET /api/menu` | everyone — the admin's menu changes |
-| `PUT / DELETE /api/menu/:id` | admin |
+| `GET /api/menu` | everyone — the admin's menu changes and stock |
+| `PUT / DELETE /api/menu/:id` | super admin — edit / remove an item |
+| `PUT /api/menu/:id/stock` | super admin (any branch) or branch admin (own branch) — in stock / sold out |
 | `POST /api/images`, `GET /api/images/:id` | admin uploads, everyone views |
 | `POST /api/orders` | signed-in customer (checked like the old Firestore rules) or admin |
 | `GET /api/orders/mine` | signed-in customer — their own orders |
 | `GET / PATCH / DELETE /api/orders/:ref` | the customer who placed it (limited) or admin |
-| `GET /api/orders?since=…` | admin — every order, or what changed since the last check |
+| `GET /api/orders?since=…` | admin — every order (a branch admin: their branch's), or what changed since the last check |
 | `/api/admin/…` | admin sign-in, user codes (see `routes/admin.js`) |
+| `/api/admin/users` | super admin — add, change and remove admin logins |
+| `/api/employees` | admin — staff records (a branch admin: their branch's) |
 
 Screens stay up to date by asking for changes every few seconds (orders in the console
 every 5 s, a customer's order every 6–8 s, the menu every minute). Changes made in the
@@ -59,8 +62,22 @@ on the device and go through when it is back ("Saving N changes…" in the top b
 
 The console is at **/admin** (it is not linked from the storefront).
 
-- **Name + password** — stored in MongoDB as salted hashes. Create the login or change a
-  password with `npm run set-admin -- Admin` (typing is hidden). Changing a password signs
+**Roles.** There is one **super admin** (the first admin login, plus Google owners) and a
+**branch admin** for each branch. The server enforces this on every request:
+
+| | Super admin | Branch admin |
+| --- | --- | --- |
+| Orders, refunds, reports | all branches | own branch only |
+| Menu | edit items, prices, photos; stock at any branch | stock (sold out / in stock) at own branch |
+| Employees | every branch | own branch |
+| Users (admin logins) | add, change, reset passwords, remove | — |
+
+Stock is per branch: customers see an item as sold out only at the branch they order from,
+and the server refuses an order with an item sold out at that branch.
+
+- **Name + password** — stored in MongoDB as salted hashes. The super admin adds branch
+  admins on the console's **Users** page. `npm run set-admin -- Admin` (typing is hidden)
+  creates the super admin or resets a password if nobody can sign in. Changing a password signs
   that admin out on every device. Eight wrong passwords lock the login for 15 minutes.
 - **User code** — after signing in on a device, an admin can set a 4–6 digit code; next
   time that device opens the console with just the code. The server checks the code, and

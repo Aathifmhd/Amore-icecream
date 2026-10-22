@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Plus, Search, Pencil, Trash2, Upload, Images, X, ImageOff } from 'lucide-react';
-import { MenuItem, ScoopItem } from '../../../types';
-import { CATALOG_PRESET_IMAGES } from '../../../data/iceCreamData';
+import { BranchId, MenuItem, ScoopItem } from '../../../types';
+import { AMORE_BRANCHES, CATALOG_PRESET_IMAGES } from '../../../data/iceCreamData';
 import {
   createCakeItem,
   createCoffeeItem,
@@ -9,14 +9,15 @@ import {
   deleteCakeItem,
   deleteCoffeeItem,
   deleteScoopItem,
-  toggleItemStockStatus,
+  setItemStock,
   updateCakeItem,
   updateCoffeeItem,
   updateScoopItem,
 } from '../../../utils/menuStorage';
 import { formatPrice } from '../../../utils/currency';
 import { Badge, Button, Card, Drawer, EmptyState, Field, Switch, cx, inputClass, useConsoleUi } from './ui';
-import { MenuData } from './useConsoleData';
+import { BranchFilter, MenuData } from './useConsoleData';
+import { isSoldOutAt } from '../../../utils/stock';
 import { uploadMenuPhoto } from '../../../utils/imageUpload';
 import { ApiError } from '../../../api';
 
@@ -28,6 +29,7 @@ const KINDS: { id: Kind; label: string }[] = [
   { id: 'cakes', label: 'Cakes' },
 ];
 const isScoop = (i: ScoopItem | MenuItem): i is ScoopItem => 'conePriceLKR' in i;
+const BRANCH_SHORT: Record<BranchId, string> = { akurana: 'Akurana', colombo: 'Colombo', arugambay: 'Arugam Bay' };
 
 // ---- Photo picker ----
 
@@ -112,12 +114,11 @@ interface Draft {
   doubleCup: string;
   popular: boolean;
   signature: boolean;
-  available: boolean;
 }
 
 const toDraft = (item?: ScoopItem | MenuItem): Draft => {
   if (!item)
-    return { name: '', tagline: '', description: '', image: '', price: '', cone: '', cup: '', doubleCone: '', doubleCup: '', popular: false, signature: false, available: true };
+    return { name: '', tagline: '', description: '', image: '', price: '', cone: '', cup: '', doubleCone: '', doubleCup: '', popular: false, signature: false };
   if (isScoop(item))
     return {
       name: item.name,
@@ -131,7 +132,6 @@ const toDraft = (item?: ScoopItem | MenuItem): Draft => {
       doubleCup: String(item.doubleCupPriceLKR ?? ''),
       popular: !!item.isPopular,
       signature: !!item.isIconic,
-      available: item.isAvailable !== false,
     };
   return {
     name: item.name,
@@ -145,7 +145,6 @@ const toDraft = (item?: ScoopItem | MenuItem): Draft => {
     doubleCup: '',
     popular: !!item.popular,
     signature: false,
-    available: item.isAvailable !== false,
   };
 };
 
@@ -175,7 +174,6 @@ const ItemEditor: React.FC<{ kind: Kind; item?: ScoopItem | MenuItem; onClose: (
         doubleCupPriceLKR: num(d.doubleCup) || Math.round(cup * 1.8),
         isPopular: d.popular,
         isIconic: d.signature,
-        isAvailable: d.available,
       };
       if (item) updateScoopItem(item.id, fields);
       else
@@ -198,7 +196,6 @@ const ItemEditor: React.FC<{ kind: Kind; item?: ScoopItem | MenuItem; onClose: (
         image,
         priceLKR: num(d.price),
         popular: d.popular,
-        isAvailable: d.available,
       };
       const update = kind === 'coffee' ? updateCoffeeItem : updateCakeItem;
       const create = kind === 'coffee' ? createCoffeeItem : createCakeItem;
@@ -213,7 +210,7 @@ const ItemEditor: React.FC<{ kind: Kind; item?: ScoopItem | MenuItem; onClose: (
     if (!item) return;
     const ok = await confirm({
       title: `Remove ${item.name} from the menu?`,
-      message: 'Customers will no longer see it. If it is only out for today, use “Sold out” instead.',
+      message: 'Customers at every branch will no longer see it. If it is only out for today, switch it to sold out instead.',
       confirmLabel: 'Remove',
       danger: true,
     });
@@ -252,13 +249,9 @@ const ItemEditor: React.FC<{ kind: Kind; item?: ScoopItem | MenuItem; onClose: (
       }
     >
       <div className="space-y-5">
-        <div className="flex items-center justify-between rounded-xl bg-white border border-[#EAE2D6] px-4 py-3">
-          <div>
-            <p className="font-semibold text-[#241A18]">{d.available ? 'In stock' : 'Sold out'}</p>
-            <p className="text-xs text-[#7A6458]">{d.available ? 'Customers can order it' : 'Shown as sold out on the website'}</p>
-          </div>
-          <Switch checked={d.available} onChange={(v) => set('available', v)} label="In stock" />
-        </div>
+        <p className="text-xs text-[#7A6458] rounded-xl bg-[#F7F3EC] px-4 py-3">
+          Changes here apply to all three branches. Each branch switches its own stock (in stock / sold out) in the list.
+        </p>
 
         <Field label="Photo">
           <PhotoPicker value={d.image} onChange={(url) => set('image', url)} />
@@ -307,7 +300,11 @@ const ItemEditor: React.FC<{ kind: Kind; item?: ScoopItem | MenuItem; onClose: (
 
 // ---- List ----
 
-export const MenuView: React.FC<{ menu: MenuData }> = ({ menu }) => {
+/**
+ * The menu and its stock. The super admin edits items (for all branches); each branch admin
+ * only switches stock for their own branch. `branch` is the branch being looked at.
+ */
+export const MenuView: React.FC<{ menu: MenuData; branch: BranchFilter; canEdit: boolean }> = ({ menu, branch, canEdit }) => {
   const { toast } = useConsoleUi();
   const [kind, setKind] = useState<Kind>('scoops');
   const [query, setQuery] = useState('');
@@ -316,7 +313,15 @@ export const MenuView: React.FC<{ menu: MenuData }> = ({ menu }) => {
   const items: (ScoopItem | MenuItem)[] = kind === 'scoops' ? menu.scoops : kind === 'coffee' ? menu.coffee : menu.cakes;
   const q = query.trim().toLowerCase();
   const shown = useMemo(() => (q ? items.filter((i) => i.name.toLowerCase().includes(q)) : items), [items, q]);
-  const soldOut = items.filter((i) => i.isAvailable === false).length;
+  const soldOutWhere = (i: ScoopItem | MenuItem) => AMORE_BRANCHES.map((b) => b.id).filter((b) => isSoldOutAt(i, b));
+  const soldOut = items.filter((i) => (branch === 'all' ? soldOutWhere(i).length > 0 : isSoldOutAt(i, branch))).length;
+  const where = branch === 'all' ? '' : ` at ${BRANCH_SHORT[branch]}`;
+
+  const switchStock = (i: ScoopItem | MenuItem, b: BranchId) => {
+    const inStock = isSoldOutAt(i, b);
+    setItemStock(i.id, kind, b, inStock);
+    toast(`${i.name} ${inStock ? 'back in stock' : 'marked sold out'} at ${BRANCH_SHORT[b]}`);
+  };
 
   const priceText = (i: ScoopItem | MenuItem) =>
     isScoop(i) ? `Cone ${lkr(i.conePriceLKR)} · Cup ${lkr(i.biscuitCupPriceLKR)}` : lkr(i.priceLKR);
@@ -357,19 +362,26 @@ export const MenuView: React.FC<{ menu: MenuData }> = ({ menu }) => {
               </button>
             )}
           </div>
-          <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setEditor({})}>
-            <span className="hidden sm:inline">Add item</span>
-          </Button>
+          {canEdit && (
+            <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setEditor({})}>
+              <span className="hidden sm:inline">Add item</span>
+            </Button>
+          )}
         </div>
       </div>
 
       <p className="text-sm text-[#6B5A51]">
         {soldOut > 0 ? (
           <>
-            <strong className="text-[#241A18]">{soldOut} sold out</strong> · flip the switch when an item is back.
+            <strong className="text-[#241A18]">
+              {soldOut} sold out{branch === 'all' ? ' somewhere' : where}
+            </strong>{' '}
+            · {branch === 'all' ? 'tap a branch to switch its stock.' : 'flip the switch when an item is back.'}
           </>
+        ) : branch === 'all' ? (
+          'Everything is in stock at all branches. Tap a branch to mark an item sold out there.'
         ) : (
-          'Everything is in stock. Flip the switch to mark an item sold out.'
+          `Everything is in stock${where}. Flip the switch to mark an item sold out.`
         )}
       </p>
 
@@ -378,40 +390,71 @@ export const MenuView: React.FC<{ menu: MenuData }> = ({ menu }) => {
           <EmptyState title="No items found" />
         ) : (
           shown.map((i) => {
-            const available = i.isAvailable !== false;
+            const soldOutAt = soldOutWhere(i);
+            const available = branch === 'all' ? soldOutAt.length === 0 : !soldOutAt.includes(branch);
+            const details = (
+              <>
+                <span className="w-14 h-14 rounded-xl overflow-hidden bg-[#F3EDE3] shrink-0">
+                  {i.image && <img src={i.image} alt="" loading="lazy" className={cx('w-full h-full object-cover', !available && 'grayscale opacity-60')} referrerPolicy="no-referrer" />}
+                </span>
+                <span className="min-w-0">
+                  <span className="flex items-center gap-2">
+                    <span className={cx('font-semibold truncate', canEdit && 'group-hover:underline', available ? 'text-[#241A18]' : 'text-[#8A7970]')}>{i.name}</span>
+                    {!available && branch !== 'all' && <Badge tone="grey">Sold out</Badge>}
+                  </span>
+                  <span className="block text-sm text-[#7A6458] truncate">{priceText(i)}</span>
+                </span>
+              </>
+            );
             return (
-              <div key={i.id} className="flex items-center gap-3 px-3 sm:px-4 py-3">
-                <button type="button" onClick={() => setEditor({ item: i })} className="flex items-center gap-3 min-w-0 flex-1 text-left cursor-pointer group">
-                  <span className="w-14 h-14 rounded-xl overflow-hidden bg-[#F3EDE3] shrink-0">
-                    {i.image && <img src={i.image} alt="" loading="lazy" className={cx('w-full h-full object-cover', !available && 'grayscale opacity-60')} referrerPolicy="no-referrer" />}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="flex items-center gap-2">
-                      <span className={cx('font-semibold truncate group-hover:underline', available ? 'text-[#241A18]' : 'text-[#8A7970]')}>{i.name}</span>
-                      {!available && <Badge tone="grey">Sold out</Badge>}
-                    </span>
-                    <span className="block text-sm text-[#7A6458] truncate">{priceText(i)}</span>
-                  </span>
-                </button>
-                <span className="hidden sm:block text-sm w-20 text-right text-[#5C4D44]">{available ? 'In stock' : 'Sold out'}</span>
-                <Switch
-                  checked={available}
-                  label={`${i.name} in stock`}
-                  onChange={() => {
-                    toggleItemStockStatus(i.id, kind);
-                    toast(`${i.name} ${available ? 'marked sold out' : 'back in stock'}`);
-                  }}
-                />
-                <Button size="sm" variant="ghost" aria-label={`Edit ${i.name}`} onClick={() => setEditor({ item: i })} icon={<Pencil className="w-4 h-4" />}>
-                  <span className="hidden md:inline">Edit</span>
-                </Button>
+              <div key={i.id} className="flex flex-wrap sm:flex-nowrap items-center gap-3 px-3 sm:px-4 py-3">
+                {canEdit ? (
+                  <button type="button" onClick={() => setEditor({ item: i })} className="flex items-center gap-3 min-w-0 flex-1 text-left cursor-pointer group">
+                    {details}
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-3 min-w-0 flex-1">{details}</div>
+                )}
+                {branch === 'all' ? (
+                  // One chip per branch: green = in stock there, grey = sold out there
+                  <div className="flex gap-1.5 w-full sm:w-auto" role="group" aria-label={`${i.name} stock by branch`}>
+                    {AMORE_BRANCHES.map((b) => {
+                      const out = soldOutAt.includes(b.id);
+                      return (
+                        <button
+                          key={b.id}
+                          type="button"
+                          aria-pressed={!out}
+                          title={`${BRANCH_SHORT[b.id]}: ${out ? 'sold out — tap when back in stock' : 'in stock — tap to mark sold out'}`}
+                          onClick={() => switchStock(i, b.id)}
+                          className={cx(
+                            'h-8 px-2.5 rounded-full text-xs font-semibold border cursor-pointer whitespace-nowrap',
+                            out ? 'bg-[#F3EDE3] text-[#8A7970] border-[#E2D8CA] line-through' : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          )}
+                        >
+                          {BRANCH_SHORT[b.id]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <>
+                    <span className="hidden sm:block text-sm w-20 text-right text-[#5C4D44]">{available ? 'In stock' : 'Sold out'}</span>
+                    <Switch checked={available} label={`${i.name} in stock at ${BRANCH_SHORT[branch]}`} onChange={() => switchStock(i, branch)} />
+                  </>
+                )}
+                {canEdit && (
+                  <Button size="sm" variant="ghost" aria-label={`Edit ${i.name}`} onClick={() => setEditor({ item: i })} icon={<Pencil className="w-4 h-4" />}>
+                    <span className="hidden md:inline">Edit</span>
+                  </Button>
+                )}
               </div>
             );
           })
         )}
       </Card>
 
-      {editor && <ItemEditor kind={kind} item={editor.item} onClose={() => setEditor(null)} />}
+      {canEdit && editor && <ItemEditor kind={kind} item={editor.item} onClose={() => setEditor(null)} />}
     </div>
   );
 };

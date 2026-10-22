@@ -15,11 +15,19 @@ const FREE_DELIVERY_FROM = 3000;
 type Pick = { key: string; item: ScoopItem | MenuItem; kind: 'scoop' | 'coffee' | 'cake' };
 
 /** Record a phone or walk-in order. It starts as accepted, ready to prepare. */
-export const NewOrderDialog: React.FC<{ open: boolean; onClose: () => void; menu: MenuData; defaultBranch: BranchId }> = ({
+export const NewOrderDialog: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  menu: MenuData;
+  defaultBranch: BranchId;
+  /** A branch admin can only add orders for their own branch. */
+  lockBranch?: boolean;
+}> = ({
   open,
   onClose,
   menu,
   defaultBranch,
+  lockBranch,
 }) => {
   const { toast } = useConsoleUi();
   const [name, setName] = useState('');
@@ -126,7 +134,7 @@ export const NewOrderDialog: React.FC<{ open: boolean; onClose: () => void; menu
             <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" className={inputClass} placeholder="07X XXX XXXX" />
           </Field>
           <Field label="Branch">
-            <select value={branch} onChange={(e) => setBranch(e.target.value as BranchId)} className={inputClass}>
+            <select value={branch} onChange={(e) => setBranch(e.target.value as BranchId)} disabled={lockBranch} className={inputClass}>
               {AMORE_BRANCHES.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}

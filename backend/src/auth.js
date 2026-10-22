@@ -14,6 +14,12 @@ import { col, getSetting, setSetting, now } from './db.js';
  *   User code   an admin can set a 4–6 digit code on a device. The code is checked here, with a
  *               limit on wrong tries, so it can't be guessed offline.
  *
+ * Admin roles
+ *   superadmin  everything, and the only one who can add, change or remove admin logins.
+ *               The first admin (and Google owners) are super admins.
+ *   branch      one branch (`branchId`): its orders, refunds, reports, stock and employees.
+ *               The role is read from the database on every request, so changes apply at once.
+ *
  * Every request sends `Authorization: Bearer <session>`: admin sessions start with "adm.",
  * customer sessions with "cus.".
  */
@@ -63,20 +69,33 @@ const sha256 = (s) => crypto.createHash('sha256').update(s).digest('base64');
 
 export const usernameKey = (name) => String(name || '').trim().toLowerCase();
 
-/** Create or update an admin login (used by the set-admin script and the first-start seed). */
+export const BRANCHES = ['akurana', 'colombo', 'arugambay'];
+
+function checkLogin(key, password) {
+  if (!/^[a-z0-9._-]{2,40}$/.test(key)) throw new HttpError(400, 'Login name: 2–40 letters, digits, dot, dash or underscore (no spaces)');
+  if (password !== undefined && String(password).length < 8) throw new HttpError(400, 'The password must be at least 8 characters');
+}
+
+/** Set a password: signs that admin out everywhere and forgets the user codes on their devices. */
+async function passwordFields(password) {
+  const { salt, hash } = await hashSecret(password);
+  return { salt, hash, failedLogins: 0, lockedUntil: null };
+}
+
+/**
+ * Create or update an admin login from the set-admin script (or the first-start seed).
+ * A new login made this way is a super admin; an existing one keeps its role.
+ */
 export async function upsertAdmin(username, password) {
   const key = usernameKey(username);
-  if (!/^[a-z0-9._-]{2,40}$/.test(key)) throw new Error('Admin name: 2–40 letters, digits, dot, dash or underscore');
-  if (String(password).length < 8) throw new Error('Password must be at least 8 characters');
-  const { salt, hash } = await hashSecret(password);
+  checkLogin(key, password);
   const existing = await col('admins').findOne({ username: key });
   await col('admins').updateOne(
     { username: key },
     {
-      $set: { username: key, displayName: String(username).trim(), salt, hash, failedLogins: 0, lockedUntil: null, updatedAt: now() },
-      // A new password signs out every device and forgets their user codes
+      $set: { username: key, ...(await passwordFields(password)), updatedAt: now() },
       $inc: { sessionVersion: 1 },
-      $setOnInsert: { createdAt: now() },
+      $setOnInsert: { displayName: String(username).trim(), role: 'superadmin', createdAt: now() },
     },
     { upsert: true }
   );
@@ -91,6 +110,8 @@ export async function initAuth() {
     await upsertAdmin(ADMIN_USERNAME, ADMIN_PASSWORD);
     console.log(`Created admin login "${ADMIN_USERNAME}"`);
   }
+  // Admins from before roles existed were the only (super) admin
+  await col('admins').updateMany({ role: { $exists: false } }, { $set: { role: 'superadmin' } });
   await sessionSecret();
 }
 
@@ -145,15 +166,24 @@ export async function issueAdminSession(admin) {
 
 export const publicAdmin = (admin) =>
   admin.google
-    ? { username: admin.email, displayName: admin.name || admin.email, google: true }
-    : { username: admin.username, displayName: admin.displayName || admin.username, google: false };
+    ? { username: admin.email, displayName: admin.name || admin.email, google: true, role: 'superadmin', branchId: null }
+    : {
+        username: admin.username,
+        displayName: admin.displayName || admin.username,
+        google: false,
+        role: admin.role === 'branch' ? 'branch' : 'superadmin',
+        branchId: admin.role === 'branch' ? admin.branchId : null,
+      };
+
+/** The branch a branch admin is limited to, or null for a super admin. */
+export const adminBranch = (admin) => (admin?.role === 'branch' ? admin.branchId : null);
 
 async function adminFromToken(token) {
   const payload = await readToken(token);
   if (!payload) return null;
   if (payload.sub.startsWith('google:')) {
     const email = payload.sub.slice('google:'.length);
-    return ownerEmails().includes(email) ? { google: true, email, username: email } : null;
+    return ownerEmails().includes(email) ? { google: true, email, username: email, role: 'superadmin' } : null;
   }
   const admin = await col('admins').findOne({ username: payload.sub });
   if (!admin || (admin.sessionVersion ?? 0) !== payload.ver) return null;
@@ -214,6 +244,12 @@ export async function identify(req, res, next) {
 
 export function requireAdmin(req, res, next) {
   if (!req.admin) throw new HttpError(401, 'Admin sign-in needed');
+  next();
+}
+
+export function requireSuperAdmin(req, res, next) {
+  if (!req.admin) throw new HttpError(401, 'Admin sign-in needed');
+  if (adminBranch(req.admin)) throw new HttpError(403, 'Only the super admin can do this');
   next();
 }
 
@@ -296,7 +332,7 @@ export async function unlockWithCode(deviceId, deviceSecret, code) {
 
   let admin;
   if (device.google) {
-    admin = ownerEmails().includes(device.username) ? { google: true, email: device.username, name: device.displayName } : null;
+    admin = ownerEmails().includes(device.username) ? { google: true, email: device.username, name: device.displayName, role: 'superadmin' } : null;
   } else {
     admin = await col('admins').findOne({ username: device.username });
     if (admin && (admin.sessionVersion ?? 0) !== device.sessionVersion) admin = null; // password changed since
@@ -322,4 +358,82 @@ export async function unlockWithCode(deviceId, deviceSecret, code) {
 export async function forgetDevice(deviceId, deviceSecret) {
   const device = await findDevice(deviceId, deviceSecret);
   if (device) await col('admin_devices').deleteOne({ deviceId });
+}
+
+// ---- Managing admin logins (super admin only; see routes/users.js) ----------------
+
+const userFields = (a) => ({
+  ...publicAdmin(a),
+  createdAt: a.createdAt || null,
+  lastLoginAt: a.lastLoginAt || null,
+  locked: Boolean(a.lockedUntil && new Date(a.lockedUntil) > new Date()),
+});
+
+export async function listAdmins() {
+  const admins = await col('admins').find({}, { projection: { salt: 0, hash: 0 } }).toArray();
+  return admins.map(userFields).sort((a, b) => (a.role === b.role ? a.displayName.localeCompare(b.displayName) : a.role === 'superadmin' ? -1 : 1));
+}
+
+/** Add a branch admin. */
+export async function createBranchAdmin({ username, displayName, branchId, password }) {
+  const key = usernameKey(username);
+  checkLogin(key, password ?? '');
+  if (!BRANCHES.includes(branchId)) throw new HttpError(400, 'Choose a branch');
+  const name = String(displayName || '').trim() || String(username).trim();
+  if (name.length > 60) throw new HttpError(400, 'The name is too long');
+  try {
+    await col('admins').insertOne({
+      username: key,
+      displayName: name,
+      role: 'branch',
+      branchId,
+      ...(await passwordFields(password)),
+      sessionVersion: 1,
+      createdAt: now(),
+      updatedAt: now(),
+    });
+  } catch (err) {
+    if (err.code === 11000) throw new HttpError(409, `The login name "${key}" is already taken`);
+    throw err;
+  }
+  return userFields(await col('admins').findOne({ username: key }));
+}
+
+/** Change an admin's name, branch or password, or lift a sign-in lock. */
+export async function updateAdmin(username, { displayName, branchId, password, unlock }, actingAdmin) {
+  const key = usernameKey(username);
+  const admin = await col('admins').findOne({ username: key });
+  if (!admin) throw new HttpError(404, 'No such admin');
+  const set = { updatedAt: now() };
+  if (displayName !== undefined) {
+    const name = String(displayName).trim();
+    if (!name || name.length > 60) throw new HttpError(400, 'Enter a name (up to 60 characters)');
+    set.displayName = name;
+  }
+  if (branchId !== undefined) {
+    if (admin.role !== 'branch') throw new HttpError(400, 'The super admin is not tied to a branch');
+    if (!BRANCHES.includes(branchId)) throw new HttpError(400, 'Choose a branch');
+    set.branchId = branchId;
+  }
+  if (password !== undefined && password !== '') {
+    checkLogin(key, password);
+    Object.assign(set, await passwordFields(password));
+  } else if (unlock) {
+    Object.assign(set, { failedLogins: 0, lockedUntil: null });
+  }
+  const newPassword = password !== undefined && password !== '';
+  await col('admins').updateOne({ username: key }, { $set: set, ...(newPassword && { $inc: { sessionVersion: 1 } }) });
+  if (newPassword) await col('admin_devices').deleteMany({ username: key });
+  return { user: userFields(await col('admins').findOne({ username: key })), signedOutSelf: newPassword && key === actingAdmin?.username };
+}
+
+/** Remove a branch admin. Super admins can't be removed here (and nobody can remove themselves). */
+export async function deleteAdmin(username, actingAdmin) {
+  const key = usernameKey(username);
+  if (key === actingAdmin?.username) throw new HttpError(400, "You can't remove your own login");
+  const admin = await col('admins').findOne({ username: key });
+  if (!admin) throw new HttpError(404, 'No such admin');
+  if (admin.role !== 'branch') throw new HttpError(403, "The super admin login can't be removed");
+  await col('admins').deleteOne({ username: key });
+  await col('admin_devices').deleteMany({ username: key });
 }

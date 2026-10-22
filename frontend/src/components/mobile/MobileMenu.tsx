@@ -4,7 +4,8 @@ import { BranchId, Currency, MenuItem, MenuTab, ScoopItem, SelectedOrderItem } f
 import { AMORE_BRANCHES } from '../../data/iceCreamData';
 import { formatPrice } from '../../utils/currency';
 import { CurrencyToggle } from '../CurrencyToggle';
-import { isScoop, isSoldOut, startingPriceLKR, useMenuItems } from './mobileHooks';
+import { isScoop, startingPriceLKR, useMenuItems } from './mobileHooks';
+import { useIsSoldOut } from '../../utils/stock';
 
 interface MobileMenuProps {
   currency: Currency;
@@ -28,6 +29,8 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
   onOpenItem,
   onQuickAdd,
 }) => {
+  // Sold out at the branch the customer has picked
+  const soldOutHere = useIsSoldOut();
   const { scoops, coffee, cakes } = useMenuItems();
   const [tab, setTab] = useState<MenuTab>(initialTab);
   const [query, setQuery] = useState('');
@@ -182,7 +185,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
             <ul key={tab} className="bg-white rounded-3xl border border-[#E8DFC8] divide-y divide-[#F0E8DC] overflow-hidden">
               {section.items.map((item, idx) => {
                 const scoop = isScoop(item) ? item : null;
-                const soldOut = isSoldOut(item);
+                const soldOut = soldOutHere(item);
                 const inTray = qtyInTray[item.id] || 0;
                 const badge = scoop?.isIconic
                   ? 'Signature'

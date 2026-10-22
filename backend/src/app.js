@@ -8,6 +8,8 @@ import menu from './routes/menu.js';
 import images from './routes/images.js';
 import admin from './routes/admin.js';
 import customerAuth from './routes/auth.js';
+import users from './routes/users.js';
+import employees from './routes/employees.js';
 
 export function createApp() {
   const app = express();
@@ -25,7 +27,9 @@ export function createApp() {
     res.json({ ok: true, database: DB_LABEL });
   });
   app.use('/api/auth', customerAuth);
+  app.use('/api/admin/users', users);
   app.use('/api/admin', admin);
+  app.use('/api/employees', employees);
   app.use('/api/orders', orders);
   app.use('/api/menu', menu);
   app.use('/api/images', images);

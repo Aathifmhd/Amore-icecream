@@ -17,7 +17,12 @@ const method = (o: OrderRecord) => (o.paymentMethod === 'card' ? 'Back to card' 
 
 // ---- Add / edit ----
 
-const RefundForm: React.FC<{ editing?: OrderRecord; defaultBranch: BranchId; onClose: () => void }> = ({ editing, defaultBranch, onClose }) => {
+const RefundForm: React.FC<{ editing?: OrderRecord; defaultBranch: BranchId; lockBranch: boolean; onClose: () => void }> = ({
+  editing,
+  defaultBranch,
+  lockBranch,
+  onClose,
+}) => {
   const { toast } = useConsoleUi();
   const [name, setName] = useState(editing?.customerName || '');
   const [phone, setPhone] = useState(editing?.contactNumber || '');
@@ -84,7 +89,7 @@ const RefundForm: React.FC<{ editing?: OrderRecord; defaultBranch: BranchId; onC
         </Field>
         {!editing && (
           <Field label="Branch">
-            <select value={branch} onChange={(e) => setBranch(e.target.value as BranchId)} className={inputClass}>
+            <select value={branch} onChange={(e) => setBranch(e.target.value as BranchId)} disabled={lockBranch} className={inputClass}>
               {AMORE_BRANCHES.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
@@ -128,7 +133,7 @@ const RefundForm: React.FC<{ editing?: OrderRecord; defaultBranch: BranchId; onC
 
 // ---- List ----
 
-export const RefundsView: React.FC<{ orders: OrderRecord[]; branch: BranchFilter }> = ({ orders, branch }) => {
+export const RefundsView: React.FC<{ orders: OrderRecord[]; branch: BranchFilter; lockedBranch: BranchId | null }> = ({ orders, branch, lockedBranch }) => {
   const { confirm, toast } = useConsoleUi();
   const [tab, setTab] = useState<'pending' | 'done'>('pending');
   const [form, setForm] = useState<{ editing?: OrderRecord } | null>(null);
@@ -247,7 +252,7 @@ export const RefundsView: React.FC<{ orders: OrderRecord[]; branch: BranchFilter
       )}
 
       {form && (
-        <RefundForm editing={form.editing} defaultBranch={branch === 'all' ? 'akurana' : branch} onClose={() => setForm(null)} />
+        <RefundForm editing={form.editing} defaultBranch={branch === 'all' ? 'akurana' : branch} lockBranch={Boolean(lockedBranch)} onClose={() => setForm(null)} />
       )}
       <CustomerMessageDialog order={messageFor} onClose={() => setMessageFor(null)} />
     </div>

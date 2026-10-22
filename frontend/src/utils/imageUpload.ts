@@ -39,3 +39,18 @@ export async function uploadMenuPhoto(file: File): Promise<string> {
   const { url } = await api<{ url: string }>('/images', { method: 'POST', file: blob, as: 'admin' });
   return url;
 }
+
+/**
+ * A small photo kept inside a private record (e.g. an employee), as a data URL, instead of
+ * being uploaded where anyone with the link could see it.
+ */
+export async function photoDataUrl(file: File, maxDimension = 320): Promise<string> {
+  const blob = await compressImageClientSide(file, maxDimension, 0.8);
+  if (!/^image\/(jpeg|png|webp)$/.test(blob.type)) throw new Error('Use a JPEG, PNG or WebP photo');
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Could not read the photo'));
+    reader.readAsDataURL(blob);
+  });
+}

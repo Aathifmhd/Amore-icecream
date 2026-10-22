@@ -1,3 +1,5 @@
+import type { BranchId } from './types';
+
 /**
  * Talks to the Amore backend (/api — see backend/ in this repository).
  *
@@ -17,10 +19,14 @@ export class ApiError extends Error {
 
 // ---- Admin session ---------------------------------------------------------
 
+export type AdminRole = 'superadmin' | 'branch';
 export interface AdminProfile {
   username: string;
   displayName: string;
   google: boolean;
+  /** superadmin: everything, incl. admin logins. branch: one branch (branchId) only. */
+  role: AdminRole;
+  branchId: BranchId | null;
 }
 export interface AdminSession {
   token: string;

@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Minus, Plus, X, Cookie, IceCreamCone } from 'lucide-react';
 import { Currency, MenuItem, ScoopItem, SelectedOrderItem, ServingFormat } from '../../types';
 import { formatPrice } from '../../utils/currency';
-import { isScoop, isSoldOut } from './mobileHooks';
+import { isScoop } from './mobileHooks';
+import { useIsSoldOut } from '../../utils/stock';
 
 interface ItemSheetProps {
   item: ScoopItem | MenuItem;
@@ -13,10 +14,12 @@ interface ItemSheetProps {
 
 /** Bottom sheet for choosing cone/cup and quantity before adding to the tray. */
 export const ItemSheet: React.FC<ItemSheetProps> = ({ item, currency, onClose, onAdd }) => {
+  // Sold out at the branch the customer has picked
+  const soldOutHere = useIsSoldOut();
   const scoop = isScoop(item) ? item : null;
   const [format, setFormat] = useState<ServingFormat>('waffle-cone');
   const [qty, setQty] = useState(1);
-  const soldOut = isSoldOut(item);
+  const soldOut = soldOutHere(item);
 
   // Lock the page behind the sheet and close on Escape
   useEffect(() => {

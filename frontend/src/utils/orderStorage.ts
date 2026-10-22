@@ -108,6 +108,16 @@ export function clearSessionOrderRefs(): void {
   }
 }
 
+/** Forget the orders kept on this device (e.g. when a different admin signs in here). */
+export function clearOrdersCache(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* storage blocked */
+  }
+  notifyOrdersUpdated();
+}
+
 export function getAllOrders(): Record<string, OrderRecord> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);

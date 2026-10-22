@@ -45,7 +45,6 @@ export function useMenuItems() {
 
 export const isScoop = (item: ScoopItem | MenuItem): item is ScoopItem => 'tastingNotes' in item;
 
-export const isSoldOut = (item: ScoopItem | MenuItem) => item.isAvailable === false;
 
 /** Lowest price of an item, for "from LKR …" labels. */
 export const startingPriceLKR = (item: ScoopItem | MenuItem) =>

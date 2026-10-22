@@ -27,6 +27,7 @@ import {
   Plus,
   AlertCircle,
 } from 'lucide-react';
+import { useIsSoldOut } from '../utils/stock';
 
 interface MobileFullMenuPageProps {
   currency: Currency;
@@ -55,6 +56,8 @@ export const MobileFullMenuPage: React.FC<MobileFullMenuPageProps> = ({
   onBackToHome,
   initialTab = 'all',
 }) => {
+  // Sold out at the branch the customer has picked
+  const soldOutHere = useIsSoldOut();
   const [activeTab, setActiveTab] = useState<MenuTab>(initialTab);
   const [searchQuery, setSearchQuery] = useState('');
   const [dietaryFilter, setDietaryFilter] = useState<string>('all');
@@ -389,7 +392,7 @@ export const MobileFullMenuPage: React.FC<MobileFullMenuPageProps> = ({
               {filteredScoops.map((scoop) => {
                 const inTray = trayItemMap[scoop.id];
                 const isJustAdded = justAddedId === scoop.id;
-                const isSoldOut = scoop.isAvailable === false;
+                const isSoldOut = soldOutHere(scoop);
 
                 return (
                   <div
@@ -550,7 +553,7 @@ export const MobileFullMenuPage: React.FC<MobileFullMenuPageProps> = ({
               {filteredCoffee.map((item) => {
                 const inTray = trayItemMap[item.id];
                 const isOrdered = !!inTray;
-                const isSoldOut = item.isAvailable === false;
+                const isSoldOut = soldOutHere(item);
 
                 return (
                   <div
@@ -714,7 +717,7 @@ export const MobileFullMenuPage: React.FC<MobileFullMenuPageProps> = ({
               {filteredCakes.map((cake) => {
                 const inTray = trayItemMap[cake.id];
                 const isOrdered = !!inTray;
-                const isSoldOut = cake.isAvailable === false;
+                const isSoldOut = soldOutHere(cake);
 
                 return (
                   <div

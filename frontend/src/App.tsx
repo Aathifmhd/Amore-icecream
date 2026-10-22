@@ -23,6 +23,7 @@ import { formatPrice } from './utils/currency';
 import { ShoppingBag } from 'lucide-react';
 import { getUserOrdersList, ORDERS_UPDATED_EVENT } from './utils/orderStorage';
 import { SYNC_ERROR_EVENT } from './utils/outbox';
+import { useCustomerBranch } from './utils/stock';
 import {
   getAllGelatoFlavours,
   syncMenuFromServer,
@@ -72,13 +73,14 @@ const AdminArea: React.FC<{
   currency: Currency;
   onToggleCurrency: (c: Currency) => void;
 }> = ({ onBackToStore, currency, onToggleCurrency }) => {
-  const { gate, deviceName } = useAdminGate();
+  const { gate, admin, deviceName } = useAdminGate();
   if (gate === 'checking') return <PageLoader />;
   const codeOnThisDevice = deviceName !== null;
   return (
     <Suspense fallback={<PageLoader />}>
-      {gate === 'open' ? (
+      {gate === 'open' && admin ? (
         <AdminDashboard
+          admin={admin}
           // With a user code set, "Lock" closes the console until the code is entered again;
           // otherwise this is a full sign-out.
           signOutLabel={codeOnThisDevice ? 'Lock' : 'Sign Out'}
@@ -95,7 +97,7 @@ const AdminArea: React.FC<{
           onToggleCurrency={onToggleCurrency}
         />
       ) : (
-        <AdminLogin gate={gate} deviceName={deviceName} onBackToStore={onBackToStore} />
+        <AdminLogin gate={gate === 'open' ? 'checking' : gate} deviceName={deviceName} onBackToStore={onBackToStore} />
       )}
     </Suspense>
   );
@@ -117,7 +119,8 @@ export default function App() {
   const isMobile = useIsMobile();
   const [menuTab, setMenuTab] = useState<MenuTab>('all');
   const [currency, setCurrency] = useState<Currency>('LKR');
-  const [selectedBranch, setSelectedBranch] = useState<BranchId>('akurana');
+  // Shared with the sold-out checks, which show stock for this branch
+  const [selectedBranch, setSelectedBranch] = useCustomerBranch();
 
   // Product Detail Modal
   const [detailItem, setDetailItem] = useState<ScoopItem | MenuItem | null>(null);

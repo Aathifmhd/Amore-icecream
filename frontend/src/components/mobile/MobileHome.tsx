@@ -6,7 +6,8 @@ import { formatPrice } from '../../utils/currency';
 import { AmoreLogo } from '../AmoreLogo';
 import { CurrencyToggle } from '../CurrencyToggle';
 import { OverflowRibbon } from '../BrandFlourish';
-import { isSoldOut, startingPriceLKR, useMenuItems, Reveal } from './mobileHooks';
+import { startingPriceLKR, useMenuItems, Reveal } from './mobileHooks';
+import { useIsSoldOut } from '../../utils/stock';
 
 const HERO_SLIDES = [
   { src: ASSET_IMAGES.durianScoop, alt: 'Durian ice cream in an edible biscuit cup', caption: 'Our iconic Durian', position: 'center 40%' },
@@ -32,6 +33,8 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
   onOpenMenu,
   onOpenItem,
 }) => {
+  // Sold out at the branch the customer has picked
+  const soldOutHere = useIsSoldOut();
   const { scoops, coffee, cakes } = useMenuItems();
   const [slideIndex, setSlideIndex] = useState(0);
 
@@ -43,7 +46,7 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
   }, [slideIndex]);
 
   const branch = AMORE_BRANCHES.find((b) => b.id === selectedBranch) || AMORE_BRANCHES[0];
-  const favourites = scoops.filter((s) => (s.isPopular || s.isIconic) && !isSoldOut(s)).slice(0, 8);
+  const favourites = scoops.filter((s) => (s.isPopular || s.isIconic) && !soldOutHere(s)).slice(0, 8);
   const durian = scoops.find((s) => s.id === 'durian-best');
 
   const categories: { tab: MenuTab; label: string; count: number; image?: string }[] = [

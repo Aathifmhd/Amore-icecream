@@ -11,6 +11,7 @@ import {
 import { formatPrice } from '../utils/currency';
 import { CurrencyToggle } from './CurrencyToggle';
 import { Search, Sparkles, Cookie, Coffee, Cake, Check, Heart, ArrowRight, X, Plus, AlertCircle } from 'lucide-react';
+import { useIsSoldOut } from '../utils/stock';
 
 interface FullMenuProps {
   currency: Currency;
@@ -33,6 +34,8 @@ export const FullMenu: React.FC<FullMenuProps> = ({
   onOpenTray,
   resetKey,
 }) => {
+  // Sold out at the branch the customer has picked
+  const soldOutHere = useIsSoldOut();
   const [activeTab, setActiveTab] = useState<MenuTab>('all');
   const [preferredFormat, setPreferredFormat] = useState<'both' | 'biscuit-cup' | 'waffle-cone'>('both');
   const [searchQuery, setSearchQuery] = useState('');
@@ -325,7 +328,7 @@ export const FullMenu: React.FC<FullMenuProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
               {displayedScoops.map((scoop) => {
-                const isSoldOut = scoop.isAvailable === false;
+                const isSoldOut = soldOutHere(scoop);
                 const isDurian = scoop.id === 'durian-best';
                 const isInTray = trayItemIds.has(scoop.id);
                 return (
@@ -701,7 +704,7 @@ export const FullMenu: React.FC<FullMenuProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {displayedCoffee.map((coffee) => {
-                const isSoldOut = coffee.isAvailable === false;
+                const isSoldOut = soldOutHere(coffee);
                 const isInTray = trayItemIds.has(coffee.id);
                 return (
                   <div
@@ -887,7 +890,7 @@ export const FullMenu: React.FC<FullMenuProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {displayedCakes.map((cake) => {
-                const isSoldOut = cake.isAvailable === false;
+                const isSoldOut = soldOutHere(cake);
                 const isInTray = trayItemIds.has(cake.id);
                 return (
                   <div

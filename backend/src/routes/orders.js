@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { col, now, PUBLIC } from '../db.js';
-import { HttpError, requireAdmin, requireCustomer } from '../auth.js';
+import { HttpError, adminBranch, requireAdmin, requireCustomer } from '../auth.js';
 import { newCustomerOrder, newAdminOrder, orderUpdate, checkDelete } from '../orderRules.js';
 
 const router = Router();
@@ -18,14 +18,39 @@ function sinceFilter(since) {
   return Number.isNaN(t) ? null : new Date(t - 10_000).toISOString();
 }
 
+// Branch admins only ever see their own branch's orders
+const scope = (req) => {
+  const branch = adminBranch(req.admin);
+  return branch ? { branchId: branch } : {};
+};
+
+/** An order this admin may see, or 404 (a branch admin isn't told other branches' orders exist). */
+async function findForAdmin(req, ref) {
+  const order = await findOrder(ref);
+  const branch = adminBranch(req.admin);
+  if (branch && order.branchId !== branch) throw new HttpError(404, 'Order not found');
+  return order;
+}
+
+/** Items in the order that the branch has marked sold out (or that were taken off the menu). */
+async function unavailableItems(order) {
+  const ids = [...new Set(order.items.map((i) => i.itemId))];
+  const docs = await col('menu_items')
+    .find({ id: { $in: ids } }, { projection: { _id: 0, id: 1, name: 1, isDeleted: 1, isAvailable: 1, soldOutAt: 1 } })
+    .toArray();
+  return docs
+    .filter((d) => d.isDeleted || d.isAvailable === false || d.soldOutAt?.includes(order.branchId))
+    .map((d) => d.name || order.items.find((i) => i.itemId === d.id)?.name || d.id);
+}
+
 // Admin: every order (or the ones changed since the last read) plus the ones deleted
 router.get('/', requireAdmin, async (req, res) => {
   const serverTime = now();
   const since = sinceFilter(req.query.since);
   const [orders, deleted] = await Promise.all([
-    col('orders').find(since ? { _syncedAt: { $gt: since } } : {}, PUBLIC).toArray(),
+    col('orders').find({ ...scope(req), ...(since && { _syncedAt: { $gt: since } }) }, PUBLIC).toArray(),
     col('deleted_orders')
-      .find(since ? { deletedAt: { $gt: since } } : {}, { projection: { _id: 0, orderReference: 1 } })
+      .find({ ...scope(req), ...(since && { deletedAt: { $gt: since } }) }, { projection: { _id: 0, orderReference: 1 } })
       .sort({ deletedAt: -1 })
       .limit(5000)
       .toArray(),
@@ -52,7 +77,7 @@ async function findOrder(ref) {
 // One order: admins, or the customer who placed it
 router.get('/:ref', async (req, res) => {
   if (!req.admin && !req.customer) throw new HttpError(401, 'Please sign in first');
-  const order = await findOrder(req.params.ref);
+  const order = req.admin ? await findForAdmin(req, req.params.ref) : await findOrder(req.params.ref);
   if (!req.admin && order.userId !== req.customer.uid) throw new HttpError(403, 'This is not your order');
   res.json({ order, serverTime: now() });
 });
@@ -61,7 +86,14 @@ router.post('/', async (req, res) => {
   if (!req.admin && !req.customer) throw new HttpError(401, 'Please sign in to place an order');
   const order = req.admin ? newAdminOrder(req.body) : newCustomerOrder(req.body, req.customer);
 
+  const branch = adminBranch(req.admin);
+  if (branch && order.branchId !== branch) throw new HttpError(403, 'You can only add orders for your own branch');
+
   if (!req.admin) {
+    const soldOut = await unavailableItems(order);
+    if (soldOut.length) {
+      throw new HttpError(409, `Sorry, ${soldOut.join(', ')} ${soldOut.length === 1 ? 'is' : 'are'} sold out at Amore ${order.branchName || order.branchId} right now. Please remove ${soldOut.length === 1 ? 'it' : 'them'} from your tray.`, { soldOut });
+    }
     const recent = await col('orders').countDocuments({
       userId: req.customer.uid,
       _placedAt: { $gt: new Date(Date.now() - 10 * 60_000).toISOString() },
@@ -83,7 +115,11 @@ router.post('/', async (req, res) => {
 
 router.patch('/:ref', async (req, res) => {
   if (!req.admin && !req.customer) throw new HttpError(401, 'Please sign in first');
-  const existing = await findOrder(req.params.ref);
+  const existing = req.admin ? await findForAdmin(req, req.params.ref) : await findOrder(req.params.ref);
+  const branch = adminBranch(req.admin);
+  if (branch && req.body?.branchId !== undefined && req.body.branchId !== branch) {
+    throw new HttpError(403, 'You can only keep orders in your own branch');
+  }
   const update = orderUpdate(req.body, existing, { admin: req.admin, customer: req.customer });
   const stamp = now();
   const order = await col('orders').findOneAndUpdate(
@@ -96,14 +132,14 @@ router.patch('/:ref', async (req, res) => {
 
 router.delete('/:ref', async (req, res) => {
   if (!req.admin && !req.customer) throw new HttpError(401, 'Please sign in first');
-  const existing = await col('orders').findOne({ orderReference: req.params.ref }, PUBLIC);
+  const existing = await col('orders').findOne({ orderReference: req.params.ref, ...scope(req) }, PUBLIC);
   if (!existing) return res.json({ deleted: false, serverTime: now() });
   checkDelete(existing, { admin: req.admin, customer: req.customer });
   const stamp = now();
   await col('orders').deleteOne({ orderReference: existing.orderReference });
   await col('deleted_orders').updateOne(
     { orderReference: existing.orderReference },
-    { $set: { orderReference: existing.orderReference, deletedAt: stamp } },
+    { $set: { orderReference: existing.orderReference, branchId: existing.branchId, deletedAt: stamp } },
     { upsert: true }
   );
   res.json({ deleted: true, serverTime: now() });

@@ -30,6 +30,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { type User } from '../customerAuth';
+import { useIsSoldOut } from '../utils/stock';
 
 interface MenuOrderingPageProps {
   currency: Currency;
@@ -64,6 +65,8 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
   onOpenOrdersModal,
   ordersCount,
 }) => {
+  // Sold out at the branch the customer has picked
+  const soldOutHere = useIsSoldOut();
   const [activeTab, setActiveTab] = useState<MenuTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [preferredFormat, setPreferredFormat] = useState<'both' | 'biscuit-cup' | 'waffle-cone'>('both');
@@ -507,7 +510,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
               {filteredScoops.map((scoop) => {
-                const isSoldOut = scoop.isAvailable === false;
+                const isSoldOut = soldOutHere(scoop);
                 const effectiveFormat = activeTab === 'scoops' ? preferredFormat : 'both';
                 const itemsOfThisScoopInTray = orderItems.filter((it) => it.itemId === scoop.id);
                 const hasAnyInTray = itemsOfThisScoopInTray.length > 0;
@@ -910,7 +913,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
               {filteredCoffee.map((coffee) => {
-                const isSoldOut = coffee.isAvailable === false;
+                const isSoldOut = soldOutHere(coffee);
                 const inTray = trayItemMap[coffee.id];
                 const isOrdered = !!inTray;
 
@@ -1118,7 +1121,7 @@ export const MenuOrderingPage: React.FC<MenuOrderingPageProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
               {filteredCakes.map((cake) => {
-                const isSoldOut = cake.isAvailable === false;
+                const isSoldOut = soldOutHere(cake);
                 const inTray = trayItemMap[cake.id];
                 const isOrdered = !!inTray;
 

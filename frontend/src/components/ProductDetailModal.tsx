@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ScoopItem, MenuItem, Currency, SelectedOrderItem } from '../types';
 import { formatPrice } from '../utils/currency';
 import { X, Check, ShoppingBag, ArrowLeft, AlertCircle } from 'lucide-react';
+import { useIsSoldOut } from '../utils/stock';
 
 interface ProductDetailModalProps {
   item: ScoopItem | MenuItem | null;
@@ -20,6 +21,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   onOpenTray,
   isAlreadyInTray = false,
 }) => {
+  // Sold out at the branch the customer has picked
+  const soldOutHere = useIsSoldOut();
   const [quantity, setQuantity] = useState<number>(1);
   const [hasAddedToTray, setHasAddedToTray] = useState<boolean>(isAlreadyInTray);
 
@@ -32,7 +35,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
   if (!item) return null;
 
-  const isSoldOut = item.isAvailable === false;
+  const isSoldOut = soldOutHere(item);
   const isScoop = 'tastingNotes' in item;
   const scoop = isScoop ? (item as ScoopItem) : null;
 

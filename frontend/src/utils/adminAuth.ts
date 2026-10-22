@@ -10,6 +10,7 @@
  * browser closes or the admin presses "Lock".
  */
 import { useEffect, useState } from 'react';
+import { clearOrdersCache } from './orderStorage';
 import {
   api,
   ApiError,
@@ -71,7 +72,21 @@ export const isValidCodeFormat = (code: string) => /^\d{4,6}$/.test(code);
 /** True when an admin session is open in this browser (used to show the console link). */
 export const hasAdminSession = () => Boolean(getAdminSession());
 
+const LAST_ADMIN_KEY = 'amore_console_last_admin_v1';
+
+/**
+ * Orders are kept on the device for speed. A branch admin must never see another branch's,
+ * so when someone else signs in here, start from an empty copy (the server refills it).
+ */
+function keepOrdersFor(username: string) {
+  if (store.get(localStorage, LAST_ADMIN_KEY) !== username) {
+    clearOrdersCache();
+    store.set(localStorage, LAST_ADMIN_KEY, username);
+  }
+}
+
 function startSession(session: AdminSession) {
+  keepOrdersFor(session.admin.username);
   // With a user code on this device, the session ends with the browser; otherwise it is kept
   saveAdminSession(session, Boolean(getRememberedDevice()));
 }
@@ -101,6 +116,7 @@ export async function unlockWithCode(code: string): Promise<{ result: 'ok' | 'wr
       body: { deviceId: device.deviceId, deviceSecret: device.deviceSecret, code },
       as: 'none',
     });
+    keepOrdersFor(session.admin.username);
     saveAdminSession(session, true);
     return { result: 'ok', triesLeft: 0 };
   } catch (err) {
@@ -142,16 +158,24 @@ export function lockConsole(): void {
 }
 
 /** Sign out and stop remembering this device. */
+/** A full sign-out also clears this device's copy of the orders. */
+function clearConsoleData() {
+  clearOrdersCache();
+  store.del(localStorage, LAST_ADMIN_KEY);
+}
+
 export async function forgetThisDevice(): Promise<void> {
   const device = getRememberedDevice();
   forgetDeviceLocally();
   clearAdminSession();
+  clearConsoleData();
   if (device) await api('/admin/device/forget', { method: 'POST', body: device, as: 'none' }).catch(() => {});
 }
 
 export function signOutAdmin(): void {
   store.del(sessionStorage, OFFER_KEY);
   clearAdminSession();
+  clearConsoleData();
 }
 
 // ---- What /admin shows ---------------------------------------------------------
@@ -190,7 +214,12 @@ export function useAdminGate(): { gate: AdminGate; admin: AdminProfile | null; d
       setChecked(true);
       return;
     }
-    api('/admin/me', { as: 'admin' })
+    api<{ admin: AdminProfile }>('/admin/me', { as: 'admin' })
+      .then(({ admin }) => {
+        // Name, role or branch may have been changed by the super admin since this device signed in
+        const session = getAdminSession();
+        if (session) saveAdminSession({ ...session, admin }, Boolean(getRememberedDevice()));
+      })
       .catch((err) => {
         // Offline: let the console open on what this device has; it catches up when back online
         if (!(err instanceof ApiError) || err.status !== 0) clearAdminSession();

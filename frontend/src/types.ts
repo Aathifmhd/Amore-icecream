@@ -53,7 +53,10 @@ export interface ScoopItem {
   isPopular?: boolean;
   isArugamBaySpecial?: boolean;
   accentColor: string;
+  /** Old "sold out everywhere" switch; stock is now per branch (soldOutAt). */
   isAvailable?: boolean;
+  /** Branches where this item is sold out right now. */
+  soldOutAt?: BranchId[];
 }
 
 export type MenuTab = 'all' | 'scoops' | 'coffee' | 'cakes' | 'tourist-specials';
@@ -68,7 +71,10 @@ export interface MenuItem {
   image?: string;
   portionOrTemp?: string;
   tags?: string[];
+  /** Old "sold out everywhere" switch; stock is now per branch (soldOutAt). */
   isAvailable?: boolean;
+  /** Branches where this item is sold out right now. */
+  soldOutAt?: BranchId[];
 }
 
 export interface SelectedOrderItem {

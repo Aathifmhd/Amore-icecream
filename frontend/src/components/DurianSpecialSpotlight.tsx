@@ -8,6 +8,7 @@ import {
   subscribeToRealtimeMenu,
 } from '../utils/menuStorage';
 import { Sparkles, Star, CheckCircle, Flame, MapPin, Award, Cookie, ShoppingBag } from 'lucide-react';
+import { useIsSoldOut } from '../utils/stock';
 
 interface DurianSpecialSpotlightProps {
   currency: Currency;
@@ -20,6 +21,8 @@ export const DurianSpecialSpotlight: React.FC<DurianSpecialSpotlightProps> = ({
   onOrderDurian,
   onExploreFullMenu,
 }) => {
+  // Sold out at the branch the customer has picked
+  const soldOutHere = useIsSoldOut();
   const [durianItem, setDurianItem] = useState<ScoopItem>(() => {
     const list = getAllGelatoFlavours();
     return list.find((f) => f.id === 'durian-best') || list[0] || ALL_20_FLAVOURS[0];
@@ -263,17 +266,17 @@ export const DurianSpecialSpotlight: React.FC<DurianSpecialSpotlightProps> = ({
               {/* Marketing & Order CTAs */}
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <button
-                  disabled={durianItem.isAvailable === false}
+                  disabled={soldOutHere(durianItem)}
                   onClick={onOrderDurian}
                   className={`inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-xs sm:text-sm font-bold transition-all shadow-md active:scale-95 ${
-                    durianItem.isAvailable === false
+                    soldOutHere(durianItem)
                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       : 'bg-[#8C102A] text-white hover:bg-[#A31634] cursor-pointer'
                   }`}
                 >
                   <ShoppingBag className="w-4 h-4 text-amber-200" />
                   <span>
-                    {durianItem.isAvailable === false
+                    {soldOutHere(durianItem)
                       ? 'Durian Scoop (Sold Out)'
                       : `Order Durian Scoop (${formatPrice(durianItem.biscuitCupPriceLKR, currency)})`}
                   </span>

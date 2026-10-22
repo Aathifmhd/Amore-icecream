@@ -1,4 +1,4 @@
-import { ScoopItem, MenuItem } from '../types';
+import { BranchId, ScoopItem, MenuItem } from '../types';
 import {
   ALL_20_FLAVOURS,
   SPECIALTY_COFFEE_ITEMS,
@@ -273,32 +273,38 @@ export function deleteCakeItem(id: string): boolean {
 }
 
 // ----------------------------------------------------
-// QUICK TOGGLE IN-STOCK / SOLD-OUT
+// STOCK PER BRANCH
 // ----------------------------------------------------
 
-export function toggleItemStockStatus(itemId: string, itemType: 'scoops' | 'coffee' | 'cakes'): boolean {
-  if (itemType === 'scoops') {
-    const scoops = getAllGelatoFlavours();
-    const item = scoops.find((s) => s.id === itemId);
-    if (!item) return false;
-    const nextStatus = item.isAvailable === false ? true : false;
-    updateScoopItem(itemId, { isAvailable: nextStatus });
-    return nextStatus;
-  } else if (itemType === 'coffee') {
-    const coffee = getAllCoffeeItems();
-    const item = coffee.find((c) => c.id === itemId);
-    if (!item) return false;
-    const nextStatus = item.isAvailable === false ? true : false;
-    updateCoffeeItem(itemId, { isAvailable: nextStatus });
-    return nextStatus;
-  } else {
-    const cakes = getAllCakeItems();
-    const item = cakes.find((c) => c.id === itemId);
-    if (!item) return false;
-    const nextStatus = item.isAvailable === false ? true : false;
-    updateCakeItem(itemId, { isAvailable: nextStatus });
-    return nextStatus;
-  }
+const ALL_BRANCHES: BranchId[] = ['akurana', 'colombo', 'arugambay'];
+
+/**
+ * Mark an item in stock / sold out at one branch. Shown here at once and sent to the server,
+ * which only lets a branch admin change their own branch.
+ */
+export function setItemStock(itemId: string, itemType: 'scoops' | 'coffee' | 'cakes', branchId: BranchId, inStock: boolean): void {
+  const [list, save] =
+    itemType === 'scoops'
+      ? [getAllGelatoFlavours(), saveAllGelatoFlavours as (items: any[]) => void]
+      : itemType === 'coffee'
+      ? [getAllCoffeeItems(), saveAllCoffeeItems as (items: any[]) => void]
+      : [getAllCakeItems(), saveAllCakeItems as (items: any[]) => void];
+  const idx = list.findIndex((i) => i.id === itemId);
+  if (idx === -1) return;
+  const item = list[idx];
+  // The old "sold out everywhere" switch becomes sold out at each branch first
+  const soldOut = new Set<BranchId>(item.isAvailable === false ? ALL_BRANCHES : item.soldOutAt || []);
+  if (inStock) soldOut.delete(branchId);
+  else soldOut.add(branchId);
+  const { isAvailable: _old, ...rest } = item;
+  const updated = [...list];
+  updated[idx] = { ...rest, soldOutAt: ALL_BRANCHES.filter((b) => soldOut.has(b)) };
+  save(updated);
+  queueWrite({
+    method: 'PUT',
+    path: `${menuPath(itemId)}/stock`,
+    body: { branchId, inStock, itemType: itemType === 'scoops' ? 'scoop' : itemType === 'coffee' ? 'coffee' : 'cake' },
+  });
 }
 
 // ----------------------------------------------------
@@ -337,7 +343,7 @@ export function mergeServerMenuItems(items: any[]): void {
   let hasCakeChanges = false;
 
   items.forEach((raw) => {
-    if (!raw?.id || pending.has(menuPath(raw.id))) return;
+    if (!raw?.id || pending.has(menuPath(raw.id)) || pending.has(`${menuPath(raw.id)}/stock`)) return;
     const { updatedAt: _updatedAt, ...item } = raw;
 
     // Deleted on the server: remove it here too
@@ -363,7 +369,9 @@ export function mergeServerMenuItems(items: any[]): void {
     const type = item.itemType || (item.tastingNotes ? 'scoop' : item.category === 'coffee' ? 'coffee' : 'cake');
     const list: any[] = type === 'scoop' ? currentScoops : type === 'coffee' ? currentCoffee : currentCakes;
     const idx = list.findIndex((x) => x.id === item.id);
-    const merged = idx > -1 ? { ...list[idx], ...item } : item;
+    const merged = idx > -1 ? { ...list[idx], ...item } : { ...item };
+    // Stock comes from the server as it is (an item back in stock everywhere has no soldOutAt)
+    for (const key of ['isAvailable', 'soldOutAt']) if (!(key in item)) delete merged[key];
     if (idx > -1 && JSON.stringify(merged) === JSON.stringify(list[idx])) return;
     if (idx > -1) list[idx] = merged;
     else list.unshift(merged);

@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ClipboardList, RotateCcw, UtensilsCrossed, BarChart3, Bell, BellOff, CloudOff, ExternalLink, LogOut, Lock, MoreHorizontal } from 'lucide-react';
+import { ClipboardList, RotateCcw, UtensilsCrossed, BarChart3, Bell, BellOff, CloudOff, ExternalLink, IdCard, LogOut, Lock, MapPin, MoreHorizontal, UserCog } from 'lucide-react';
 import { BranchId, Currency, OrderRecord } from '../../../types';
 import { AMORE_BRANCHES } from '../../../data/iceCreamData';
 import { isCapturedReturnedBill } from '../../../utils/orderStorage';
+import { isSoldOutAt } from '../../../utils/stock';
+import type { AdminProfile } from '../../../api';
 import { AmoreLogo } from '../../AmoreLogo';
 import { ConsoleUiProvider, cx, useConsoleUi } from './ui';
 import { BranchFilter, inBranch, useMenu, useNewOrderAlert, useOrders, usePendingWrites, useStoredState, chime } from './useConsoleData';
@@ -14,14 +16,18 @@ import { NewOrderDialog } from './NewOrderDialog';
 import { RefundsView } from './RefundsView';
 import { MenuView } from './MenuView';
 import { ReportsView } from './ReportsView';
+import { EmployeesView } from './EmployeesView';
+import { UsersView } from './UsersView';
 
-type Section = 'orders' | 'refunds' | 'menu' | 'reports';
+type Section = 'orders' | 'refunds' | 'menu' | 'reports' | 'employees' | 'users';
 
-const SECTIONS: { id: Section; label: string; icon: React.ReactNode; title: string }[] = [
+const ALL_SECTIONS: { id: Section; label: string; icon: React.ReactNode; title: string; superOnly?: boolean }[] = [
   { id: 'orders', label: 'Orders', icon: <ClipboardList className="w-5 h-5" />, title: 'Orders' },
   { id: 'refunds', label: 'Refunds', icon: <RotateCcw className="w-5 h-5" />, title: 'Refunds' },
   { id: 'menu', label: 'Menu', icon: <UtensilsCrossed className="w-5 h-5" />, title: 'Menu & stock' },
   { id: 'reports', label: 'Reports', icon: <BarChart3 className="w-5 h-5" />, title: 'Reports' },
+  { id: 'employees', label: 'Staff', icon: <IdCard className="w-5 h-5" />, title: 'Employees' },
+  { id: 'users', label: 'Users', icon: <UserCog className="w-5 h-5" />, title: 'Users & access', superOnly: true },
 ];
 
 // Old links (?tab=returns, ?tab=overview…) still land in the right place
@@ -31,10 +37,14 @@ function sectionFromUrl(): Section {
   if (t === 'returns' || t === 'returned-bills' || t === 'refunds') return 'refunds';
   if (t === 'menu') return 'menu';
   if (t === 'overview' || t === 'branches' || t === 'reports') return 'reports';
+  if (t === 'employees' || t === 'staff') return 'employees';
+  if (t === 'users') return 'users';
   return 'orders';
 }
 
 interface Props {
+  /** Who is signed in: a super admin sees everything, a branch admin only their branch. */
+  admin: AdminProfile;
   onSignOut: () => void;
   /** "Lock" when this device has a user code, otherwise "Sign Out" */
   signOutLabel?: string;
@@ -51,11 +61,19 @@ export const OperationsConsole: React.FC<Props> = (props) => (
   </ConsoleUiProvider>
 );
 
-const ConsoleShell: React.FC<Props> = ({ onSignOut, signOutLabel = 'Sign Out', onBackToStore }) => {
+const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, signOutLabel = 'Sign Out', onBackToStore }) => {
   const orders = useOrders();
   const menu = useMenu();
-  const [section, setSection] = useState<Section>(sectionFromUrl);
-  const [branch, setBranch] = useStoredState<BranchFilter>('amore_console_branch', 'all');
+  const isSuper = admin.role !== 'branch';
+  // A branch admin always works on their own branch (the server only sends them its data)
+  const lockedBranch: BranchId | null = isSuper ? null : admin.branchId;
+  const SECTIONS = ALL_SECTIONS.filter((s) => isSuper || !s.superOnly);
+  const [section, setSection] = useState<Section>(() => {
+    const s = sectionFromUrl();
+    return SECTIONS.some((x) => x.id === s) ? s : 'orders';
+  });
+  const [pickedBranch, setBranch] = useStoredState<BranchFilter>('amore_console_branch', 'all');
+  const branch: BranchFilter = lockedBranch ?? pickedBranch;
   const [soundOn, setSoundOn] = useStoredState<boolean>('amore_console_sound', true);
   const [openRef, setOpenRef] = useState<string | null>(null);
   const [newOrderOpen, setNewOrderOpen] = useState(false);
@@ -82,7 +100,9 @@ const ConsoleShell: React.FC<Props> = ({ onSignOut, signOutLabel = 'Sign Out', o
   const scoped = useMemo(() => orders.filter((o) => inBranch(o, branch)), [orders, branch]);
   const newCount = scoped.filter((o) => stageOf(o) === 'new' && !isCapturedReturnedBill(o)).length;
   const refundCount = scoped.filter((o) => isCapturedReturnedBill(o) && o.refundStatus !== 'completed').length;
-  const soldOut = [...menu.scoops, ...menu.coffee, ...menu.cakes].filter((i) => i.isAvailable === false).length;
+  const soldOut = [...menu.scoops, ...menu.coffee, ...menu.cakes].filter((i) =>
+    branch === 'all' ? AMORE_BRANCHES.some((b) => isSoldOutAt(i, b.id)) : isSoldOutAt(i, branch)
+  ).length;
   useNewOrderAlert(newCount, soundOn);
 
   // Keep the open order in sync with live updates
@@ -105,7 +125,11 @@ const ConsoleShell: React.FC<Props> = ({ onSignOut, signOutLabel = 'Sign Out', o
     if (next) chime(); // confirms it works, and unlocks audio on browsers that need a tap first
   };
 
-  const branchPicker = (
+  const branchPicker = lockedBranch ? (
+    <span className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[#F3EDE3] text-sm font-semibold text-[#241A18] whitespace-nowrap">
+      <MapPin className="w-4 h-4 text-[#81001E]" /> {BRANCH_SHORT[lockedBranch]}
+    </span>
+  ) : (
     <>
       <div className="hidden xl:inline-flex p-1 bg-[#F3EDE3] rounded-xl" role="radiogroup" aria-label="Branch">
         {(['all', ...AMORE_BRANCHES.map((b) => b.id)] as BranchFilter[]).map((b) => (
@@ -148,7 +172,9 @@ const ConsoleShell: React.FC<Props> = ({ onSignOut, signOutLabel = 'Sign Out', o
           <AmoreLogo size="sm" showShadow={false} />
           <div className="leading-tight hidden xl:block">
             <p className="font-bold">Amore</p>
-            <p className="text-xs text-[#8A7970]">Operations</p>
+            <p className="text-xs text-[#8A7970] truncate" title={admin.displayName}>
+              {admin.displayName} · {isSuper ? 'Super admin' : 'Branch admin'}
+            </p>
           </div>
         </div>
         <nav className="flex-1 p-3 space-y-1" aria-label="Console">
@@ -221,7 +247,7 @@ const ConsoleShell: React.FC<Props> = ({ onSignOut, signOutLabel = 'Sign Out', o
               <span className="sm:hidden">{unsaved}</span>
             </span>
           )}
-          {branchPicker}
+          {section !== 'users' && branchPicker}
           <div className="relative lg:hidden">
             <button type="button" aria-label="More" onClick={() => setMoreOpen((v) => !v)} className="w-10 h-10 rounded-xl bg-white border border-[#E2D8CA] flex items-center justify-center cursor-pointer">
               <MoreHorizontal className="w-5 h-5" />
@@ -248,14 +274,16 @@ const ConsoleShell: React.FC<Props> = ({ onSignOut, signOutLabel = 'Sign Out', o
 
       <main className="px-4 lg:px-8 py-5 lg:py-7 pb-28 lg:pb-10 max-w-[1500px]">
         {section === 'orders' && <OrdersView orders={orders} branch={branch} onOpenOrder={(o) => setOpenRef(o.orderReference)} onNewOrder={() => setNewOrderOpen(true)} />}
-        {section === 'refunds' && <RefundsView orders={orders} branch={branch} />}
-        {section === 'menu' && <MenuView menu={menu} />}
+        {section === 'refunds' && <RefundsView orders={orders} branch={branch} lockedBranch={lockedBranch} />}
+        {section === 'menu' && <MenuView menu={menu} branch={branch} canEdit={isSuper} />}
         {section === 'reports' && <ReportsView orders={orders} branch={branch} />}
+        {section === 'employees' && <EmployeesView branch={branch} lockedBranch={lockedBranch} />}
+        {section === 'users' && isSuper && <UsersView me={admin} />}
       </main>
 
       {/* Bottom tabs (phones / tablets) */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-[#EAE2D6] pb-safe" aria-label="Console">
-        <div className="grid grid-cols-4 h-16">
+        <div className="grid h-16" style={{ gridTemplateColumns: `repeat(${SECTIONS.length}, minmax(0, 1fr))` }}>
           {SECTIONS.map((s) => {
             const b = badges[s.id];
             return (
@@ -264,7 +292,7 @@ const ConsoleShell: React.FC<Props> = ({ onSignOut, signOutLabel = 'Sign Out', o
                 type="button"
                 onClick={() => go(s.id)}
                 aria-current={section === s.id ? 'page' : undefined}
-                className={cx('relative flex flex-col items-center justify-center gap-0.5 text-xs font-semibold cursor-pointer', section === s.id ? 'text-[#81001E]' : 'text-[#7A6458]')}
+                className={cx('relative flex flex-col items-center justify-center gap-0.5 text-[11px] sm:text-xs font-semibold cursor-pointer', section === s.id ? 'text-[#81001E]' : 'text-[#7A6458]')}
               >
                 <span className="relative">
                   {s.icon}
@@ -278,7 +306,13 @@ const ConsoleShell: React.FC<Props> = ({ onSignOut, signOutLabel = 'Sign Out', o
       </nav>
 
       <OrderDrawer order={openOrder} onClose={() => setOpenRef(null)} />
-      <NewOrderDialog open={newOrderOpen} onClose={() => setNewOrderOpen(false)} menu={menu} defaultBranch={branch === 'all' ? 'akurana' : branch} />
+      <NewOrderDialog
+        open={newOrderOpen}
+        onClose={() => setNewOrderOpen(false)}
+        menu={menu}
+        defaultBranch={branch === 'all' ? 'akurana' : branch}
+        lockBranch={Boolean(lockedBranch)}
+      />
     </div>
   );
 };
