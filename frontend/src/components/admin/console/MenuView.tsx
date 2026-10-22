@@ -126,15 +126,13 @@ interface Draft {
   price: string;
   cone: string;
   cup: string;
-  doubleCone: string;
-  doubleCup: string;
   popular: boolean;
   signature: boolean;
 }
 
 const toDraft = (item?: ScoopItem | MenuItem): Draft => {
   if (!item)
-    return { name: '', tagline: '', description: '', image: '', coneImage: '', price: '', cone: '', cup: '', doubleCone: '', doubleCup: '', popular: false, signature: false };
+    return { name: '', tagline: '', description: '', image: '', coneImage: '', price: '', cone: '', cup: '', popular: false, signature: false };
   if (isScoop(item))
     return {
       name: item.name,
@@ -145,8 +143,6 @@ const toDraft = (item?: ScoopItem | MenuItem): Draft => {
       price: '',
       cone: String(item.conePriceLKR),
       cup: String(item.biscuitCupPriceLKR),
-      doubleCone: String(item.doubleConePriceLKR ?? ''),
-      doubleCup: String(item.doubleCupPriceLKR ?? ''),
       popular: !!item.isPopular,
       signature: !!item.isIconic,
     };
@@ -159,8 +155,6 @@ const toDraft = (item?: ScoopItem | MenuItem): Draft => {
     price: String(item.priceLKR),
     cone: '',
     cup: '',
-    doubleCone: '',
-    doubleCup: '',
     popular: !!item.popular,
     signature: false,
   };
@@ -176,8 +170,6 @@ export function describeBranchChanges(item: ScoopItem | MenuItem, b: BranchId): 
   const priceLabel: Partial<Record<BranchField, string>> = {
     conePriceLKR: 'cone',
     biscuitCupPriceLKR: 'cup',
-    doubleConePriceLKR: 'double cone',
-    doubleCupPriceLKR: 'double cup',
     priceLKR: 'price',
   };
   const out: string[] = [];
@@ -232,8 +224,6 @@ const ItemEditor: React.FC<{
     if (scoop) {
       price('cone', 'conePriceLKR');
       price('cup', 'biscuitCupPriceLKR');
-      price('doubleCone', 'doubleConePriceLKR');
-      price('doubleCup', 'doubleCupPriceLKR');
     } else {
       price('price', 'priceLKR');
     }
@@ -256,8 +246,6 @@ const ItemEditor: React.FC<{
         coneImage: d.coneImage,
         conePriceLKR: cone,
         biscuitCupPriceLKR: cup,
-        doubleConePriceLKR: num(d.doubleCone) || Math.round(cone * 1.8),
-        doubleCupPriceLKR: num(d.doubleCup) || Math.round(cup * 1.8),
         isPopular: d.popular,
         isIconic: d.signature,
       };
@@ -427,8 +415,6 @@ const ItemEditor: React.FC<{
             <div className="grid grid-cols-2 gap-3">
               {priceInput('cone', 'Waffle cone')}
               {priceInput('cup', 'Biscuit cup')}
-              {priceInput('doubleCone', 'Double cone')}
-              {priceInput('doubleCup', 'Double biscuit cup')}
             </div>
           </div>
         ) : (

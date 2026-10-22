@@ -297,7 +297,7 @@ export const DurianSpecialSpotlight: React.FC<DurianSpecialSpotlightProps> = ({
               <div className="flex items-center gap-2 text-xs text-[#7A6458] pt-1">
                 <Cookie className="w-3.5 h-3.5 text-amber-600" />
                 <span>
-                  Cone: {formatPrice(durianItem.conePriceLKR, currency)} • Edible Biscuit Cup: {formatPrice(durianItem.biscuitCupPriceLKR, currency)} • Double: {formatPrice(durianItem.doubleCupPriceLKR, currency)}
+                  Cone: {formatPrice(durianItem.conePriceLKR, currency)} • Edible Biscuit Cup: {formatPrice(durianItem.biscuitCupPriceLKR, currency)}
                 </span>
               </div>
             </div>

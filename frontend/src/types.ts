@@ -33,8 +33,6 @@ export interface BranchOverride {
   coneImage?: string;
   conePriceLKR?: number;
   biscuitCupPriceLKR?: number;
-  doubleConePriceLKR?: number;
-  doubleCupPriceLKR?: number;
   priceLKR?: number;
   updatedAt?: string;
   updatedBy?: string;
@@ -51,6 +49,7 @@ export type FlavorCategory =
   | 'sorbet'
   | 'srilankan-twist';
 
+// Double cone / double cup are no longer sold; they stay here so older orders still show them
 export type ServingFormat = 'waffle-cone' | 'biscuit-cup' | 'double-cone' | 'double-biscuit-cup';
 
 export interface ScoopItem {
@@ -61,8 +60,6 @@ export interface ScoopItem {
   category: FlavorCategory;
   conePriceLKR: number;
   biscuitCupPriceLKR: number;
-  doubleConePriceLKR: number;
-  doubleCupPriceLKR: number;
   image: string;
   dietary: ('Eggless' | 'Halal' | 'Gluten-Free' | 'Dairy-Free' | 'Vegetarian' | '100% Real Fruit')[];
   tastingNotes: string[];

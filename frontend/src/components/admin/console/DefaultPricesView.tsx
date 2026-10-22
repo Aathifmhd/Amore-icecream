@@ -13,7 +13,7 @@ import { Button, Card, cx, inputClass, useConsoleUi } from './ui';
 import type { MenuData } from './useConsoleData';
 
 type Kind = 'scoops' | 'coffee' | 'cakes';
-type PriceKey = 'conePriceLKR' | 'biscuitCupPriceLKR' | 'doubleConePriceLKR' | 'doubleCupPriceLKR' | 'priceLKR';
+type PriceKey = 'conePriceLKR' | 'biscuitCupPriceLKR' | 'priceLKR';
 type Col = { key: PriceKey; label: string };
 
 const KINDS: { id: Kind; label: string }[] = [
@@ -24,8 +24,6 @@ const KINDS: { id: Kind; label: string }[] = [
 const SCOOP_COLS: Col[] = [
   { key: 'conePriceLKR', label: 'Waffle cone' },
   { key: 'biscuitCupPriceLKR', label: 'Biscuit cup' },
-  { key: 'doubleConePriceLKR', label: 'Double cone' },
-  { key: 'doubleCupPriceLKR', label: 'Double cup' },
 ];
 const PRICE_COL: Col[] = [{ key: 'priceLKR', label: 'Price' }];
 const BRANCH_SHORT: Record<BranchId, string> = { akurana: 'Akurana', colombo: 'Colombo', arugambay: 'Arugam Bay' };
@@ -99,7 +97,7 @@ export const DefaultPricesView: React.FC<{ menu: MenuData }> = ({ menu }) => {
 
   const cols = colsOf(kind);
   const items = itemsOf(kind);
-  const scoopGrid = 'sm:grid-cols-[minmax(0,1fr)_repeat(4,7.5rem)]';
+  const scoopGrid = 'sm:grid-cols-[minmax(0,1fr)_repeat(2,9rem)]';
   const oneGrid = 'sm:grid-cols-[minmax(0,1fr)_9rem]';
 
   return (

@@ -20,8 +20,6 @@ export const BRANCH_FIELDS = [
   'coneImage',
   'conePriceLKR',
   'biscuitCupPriceLKR',
-  'doubleConePriceLKR',
-  'doubleCupPriceLKR',
   'priceLKR',
 ] as const;
 export type BranchField = (typeof BRANCH_FIELDS)[number];
@@ -54,16 +52,7 @@ export function branchChanges(item: Item, branch: BranchId): Partial<Record<Bran
 /** Price of one serving of an item. */
 export function priceFor(item: Item, format?: ServingFormat): number {
   if (!('conePriceLKR' in item)) return item.priceLKR;
-  switch (format) {
-    case 'biscuit-cup':
-      return item.biscuitCupPriceLKR;
-    case 'double-cone':
-      return item.doubleConePriceLKR;
-    case 'double-biscuit-cup':
-      return item.doubleCupPriceLKR;
-    default:
-      return item.conePriceLKR;
-  }
+  return format === 'biscuit-cup' ? item.biscuitCupPriceLKR : item.conePriceLKR;
 }
 
 /**
@@ -72,7 +61,8 @@ export function priceFor(item: Item, format?: ServingFormat): number {
  */
 export function repriceForBranch(line: SelectedOrderItem, branch: BranchId): SelectedOrderItem {
   const base = [...getAllGelatoFlavours(), ...getAllCoffeeItems(), ...getAllCakeItems()].find((i) => i.id === line.itemId) as Item | undefined;
-  if (!base) return line;
+  // A double from before doubles were dropped keeps the price it was added at
+  if (!base || line.format === 'double-cone' || line.format === 'double-biscuit-cup') return line;
   const item = forBranch(base, branch);
   const photo = 'conePriceLKR' in item ? scoopPhoto(item, line.format) : item.image;
   return { ...line, name: item.name, priceLKR: priceFor(item, line.format), image: photo || line.image };

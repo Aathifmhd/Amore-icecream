@@ -36,15 +36,11 @@ const OVERRIDE_FIELDS = {
   coneImage: photo,
   conePriceLKR: price,
   biscuitCupPriceLKR: price,
-  doubleConePriceLKR: price,
-  doubleCupPriceLKR: price,
   priceLKR: price,
 };
 const FIELD_LABEL = {
   conePriceLKR: 'cone',
   biscuitCupPriceLKR: 'cup',
-  doubleConePriceLKR: 'double cone',
-  doubleCupPriceLKR: 'double cup',
   priceLKR: 'price',
 };
 

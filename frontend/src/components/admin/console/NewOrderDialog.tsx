@@ -56,8 +56,7 @@ export const NewOrderDialog: React.FC<{
     setLines((prev) => prev.map((l) => repriceForBranch(l, branch)));
   }, [branch]);
   const picked = picks.find((p) => p.key === pickKey);
-  const scoopPrice = (s: ScoopItem, f: ServingFormat) =>
-    f === 'biscuit-cup' ? s.biscuitCupPriceLKR : f === 'double-cone' ? s.doubleConePriceLKR : f === 'double-biscuit-cup' ? s.doubleCupPriceLKR : s.conePriceLKR;
+  const scoopPrice = (s: ScoopItem, f: ServingFormat) => (f === 'biscuit-cup' ? s.biscuitCupPriceLKR : s.conePriceLKR);
 
   const addLine = () => {
     if (!picked) return;
@@ -203,7 +202,7 @@ export const NewOrderDialog: React.FC<{
             </select>
             {picked?.kind === 'scoop' && (
               <select value={format} onChange={(e) => setFormat(e.target.value as ServingFormat)} className={cx(inputClass, 'sm:w-52')} aria-label="Cone or cup">
-                {(['waffle-cone', 'biscuit-cup', 'double-cone', 'double-biscuit-cup'] as ServingFormat[]).map((f) => (
+                {(['waffle-cone', 'biscuit-cup'] as ServingFormat[]).map((f) => (
                   <option key={f} value={f}>
                     {formatLabel(f)} — {lkr(scoopPrice(picked.item as ScoopItem, f))}
                   </option>
