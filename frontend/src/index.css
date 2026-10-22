@@ -716,38 +716,37 @@ html {
   .anim-bag, .anim-check, .anim-clock-hand, .seg-active, .row-flash { animation: none !important; }
 }
 
-/* Delivery-pin map: a calm, light map like delivery apps (OpenStreetMap tiles, softened) */
-.amore-pin-map.leaflet-container {
-  background: #f2f0ec;
+/* The maps (MapLibre, see utils/map.ts) */
+.amore-map {
+  background: #f3f3f1;
   font-family: inherit;
 }
-.amore-pin-map .leaflet-tile-pane {
-  filter: saturate(0.3) brightness(1.07) contrast(0.9);
-}
-.amore-pin-map .leaflet-control-attribution {
-  margin: 0 0 6px 8px !important;
-  padding: 1px 6px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.75) !important;
-  font-size: 9px;
-  color: #7a6458;
-}
-.amore-pin-map .leaflet-control-attribution a {
-  color: inherit;
+.amore-map .maplibregl-ctrl-attrib {
+  font-size: 10px;
 }
 
-/* Parlour names next to their dots on the maps */
-.leaflet-tooltip.amore-parlour-label {
+/* Parlours on the maps: a dot with the parlour's name */
+.amore-parlour-marker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+.amore-parlour-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #8c102a;
+  border: 3px solid #fff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+}
+.amore-parlour-name {
   padding: 2px 8px;
-  border: 0;
   border-radius: 999px;
   background: #fff;
   color: #8c102a;
-  font-family: inherit;
   font-size: 11px;
   font-weight: 700;
+  white-space: nowrap;
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.18);
-}
-.leaflet-tooltip.amore-parlour-label::before {
-  display: none;
 }

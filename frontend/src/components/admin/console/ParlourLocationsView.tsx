@@ -8,7 +8,8 @@ import { BranchId } from '../../../types';
 import { AMORE_BRANCHES } from '../../../data/iceCreamData';
 import { api, ApiError } from '../../../api';
 import { refreshParlourZones, type ParlourZone } from '../../../utils/branchLocation';
-import { drawParlours, loadLeaflet } from '../../../utils/leaflet';
+import type { Map as MapLibreMap, Marker } from 'maplibre-gl';
+import { createAmoreMap, drawParlours, whenMapReady, type MapLib } from '../../../utils/map';
 import { Button, cx, inputClass, useConsoleUi } from './ui';
 import { timeAgo } from './orderMeta';
 
@@ -24,13 +25,13 @@ const parseCoords = (text: string) => {
 };
 const same = (a: ParlourZone, b: ParlourZone) => a.lat === b.lat && a.lng === b.lng && a.radiusKm === b.radiusKm;
 
-const pinIcon = (L: any) =>
-  L.divIcon({
-    className: '',
-    html: '<div style="width:34px;height:34px;border-radius:50% 50% 50% 0;background:#8C102A;border:3px solid #fff;transform:rotate(-45deg);box-shadow:0 4px 12px rgba(0,0,0,.3)"></div>',
-    iconSize: [34, 34],
-    iconAnchor: [17, 34],
-  });
+// The draggable pin for the chosen parlour
+const pinElement = () => {
+  const el = document.createElement('div');
+  el.innerHTML =
+    '<div style="width:34px;height:34px;border-radius:50% 50% 50% 0;background:#8C102A;border:3px solid #fff;transform:rotate(-45deg);box-shadow:0 4px 12px rgba(0,0,0,.3);cursor:grab"></div>';
+  return el;
+};
 
 export const ParlourLocationsView: React.FC = () => {
   const { toast } = useConsoleUi();
@@ -42,9 +43,10 @@ export const ParlourLocationsView: React.FC = () => {
   const [mapError, setMapError] = useState<string | null>(null);
 
   const mapBox = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<any>(null);
-  const layerRef = useRef<any>(null);
-  const markerRef = useRef<any>(null);
+  const mapRef = useRef<MapLibreMap | null>(null);
+  const libRef = useRef<MapLib | null>(null);
+  const markerRef = useRef<Marker | null>(null);
+  const [mapReady, setMapReady] = useState(false);
   const selRef = useRef(sel);
   selRef.current = sel;
 
@@ -70,15 +72,12 @@ export const ParlourLocationsView: React.FC = () => {
   useEffect(() => {
     if (!saved || !mapBox.current || mapRef.current) return;
     let cancelled = false;
-    loadLeaflet()
-      .then((L) => {
-        if (cancelled || !mapBox.current) return;
-        const start = drafts[sel] ?? saved[sel];
-        const map = L.map(mapBox.current, { center: [start.lat, start.lng], zoom: 12, zoomControl: true, attributionControl: false });
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-        L.control.attribution({ position: 'bottomleft', prefix: false }).addAttribution('© OpenStreetMap').addTo(map);
-        layerRef.current = L.layerGroup().addTo(map);
-        const marker = L.marker([start.lat, start.lng], { draggable: true, icon: pinIcon(L), zIndexOffset: 1000 }).addTo(map);
+    const start = drafts[sel] ?? saved[sel];
+    createAmoreMap(mapBox.current, start, 11.5)
+      .then(({ map, maplibre }) => {
+        if (cancelled) return map.remove();
+        map.addControl(new maplibre.NavigationControl({ showCompass: false }), 'top-left');
+        const marker = new maplibre.Marker({ element: pinElement(), draggable: true, anchor: 'bottom' }).setLngLat([start.lng, start.lat]).addTo(map);
         const moveTo = (lat: number, lng: number) =>
           setDrafts((d) => {
             const id = selRef.current;
@@ -86,14 +85,14 @@ export const ParlourLocationsView: React.FC = () => {
             return { ...d, [id]: { ...base, lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6 } };
           });
         marker.on('dragend', () => {
-          const p = marker.getLatLng();
+          const p = marker.getLngLat();
           moveTo(p.lat, p.lng);
         });
-        map.on('click', (e: any) => moveTo(e.latlng.lat, e.latlng.lng));
+        map.on('click', (e) => moveTo(e.lngLat.lat, e.lngLat.lng));
         markerRef.current = marker;
         mapRef.current = map;
-        setTimeout(() => map.invalidateSize(), 120);
-        setDrafts((d) => ({ ...d })); // draw the circles
+        libRef.current = maplibre;
+        whenMapReady(map, () => !cancelled && setMapReady(true));
       })
       .catch(() => setMapError('The map could not load. You can still type the location below.'));
     return () => {
@@ -111,15 +110,17 @@ export const ParlourLocationsView: React.FC = () => {
 
   // Redraw every parlour's dot and delivery circle, and put the pin on the chosen one
   useEffect(() => {
-    if (!saved || !mapRef.current || !layerRef.current) return;
+    const map = mapRef.current;
+    const lib = libRef.current;
+    if (!saved || !mapReady || !map || !lib) return;
     const all = (Object.keys(saved) as BranchId[]).map((id) => ({ id, name: fullName(id), ...(drafts[id] ?? saved[id]), highlight: id === sel }));
-    drawParlours(window.L, layerRef.current, all);
-    if (current) markerRef.current?.setLatLng([current.lat, current.lng]);
-  }, [saved, drafts, sel]);
+    drawParlours(map, lib, all);
+    if (current) markerRef.current?.setLngLat([current.lng, current.lat]);
+  }, [saved, drafts, sel, mapReady]);
 
   // Switching parlour brings it into view
   useEffect(() => {
-    if (current && mapRef.current) mapRef.current.setView([current.lat, current.lng], 12, { animate: true });
+    if (current && mapRef.current) mapRef.current.easeTo({ center: [current.lng, current.lat], zoom: 11.5, duration: 700 });
   }, [sel]);
 
   const save = async () => {
@@ -169,7 +170,7 @@ export const ParlourLocationsView: React.FC = () => {
       </div>
 
       <div className="relative rounded-xl overflow-hidden border border-[#EAE2D6] bg-[#F2F0EC]">
-        <div ref={mapBox} className="amore-pin-map h-[22rem]" />
+        <div ref={mapBox} className="amore-map h-[22rem]" />
         <p className="absolute top-3 left-14 right-3 z-[500] pointer-events-none">
           <span className="inline-block px-3 py-1.5 rounded-full bg-white/95 text-xs font-semibold text-[#3D2C24] shadow-[0_2px_10px_rgba(0,0,0,0.12)]">
             Drag the pin or tap the map to move {fullName(sel)}

@@ -3,7 +3,8 @@ import { AlertCircle, ArrowLeft, LocateFixed, Loader2, MapPin, Search, Store } f
 import { BranchId } from '../types';
 import { AMORE_BRANCHES } from '../data/iceCreamData';
 import { deliveryCheck, useParlourZones } from '../utils/branchLocation';
-import { drawParlours, loadLeaflet } from '../utils/leaflet';
+import type { Map as MapLibreMap } from 'maplibre-gl';
+import { createAmoreMap, drawParlours, whenMapReady, type MapLib } from '../utils/map';
 
 interface LocationPickerModalProps {
   isOpen: boolean;
@@ -63,11 +64,11 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
   const [locating, setLocating] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [leafletLoaded, setLeafletLoaded] = useState(() => typeof window !== 'undefined' && Boolean(window.L));
+  const [mapReady, setMapReady] = useState(false);
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<any>(null);
-  const parloursLayerRef = useRef<any>(null);
+  const mapRef = useRef<MapLibreMap | null>(null);
+  const libRef = useRef<MapLib | null>(null);
   const lookupRef = useRef(0);
   const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -79,14 +80,6 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
     setCity(initialCity);
     setTyped(false);
     setNotice(null);
-  }, [isOpen]);
-
-  // Leaflet is only loaded when someone opens the map
-  useEffect(() => {
-    if (!isOpen || leafletLoaded) return;
-    loadLeaflet()
-      .then(() => setLeafletLoaded(true))
-      .catch(() => setNotice('The map could not load. Check your internet and try again.'));
   }, [isOpen]);
 
   // The street address under the pin (only the latest lookup counts)
@@ -123,7 +116,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLocating(false);
-        mapRef.current?.setView([pos.coords.latitude, pos.coords.longitude], 18, { animate: true });
+        mapRef.current?.easeTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 18, duration: 900 });
       },
       () => {
         setLocating(false);
@@ -135,34 +128,36 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
 
   // Build the map: the pin stays in the middle and the map moves under it
   useEffect(() => {
-    if (!isOpen || !leafletLoaded || !mapContainerRef.current) return;
-    const L = window.L;
+    if (!isOpen || !mapContainerRef.current) return;
     const start = initialCoords || zones[fallbackBranch];
-    const map = L.map(mapContainerRef.current, {
-      center: [start.lat, start.lng],
-      // Without a pin yet, start wide enough to see the delivery area
-      zoom: initialCoords ? 17 : 12,
-      zoomControl: false,
-      attributionControl: false,
-    });
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-    L.control.attribution({ position: 'bottomleft', prefix: false }).addAttribution('© OpenStreetMap').addTo(map);
-    parloursLayerRef.current = L.layerGroup().addTo(map);
+    let map: MapLibreMap | null = null;
+    let cancelled = false;
 
-    map.on('movestart', () => {
-      setMoving(true);
-      if (lookupTimer.current) clearTimeout(lookupTimer.current);
-    });
-    map.on('moveend', () => {
-      setMoving(false);
-      const c = map.getCenter();
-      setCoords({ lat: c.lat, lng: c.lng });
-      if (lookupTimer.current) clearTimeout(lookupTimer.current);
-      lookupTimer.current = setTimeout(() => lookUpAddress(c.lat, c.lng), 450);
-    });
-    mapRef.current = map;
-    // The container has only just been laid out
-    const settle = setTimeout(() => map.invalidateSize(), 120);
+    // Without a pin yet, start wide enough to see the delivery area
+    createAmoreMap(mapContainerRef.current, start, initialCoords ? 17 : 11.5)
+      .then(({ map: m, maplibre }) => {
+        if (cancelled) return m.remove();
+        map = m;
+        mapRef.current = m;
+        libRef.current = maplibre;
+        m.on('movestart', () => {
+          setMoving(true);
+          if (lookupTimer.current) clearTimeout(lookupTimer.current);
+        });
+        m.on('moveend', () => {
+          setMoving(false);
+          const c = m.getCenter();
+          setCoords({ lat: c.lat, lng: c.lng });
+          if (lookupTimer.current) clearTimeout(lookupTimer.current);
+          lookupTimer.current = setTimeout(() => lookUpAddress(c.lat, c.lng), 450);
+        });
+        whenMapReady(m, () => !cancelled && setMapReady(true));
+        m.on('error', (e) => {
+          if (!m.isStyleLoaded()) setNotice('The map could not load. Check your internet, or type your street below.');
+          console.warn('Map error', e.error);
+        });
+      })
+      .catch(() => setNotice('The map could not load on this phone. Type your street below and press search.'));
 
     if (initialCoords) {
       if (!initialAddress.trim()) lookUpAddress(start.lat, start.lng);
@@ -172,23 +167,27 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
     }
 
     return () => {
-      clearTimeout(settle);
+      cancelled = true;
       if (lookupTimer.current) clearTimeout(lookupTimer.current);
-      map.remove();
+      map?.remove();
       mapRef.current = null;
-      parloursLayerRef.current = null;
+      setMapReady(false);
     };
-  }, [isOpen, leafletLoaded]);
+  }, [isOpen]);
 
   // The parlours as dots, each with its delivery area (redrawn if the settings change)
   useEffect(() => {
-    if (!isOpen || !leafletLoaded || !parloursLayerRef.current) return;
-    drawParlours(
-      window.L,
-      parloursLayerRef.current,
-      AMORE_BRANCHES.filter((b) => !deliverFrom || b.id === deliverFrom).map((b) => ({ id: b.id, name: `Amore ${b.name}`, ...zones[b.id] }))
+    const map = mapRef.current;
+    if (!isOpen || !mapReady || !map || !libRef.current) return;
+    const lib = libRef.current;
+    whenMapReady(map, () =>
+      drawParlours(
+        map,
+        lib,
+        AMORE_BRANCHES.filter((b) => !deliverFrom || b.id === deliverFrom).map((b) => ({ id: b.id, name: `Amore ${b.name}`, ...zones[b.id] }))
+      )
     );
-  }, [isOpen, leafletLoaded, zones, deliverFrom]);
+  }, [isOpen, mapReady, zones, deliverFrom]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -209,7 +208,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
       });
       const data = await res.json();
       if (Array.isArray(data) && data.length) {
-        mapRef.current?.setView([parseFloat(data[0].lat), parseFloat(data[0].lon)], 17, { animate: true });
+        mapRef.current?.easeTo({ center: [parseFloat(data[0].lon), parseFloat(data[0].lat)], zoom: 17, duration: 900 });
       } else {
         setNotice('Place not found. Move the map so the pin is on your door.');
       }
@@ -242,7 +241,10 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
       >
         {/* Map with the pin fixed in the middle */}
         <div className="relative flex-1 min-h-0 bg-[#F2F0EC]">
-          <div ref={mapContainerRef} className="amore-pin-map absolute inset-0" />
+          {/* MapLibre makes its own box position: relative, so the full-size box wraps it */}
+          <div className="absolute inset-0">
+            <div ref={mapContainerRef} className="amore-map w-full h-full" />
+          </div>
 
           <div className="absolute inset-0 pointer-events-none z-[500]">
             <div className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full transition-transform duration-200 ${moving ? '-mt-3' : ''}`}>
@@ -273,7 +275,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
             <ArrowLeft className="w-6 h-6" />
           </button>
 
-          <div className="absolute bottom-7 left-3 z-[600] px-3 py-1.5 rounded-full bg-white/95 shadow-[0_2px_10px_rgba(0,0,0,0.12)] flex items-center gap-3 text-[11px] font-semibold text-[#3D2C24] pointer-events-none">
+          <div className="absolute bottom-12 left-3 z-[600] px-3 py-1.5 rounded-full bg-white/95 shadow-[0_2px_10px_rgba(0,0,0,0.12)] flex items-center gap-3 text-[11px] font-semibold text-[#3D2C24] pointer-events-none">
             <span className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-[#8C102A] ring-2 ring-white shadow" />
               Parlour

@@ -147,7 +147,7 @@ The tray (`QuickOrderModal.tsx`) runs in four numbered steps: delivery or pickup
 the pickup parlour), name and phone, payment; the total and the order button stay at the bottom.
 **Detect location & drop pin** (`LocationPickerModal.tsx`) opens a full-screen map that finds the
 customer, keeps the pin in the middle while they move the map, and looks up the street under it
-(OpenStreetMap tiles and Nominatim, no key needed). A delivery goes to the parlour nearest the pin
+(MapLibre with OpenFreeMap's free vector map, recoloured in `utils/map.ts` to a light delivery-app look; street names from Nominatim; no keys needed). A delivery goes to the parlour nearest the pin
 (`utils/branchLocation.ts`). The last order's name, phone and address are kept on that device for
 the same Google account, so the next checkout is already filled in.
 
