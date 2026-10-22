@@ -54,7 +54,7 @@ const AdminLogin = lazy(() =>
   import('./components/admin/AdminLogin').then((m) => ({ default: m.AdminLogin }))
 );
 const AdminDashboard = lazy(() =>
-  import('./components/admin/AdminDashboard').then((m) => ({ default: m.AdminDashboard }))
+  import('./components/admin/console/OperationsConsole').then((m) => ({ default: m.OperationsConsole }))
 );
 
 // Matches the logo splash in index.html so loading feels like one continuous screen

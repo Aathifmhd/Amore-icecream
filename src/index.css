@@ -427,3 +427,25 @@ html {
 .splash-on .rise-in {
   animation-play-state: paused;
 }
+
+/* ---- Operations console ---- */
+@keyframes drawerIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.drawer-in {
+  animation: drawerIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@media (max-width: 639px) {
+  .drawer-in { animation: sheetUp 0.28s cubic-bezier(0.16, 1, 0.3, 1) both; }
+}
+@keyframes newOrderPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.45); }
+  50% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+}
+.new-order-pulse {
+  animation: newOrderPulse 2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .drawer-in, .new-order-pulse { animation: none; }
+}

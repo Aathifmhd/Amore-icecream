@@ -577,9 +577,11 @@ export function adminSetOnTheWay(orderReference: string): OrderRecord | null {
  */
 export function adminSetDelivered(orderReference: string): OrderRecord | null {
   const now = new Date().toISOString();
+  const existing = getOrder(orderReference);
   return updateOrder(orderReference, {
     status: 'delivered',
-    paidAt: now,
+    // Cash / counter orders are paid on hand-over; keep an earlier card capture time as is
+    paidAt: existing?.paidAt || now,
     deliveredAt: now,
     updatedAt: now,
   });
@@ -599,34 +601,46 @@ export function adminCancelOrderWithReason(
   const existing = all[orderReference];
   if (!existing) return null;
 
-  // STRICT USER POLICY:
-  // "only sent the returned order which is already captured payment order by card payment...
-  // thats mean cancel by owner after confirm the order and captured the payment.
-  // Dont get not payment captured orders that's means cancel by admin before confirm the order"
+  const updates: Partial<OrderRecord> = {
+    ...cancellationUpdates(existing, reason, now),
+    // Default to a message written for the order *after* cancelling, so a captured
+    // card payment is described as a pending refund (not "no payment was captured")
+    inconvenienceEmailContent: emailContent ?? buildCancellationMessage(existing, reason).body,
+  };
+
+  return updateOrder(orderReference, updates);
+}
+
+/**
+ * Field changes for an admin cancellation. Only a card payment that was already
+ * captured (card delivery order confirmed by the parlour) becomes a pending refund;
+ * orders cancelled before confirmation were never charged.
+ */
+function cancellationUpdates(existing: OrderRecord, reason: string, now: string): Partial<OrderRecord> {
   const isCardCaptured =
     existing.paymentMethod === 'card' &&
     existing.orderType !== 'pickup' &&
     Boolean(existing.confirmedAt) &&
     existing.status !== 'pending_confirmation';
-
-  const updates: Partial<OrderRecord> = {
+  return {
     status: 'cancelled',
     cancelledAt: now,
     cancelledBy: 'admin',
     cancellationReason: reason,
-    inconvenienceEmailContent: emailContent,
     updatedAt: now,
+    refundStatus: isCardCaptured ? 'pending' : undefined,
+    refundAmountLKR: isCardCaptured ? existing.grandTotalLKR : undefined,
   };
+}
 
-  if (isCardCaptured) {
-    updates.refundStatus = 'pending';
-    updates.refundAmountLKR = existing.grandTotalLKR;
-  } else {
-    updates.refundStatus = undefined;
-    updates.refundAmountLKR = undefined;
-  }
+/** True when cancelling this order now would put a refund in the Refunds list. */
+export function cancellationNeedsRefund(order: OrderRecord): boolean {
+  return cancellationUpdates(order, '', new Date().toISOString()).refundStatus === 'pending';
+}
 
-  return updateOrder(orderReference, updates);
+/** The customer message for cancelling this order, written as if it is already cancelled. */
+export function buildCancellationMessage(order: OrderRecord, reason: string): { subject: string; body: string } {
+  return generateInconvenienceEmail({ ...order, ...cancellationUpdates(order, reason, new Date().toISOString()) }, reason);
 }
 
 /**
@@ -653,7 +667,9 @@ export function createManualReturnBill(data: {
   paymentMethod: 'card' | 'cash';
   cancellationReason: string;
 }): OrderRecord {
-  const ref = data.orderReference?.trim() || generateOrderReference('RET');
+  // Never reuse an existing reference — saving would overwrite that order
+  const wanted = data.orderReference?.trim();
+  const ref = wanted && !getOrder(wanted) ? wanted : generateOrderReference('RET');
   const now = new Date().toISOString();
   const branch = AMORE_BRANCHES.find((b) => b.id === data.branchId) || AMORE_BRANCHES[0];
 
@@ -708,10 +724,14 @@ export function updateReturnBill(
   }
 ): OrderRecord | null {
   const now = new Date().toISOString();
+  const existing = getOrder(orderReference);
+  // A manual refund record's "total" is the refund itself. For a refund on a real order,
+  // keep the order's own totals so a partial refund doesn't erase the original sale.
+  const isManualRecord =
+    orderReference.startsWith('RET-') || Boolean(existing?.items?.some((i) => i.itemId === 'returned-item-manual'));
   return updateOrder(orderReference, {
     ...updates,
-    // Only overwrite the totals when a new refund amount was given
-    ...(updates.refundAmountLKR !== undefined
+    ...(updates.refundAmountLKR !== undefined && isManualRecord
       ? { grandTotalLKR: updates.refundAmountLKR, subtotalLKR: updates.refundAmountLKR }
       : {}),
     updatedAt: now,
@@ -734,53 +754,36 @@ export function generateInconvenienceEmail(
     ? `${order.cardBrand || 'Card'} •••• ${order.cardLast4}`
     : 'your original payment card';
 
-  let subject = `Notice regarding your Amore Order ${order.orderReference} - Cancellation & Sincere Apology`;
+  let subject = `Your Amore order ${order.orderReference} has been cancelled`;
   let paymentNotice = '';
 
   if (isReturnedBill) {
-    subject = `Refund Notice: Amore Order ${order.orderReference} - Returned Bill & Apology`;
-    paymentNotice = `RETURN & REFUND NOTICE (In accordance with Amore Card Return Policy):
-• 100% Refund Guarantee: Full refund of ${formattedAmt} has been officially approved.
-• Refund Method: Reversal credited directly back to ${cardDetails}.
-• Refund Processing Days: Funds will reflect in your account within 2 to 3 business days (depending on your card issuing bank).
-• Accounting Record: Returned Bill & Credit Note #${order.orderReference} has been logged in our system.`;
+    subject = `Refund for your Amore order ${order.orderReference}`;
+    paymentNotice = `Your refund: we are refunding the full ${formattedAmt} to ${cardDetails}. It usually reaches your account within 2–3 working days, depending on your bank.`;
   } else if (order.paymentMethod === 'card') {
-    paymentNotice = `PAYMENT AUTHORIZATION NOTICE:
-• Your card pre-authorization hold for ${formattedAmt} was voided immediately upon cancellation.
-• No payment was captured and no charges were made to your account.`;
-  } else if (order.orderType === 'pickup' || order.paymentMethod === 'pay_at_parlour') {
-    paymentNotice = `PAYMENT NOTICE:
-• As you selected Pay at the Parlour, your order was cancelled with zero fee and no payment obligation.`;
+    paymentNotice = `Payment: your card was not charged for this order.`;
   } else {
-    paymentNotice = `PAYMENT NOTICE:
-• As you selected Cash on Delivery, your order was cancelled with zero fee and no payment obligation.`;
+    paymentNotice = `Payment: you have not been charged and there is nothing to pay.`;
   }
 
-  const branchTitle = order.branchName || 'Akurana Flagship';
+  const branch = AMORE_BRANCHES.find((b) => b.id === order.branchId) || AMORE_BRANCHES[0];
+  const branchTitle = order.branchName || branch.name;
 
-  const body = `From: zenatiqcodes@gmail.com
-To: ${order.emailAddress || order.customerName}
-Subject: ${subject}
+  const body = `Dear ${order.customerName},
 
-Dear ${order.customerName},
+We're very sorry, but we can't complete your order ${order.orderReference} from Amore ${branchTitle}.
 
-We sincerely apologize, but we are unable to process and fulfill your order (${order.orderReference}) placed with Amore Speciality Ice Cream (${branchTitle}).
-
-Reason for cancellation:
-"${reason}"
+Reason: ${reason}
 
 ${paymentNotice}
 
-Amore Return Policy Commitment:
-Under our 100% Refund Policy, any order cancelled after payment authorization is guaranteed a full, prompt reversal within 2 to 3 business days. Every batch at Amore is churned fresh with authentic artisanal ingredients, and we deeply regret any inconvenience or disruption this has caused to your day. We look forward to the honor of serving you an exceptional experience on your next visit.
+We're sorry for the inconvenience and hope to serve you again soon.
 
-If you have any questions regarding your refund or need immediate assistance, please reply directly to this email at zenatiqcodes@gmail.com or contact our parlour counter.
+If you have any questions, please call or WhatsApp us on ${branch.phone}.
 
 Warm regards,
-The Amore Parlour Team
-zenatiqcodes@gmail.com
-Amore Speciality Ice Cream, Coffee & Cakes
-${branchTitle} • Hotline: +94 81 230 4567`;
+The Amore team
+Amore Speciality Ice Cream, Coffee & Cakes · ${branchTitle}`;
 
   return { subject, body };
 }
@@ -816,6 +819,7 @@ export function updateOrderStatus(
 export function createAdminOrder(orderData: Partial<OrderRecord>): OrderRecord {
   const orderRef = orderData.orderReference || generateOrderReference('AMO-M');
   const now = new Date().toISOString();
+  const branch = AMORE_BRANCHES.find((b) => b.id === orderData.branchId) || AMORE_BRANCHES[0];
 
   const fullOrder: OrderRecord = {
     orderReference: orderRef,
@@ -825,9 +829,9 @@ export function createAdminOrder(orderData: Partial<OrderRecord>): OrderRecord {
     orderType: orderData.orderType || 'pickup',
     deliveryAddress: orderData.deliveryAddress || '',
     city: orderData.city || '',
-    branchId: orderData.branchId || 'akurana',
-    branchName: orderData.branchName || 'Akurana Flagship',
-    branchCity: orderData.branchCity || 'Kandy Hills',
+    branchId: branch.id,
+    branchName: orderData.branchName || branch.name,
+    branchCity: orderData.branchCity || branch.city,
     items: orderData.items || [],
     subtotalLKR: orderData.subtotalLKR || 0,
     deliveryFeeLKR: orderData.deliveryFeeLKR || 0,
@@ -836,6 +840,7 @@ export function createAdminOrder(orderData: Partial<OrderRecord>): OrderRecord {
     status: orderData.status || 'confirmed',
     paymentMethod: orderData.paymentMethod || (orderData.orderType === 'pickup' ? 'pay_at_parlour' : 'cash'),
     specialNote: orderData.specialNote || 'Manual Admin Order',
+    ...(orderData.confirmedAt ? { confirmedAt: orderData.confirmedAt } : {}),
     updatedAt: now,
   };
 
