@@ -182,5 +182,11 @@ export interface OrderRecord {
   cashCollectedLKR?: number;
   /** Why the last rider handed it back ("Kamal: Customer not answering") */
   riderNote?: string;
+  /** How a cash / counter order was paid in the end (asked when it is marked delivered or collected) */
+  paidVia?: PaidVia;
+  /** Who marked it delivered: the rider in the rider app, or the parlour in the console */
+  deliveredBy?: 'rider' | 'parlour';
 }
+
+export type PaidVia = 'cash' | 'bank_transfer' | 'card_machine';
 

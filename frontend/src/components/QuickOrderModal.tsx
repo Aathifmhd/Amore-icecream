@@ -4,7 +4,8 @@ import { AMORE_BRANCHES } from '../data/iceCreamData';
 import { formatPrice } from '../utils/currency';
 import { placeOrder, generateOrderReference } from '../utils/orderStorage';
 import { ApiError } from '../api';
-import { ONLINE_CARD_PAYMENTS_ENABLED } from '../config';
+import { DEMO_CARD_PAYMENTS, ONLINE_CARD_PAYMENTS_ENABLED } from '../config';
+import { cardBrandOf, checkDemoCard, demoCardApproved, sampleTestCard, type CardField } from '../utils/demoCard';
 import {
   X,
   CheckCircle2,
@@ -53,6 +54,28 @@ type CheckoutStep = 'details' | 'processing' | 'confirmed';
 
 const fieldClass =
   'w-full h-12 px-3.5 text-sm text-[#241A18] bg-[#FAF7F2] border border-[#D9CBB7] rounded-xl focus:ring-2 focus:ring-[#8C102A] focus:bg-white outline-hidden placeholder:text-[#A8988B]';
+
+/** One way to pay (card / cash on delivery) */
+const PayTile: React.FC<{ selected: boolean; onClick: () => void; icon: React.ReactNode; title: string; sub: string }> = ({ selected, onClick, icon, title, sub }) => (
+  <button
+    type="button"
+    role="radio"
+    aria-checked={selected}
+    onClick={onClick}
+    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col gap-2 ${
+      selected ? 'bg-red-50/70 border-[#8C102A] ring-1 ring-[#8C102A] shadow-xs' : 'bg-[#FAF7F2] border-[#D9CBB7] hover:bg-white'
+    }`}
+  >
+    <span className="flex items-center justify-between">
+      <span className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center shrink-0">{icon}</span>
+      {selected ? <CheckCircle2 className="w-5 h-5 text-[#8C102A]" /> : <span className="w-5 h-5 rounded-full border-2 border-[#D9CBB7]" />}
+    </span>
+    <span className="min-w-0">
+      <span className="block text-sm font-bold text-[#241A18]">{title}</span>
+      <span className="block text-xs text-slate-500">{sub}</span>
+    </span>
+  </button>
+);
 
 const StepTitle: React.FC<{ n: number; title: string }> = ({ n, title }) => (
   <div className="flex items-center gap-2.5 mb-3">
@@ -136,6 +159,17 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
   const [isReturnPolicyOpen, setIsReturnPolicyOpen] = useState(false);
+  const cardRefs: Record<CardField, React.RefObject<HTMLInputElement | null>> = {
+    number: useRef<HTMLInputElement>(null),
+    name: useRef<HTMLInputElement>(null),
+    expiry: useRef<HTMLInputElement>(null),
+    cvc: useRef<HTMLInputElement>(null),
+  };
+  // Card is offered for deliveries (a demo with test cards until a real gateway is connected)
+  const offerCard = ONLINE_CARD_PAYMENTS_ENABLED || DEMO_CARD_PAYMENTS;
+  // With a real gateway, dollar orders are card only
+  const offerCod = !ONLINE_CARD_PAYMENTS_ENABLED || currency !== 'USD';
+  const cardBrand = cardBrandOf(cardNumber);
 
   // Delivery: the parlour nearest the pin (or named in the address). Pickup: the one the customer picks.
   const [detectedBranchId, setDetectedBranchId] = useState<BranchId>(initialBranch);
@@ -292,12 +326,13 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
     }
   };
 
-  const getCardBrand = (num: string) => {
-    const clean = num.replace(/\s/g, '');
-    if (clean.startsWith('4')) return 'Visa';
-    if (/^5[1-5]/.test(clean) || /^2[2-7]/.test(clean)) return 'Mastercard';
-    if (/^3[47]/.test(clean)) return 'Amex';
-    return 'Credit/Debit';
+  const fillTestCard = () => {
+    const t = sampleTestCard();
+    setCardNumber(t.number);
+    setCardExpiry(t.expiry);
+    setCardCvv(t.cvc);
+    setCardHolder((v) => v || customerName.trim() || currentUser?.displayName || 'Test Customer');
+    setFormError(null);
   };
 
   const formatLabel = (format?: string) => {
@@ -316,7 +351,7 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
   };
 
   // Submission: "Confirm Order"
-  const handleConfirmOrder = (e: React.FormEvent) => {
+  const handleConfirmOrder = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // 1. Mandatory Login Gate
@@ -345,17 +380,30 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
 
     // 3. Validate Card Details only if Doorstep Delivery with Card payment is selected
     const cleanCard = cardNumber.replace(/\s/g, '');
-    if (ONLINE_CARD_PAYMENTS_ENABLED && orderType === 'delivery' && paymentMethod === 'card') {
-      if (cleanCard.length < 15) return fail('Enter your full card number.');
-      if (!cardExpiry.includes('/') || cardExpiry.length < 5) return fail('Enter the card expiry date (MM/YY).');
-      if (cardCvv.length < 3) return fail('Enter the 3 or 4 digit CVV.');
+    const payingByCard = offerCard && orderType === 'delivery' && paymentMethod === 'card';
+    if (payingByCard) {
+      const problem = checkDemoCard({ number: cardNumber, name: cardHolder, expiry: cardExpiry, cvc: cardCvv });
+      if (problem) return fail(problem.message, cardRefs[problem.field]);
     }
 
     // 4. Trigger 2.5s Processing Animation
     setFormError(null);
     setPlaceError(null);
     setStep('processing');
-    setProcessingMessage(orderType === 'pickup' ? 'Locking in your parlour pickup order...' : 'Securing payment details...');
+    if (payingByCard) {
+      // The demo bank answers after a moment; test card 4000 0000 0000 0002 is declined
+      setProcessingMessage(`Paying ${formatPrice(grandTotalLKR, currency)} by card…`);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      if (!demoCardApproved(cardNumber)) {
+        setStep('details');
+        setFormError('Your bank declined this card. Try another card, or choose cash on delivery.');
+        return;
+      }
+      setProcessingMessage('Payment approved — sending your order…');
+      await new Promise((resolve) => setTimeout(resolve, 700));
+    } else {
+      setProcessingMessage(orderType === 'pickup' ? 'Locking in your parlour pickup order...' : 'Securing payment details...');
+    }
 
     setTimeout(() => {
       setProcessingMessage(`Routing order to Amore ${assignedBranch.city} parlour...`);
@@ -389,10 +437,10 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
       grandTotalLKR,
       currency,
       status: 'pending_confirmation',
-      paymentMethod: orderType === 'pickup' ? 'pay_at_parlour' : paymentMethod === 'card' ? 'card' : 'cod',
+      paymentMethod: orderType === 'pickup' ? 'pay_at_parlour' : payingByCard ? 'card' : 'cod',
       paidAt: undefined,
-      cardLast4: orderType === 'delivery' && paymentMethod === 'card' ? cleanCard.slice(-4) : undefined,
-      cardBrand: orderType === 'delivery' && paymentMethod === 'card' ? getCardBrand(cardNumber) : undefined,
+      cardLast4: payingByCard ? cleanCard.slice(-4) : undefined,
+      cardBrand: payingByCard ? cardBrand ?? undefined : undefined,
       userId: currentUser?.uid,
     };
 
@@ -414,8 +462,11 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
           orderType,
           pickupBranch: pickupBranchId,
         });
-        // Clear the cart
+        // Clear the cart (and the card details)
         onClearOrder();
+        setCardNumber('');
+        setCardExpiry('');
+        setCardCvv('');
         // Show Confirmed Animation Step
         setStep('confirmed');
       })
@@ -523,6 +574,18 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
                 Ref: {confirmedOrderRef}
               </p>
             </div>
+
+            {confirmedOrder?.paymentMethod === 'card' && (
+              <div className="w-full p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-left flex items-center gap-3">
+                <CreditCard className="w-6 h-6 text-emerald-700 shrink-0" />
+                <div className="text-xs text-emerald-900 leading-snug">
+                  <p className="font-bold">
+                    Paid by card · {confirmedOrder.cardBrand} •••• {confirmedOrder.cardLast4}
+                  </p>
+                  <p>Nothing to pay the rider.{DEMO_CARD_PAYMENTS && ' This was a demo payment — no money was taken.'}</p>
+                </div>
+              </div>
+            )}
 
             {/* 2-Minute Grace Period Alert */}
             <div className="w-full p-4 rounded-2xl bg-amber-50 border border-amber-200 text-left space-y-1.5 shadow-2xs">
@@ -948,101 +1011,118 @@ export const QuickOrderModal: React.FC<QuickOrderModalProps> = ({
                     </div>
                   ) : (
                     <>
-                      <div className={`grid ${!ONLINE_CARD_PAYMENTS_ENABLED || currency === 'USD' ? 'grid-cols-1' : 'grid-cols-2'} gap-2.5`}>
-                        {ONLINE_CARD_PAYMENTS_ENABLED && (
-                          <button
-                            type="button"
-                            aria-pressed={paymentMethod === 'card'}
+                      <div className={`grid ${offerCard && offerCod ? 'grid-cols-2' : 'grid-cols-1'} gap-2.5`} role="radiogroup" aria-label="How you pay">
+                        {offerCard && (
+                          <PayTile
+                            selected={paymentMethod === 'card'}
                             onClick={() => setPaymentMethod('card')}
-                            className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-center gap-3 ${
-                              paymentMethod === 'card' ? 'bg-red-50/70 border-[#8C102A] ring-1 ring-[#8C102A] shadow-xs' : 'bg-[#FAF7F2] border-[#D9CBB7] hover:bg-white'
-                            }`}
-                          >
-                            <span className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-blue-600 shrink-0">
-                              <CreditCard className="w-5 h-5" />
-                            </span>
-                            <span className="min-w-0">
-                              <span className="block text-sm font-bold text-[#241A18]">Card</span>
-                              <span className="block text-xs text-slate-500">Visa, Mastercard, Amex</span>
-                            </span>
-                          </button>
+                            icon={<CreditCard className="w-5 h-5 text-sky-700" />}
+                            title="Card"
+                            sub={DEMO_CARD_PAYMENTS ? 'Visa or Mastercard · demo' : 'Visa or Mastercard'}
+                          />
                         )}
-                        {(!ONLINE_CARD_PAYMENTS_ENABLED || currency !== 'USD') && (
-                          <button
-                            type="button"
-                            aria-pressed={paymentMethod === 'cod'}
+                        {offerCod && (
+                          <PayTile
+                            selected={paymentMethod === 'cod'}
                             onClick={() => setPaymentMethod('cod')}
-                            className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-center gap-3 ${
-                              paymentMethod === 'cod' ? 'bg-red-50/70 border-[#8C102A] ring-1 ring-[#8C102A] shadow-xs' : 'bg-[#FAF7F2] border-[#D9CBB7] hover:bg-white'
-                            }`}
-                          >
-                            <span className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-emerald-600 shrink-0">
-                              <Banknote className="w-5 h-5" />
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block text-sm font-bold text-[#241A18]">Cash on delivery</span>
-                              <span className="block text-xs text-slate-500">Pay in LKR cash when your order arrives</span>
-                            </span>
-                            {paymentMethod === 'cod' && <CheckCircle2 className="w-5 h-5 text-[#8C102A] shrink-0" />}
-                          </button>
+                            icon={<Banknote className="w-5 h-5 text-emerald-600" />}
+                            title="Cash on delivery"
+                            sub="Pay the rider when it arrives"
+                          />
                         )}
                       </div>
 
-                      {ONLINE_CARD_PAYMENTS_ENABLED && paymentMethod === 'card' && (
-                        <div className="mt-2.5 p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5 animate-fadeIn">
-                          <div className="flex items-center justify-between text-xs text-slate-600">
-                            <span className="font-bold">Card details</span>
-                            <span className="text-[11px] text-slate-500 flex items-center gap-1">
-                              <Lock className="w-3 h-3 text-emerald-600" />
-                              Encrypted
+                      {offerCard && paymentMethod === 'card' && (
+                        <div className="mt-2.5 p-3.5 rounded-2xl bg-[#FAF7F2] border border-[#E8DFC8] space-y-3 animate-fadeIn">
+                          {DEMO_CARD_PAYMENTS && (
+                            <div className="flex items-center gap-3 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5">
+                              <span className="min-w-0 flex-1 text-xs text-amber-900 leading-snug">
+                                <span className="block font-bold">Demo payment · no money is taken</span>
+                                <span className="block">Test card 4242 4242 4242 4242, any future date and CVC</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={fillTestCard}
+                                className="shrink-0 h-9 px-3 rounded-lg bg-white border border-amber-300 text-xs font-bold text-[#8C102A] hover:bg-amber-100 cursor-pointer"
+                              >
+                                Use test card
+                              </button>
+                            </div>
+                          )}
+                          <label className="block">
+                            <span className="block text-xs font-bold text-[#5C4D44] mb-1.5">Card number</span>
+                            <span className="relative block">
+                              <input
+                                ref={cardRefs.number}
+                                type="text"
+                                inputMode="numeric"
+                                autoComplete="cc-number"
+                                placeholder="1234 5678 9012 3456"
+                                value={cardNumber}
+                                onChange={handleCardNumberChange}
+                                className={`${fieldClass} bg-white font-mono tracking-wider pr-24`}
+                              />
+                              {cardBrand && (
+                                <span
+                                  className={`absolute right-3 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded-md text-[11px] font-black italic tracking-wide pointer-events-none ${
+                                    cardBrand === 'Visa' ? 'bg-[#1A1F71] text-white' : 'bg-[#241A18] text-amber-300'
+                                  }`}
+                                >
+                                  {cardBrand === 'Visa' ? 'VISA' : 'Mastercard'}
+                                </span>
+                              )}
                             </span>
-                          </div>
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            autoComplete="cc-number"
-                            placeholder="Card number"
-                            value={cardNumber}
-                            onChange={handleCardNumberChange}
-                            className={`${fieldClass} bg-white font-mono tracking-wider`}
-                          />
-                          <input
-                            type="text"
-                            autoComplete="cc-name"
-                            placeholder="Name on card"
-                            value={cardHolder}
-                            onChange={(e) => setCardHolder(e.target.value)}
-                            className={`${fieldClass} bg-white`}
-                          />
-                          <div className="grid grid-cols-2 gap-2.5">
+                          </label>
+                          <label className="block">
+                            <span className="block text-xs font-bold text-[#5C4D44] mb-1.5">Name on card</span>
                             <input
+                              ref={cardRefs.name}
                               type="text"
-                              inputMode="numeric"
-                              autoComplete="cc-exp"
-                              placeholder="MM/YY"
-                              value={cardExpiry}
-                              onChange={handleCardExpiryChange}
-                              className={`${fieldClass} bg-white font-mono text-center`}
+                              autoComplete="cc-name"
+                              placeholder="As printed on the card"
+                              value={cardHolder}
+                              onChange={(e) => setCardHolder(e.target.value)}
+                              className={`${fieldClass} bg-white`}
                             />
-                            <input
-                              type="password"
-                              inputMode="numeric"
-                              autoComplete="cc-csc"
-                              maxLength={4}
-                              placeholder="CVV"
-                              value={cardCvv}
-                              onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, ''))}
-                              className={`${fieldClass} bg-white font-mono text-center`}
-                            />
+                          </label>
+                          <div className="grid grid-cols-2 gap-2.5">
+                            <label className="block">
+                              <span className="block text-xs font-bold text-[#5C4D44] mb-1.5">Expiry</span>
+                              <input
+                                ref={cardRefs.expiry}
+                                type="text"
+                                inputMode="numeric"
+                                autoComplete="cc-exp"
+                                placeholder="MM/YY"
+                                value={cardExpiry}
+                                onChange={handleCardExpiryChange}
+                                className={`${fieldClass} bg-white font-mono text-center`}
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="block text-xs font-bold text-[#5C4D44] mb-1.5">CVC</span>
+                              <input
+                                ref={cardRefs.cvc}
+                                type="password"
+                                inputMode="numeric"
+                                autoComplete="cc-csc"
+                                maxLength={3}
+                                placeholder="123"
+                                value={cardCvv}
+                                onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, ''))}
+                                className={`${fieldClass} bg-white font-mono text-center`}
+                              />
+                            </label>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => setIsReturnPolicyOpen(true)}
-                            className="text-xs text-[#8C102A] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
-                          >
-                            <ShieldCheck className="w-3.5 h-3.5" />
-                            <span>Return & Refund Policy</span>
-                          </button>
+                          <p className="text-[11px] text-[#7A6458] leading-snug flex gap-1.5">
+                            <Lock className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-px" />
+                            <span>
+                              Your card is charged only when the parlour accepts your order. Cancel within 2 minutes and nothing is charged.{' '}
+                              <button type="button" onClick={() => setIsReturnPolicyOpen(true)} className="font-semibold text-[#8C102A] hover:underline cursor-pointer">
+                                Refund policy
+                              </button>
+                            </span>
+                          </p>
                         </div>
                       )}
                     </>

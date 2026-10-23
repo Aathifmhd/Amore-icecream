@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Plus, MapPin, Bike, Store, StickyNote, Clock, X, BellRing, ListOrdered } from 'lucide-react';
+import { Search, Plus, MapPin, Bike, Store, StickyNote, Clock, X, BellRing, ListOrdered, CreditCard } from 'lucide-react';
 import { OrderRecord } from '../../../types';
 import { isCapturedReturnedBill } from '../../../utils/orderStorage';
 import { formatPrice } from '../../../utils/currency';
 import { Badge, Button, Card, EmptyState, cx, inputClass, useConsoleUi } from './ui';
 import { Stage, clockTime, formatLabel, graceOf, isPickup, mmss, nextStep, paymentLabel, shortRef, stageOf, timeAgo } from './orderMeta';
 import { advanceOrder } from './orderActions';
+import { FinishOrderDialog } from './FinishOrderDialog';
 import { BranchFilter, inBranch, useNow } from './useConsoleData';
 import { ConeIcon, ScooterIcon, StatusPill } from './StatusPill';
 
@@ -17,12 +18,15 @@ const isSystemNote = (n?: string) => !n || n === 'Manual Admin Order';
 export const NextStepButton: React.FC<{ order: OrderRecord; size?: 'sm' | 'md' | 'lg'; className?: string }> = ({ order, size = 'md', className }) => {
   const { toast } = useConsoleUi();
   const now = useNow(1000);
+  const [finishing, setFinishing] = useState(false);
   const next = nextStep(order);
   if (!next) return null;
   const grace = graceOf(order, now);
 
   const go = (e: React.MouseEvent) => {
     e.stopPropagation();
+    // Delivered / collected: first ask how the customer paid
+    if (next.step === 'finish') return setFinishing(true);
     const msg = advanceOrder(order);
     if (msg) toast(msg);
   };
@@ -53,6 +57,7 @@ export const NextStepButton: React.FC<{ order: OrderRecord; size?: 'sm' | 'md' |
         {next.label}
       </Button>
       {next.quiet && <span className="block text-[11px] text-[#8A7970] mt-1 whitespace-nowrap">A rider with the app picks it up</span>}
+      {finishing && <FinishOrderDialog order={order} onClose={() => setFinishing(false)} />}
     </span>
   );
 };
@@ -99,6 +104,16 @@ const TypeCell: React.FC<{ order: OrderRecord; showBranch: boolean }> = ({ order
     )}
   </div>
 );
+
+/** Under the total: a card order stands out as already paid */
+const PaymentLine: React.FC<{ order: OrderRecord }> = ({ order }) =>
+  order.paymentMethod === 'card' ? (
+    <Badge tone="blue" className="mt-1">
+      <CreditCard className="w-3 h-3" /> Paid by card
+    </Badge>
+  ) : (
+    <p className="text-xs text-[#7A6458] whitespace-nowrap">{paymentLabel(order)}</p>
+  );
 
 const NoteLine: React.FC<{ order: OrderRecord }> = ({ order }) =>
   isSystemNote(order.specialNote) ? null : (
@@ -182,7 +197,7 @@ const OrdersTable: React.FC<{
                   </td>
                   <td className="py-4 px-3 text-right">
                     <p className="font-bold text-[#241A18] whitespace-nowrap">{lkr(r.order.grandTotalLKR)}</p>
-                    <p className="text-xs text-[#7A6458] whitespace-nowrap">{paymentLabel(r.order)}</p>
+                    <PaymentLine order={r.order} />
                   </td>
                   <td className="py-4 px-3">
                     <StatusPill order={r.order} />
@@ -238,7 +253,7 @@ const OrdersTable: React.FC<{
               <div className="mt-3 flex items-end justify-between gap-3">
                 <div>
                   <p className="font-bold text-[#241A18]">{lkr(r.order.grandTotalLKR)}</p>
-                  <p className="text-xs text-[#7A6458]">{paymentLabel(r.order)}</p>
+                  <PaymentLine order={r.order} />
                 </div>
                 {nextStep(r.order) && <NextStepButton order={r.order} className="flex-1 max-w-[13rem]" />}
               </div>

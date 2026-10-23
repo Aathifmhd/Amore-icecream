@@ -8,6 +8,21 @@ import { logActivity, lkr } from '../activity.js';
 const router = Router();
 
 /** What a change to an order means, for the Action Center (null for small things like the grace timer). */
+/** " · paid by bank transfer" etc. for the Action Center, when an order is finished */
+function howPaid(o) {
+  if (o.paymentMethod === 'card') return ' · paid by card online';
+  switch (o.paidVia) {
+    case 'cash':
+      return o.riderName && o.cashCollectedLKR ? ` · ${o.riderName} collected ${lkr(o.cashCollectedLKR)} cash` : ` · paid ${lkr(o.grandTotalLKR)} in cash`;
+    case 'bank_transfer':
+      return ' · paid by bank transfer';
+    case 'card_machine':
+      return ' · paid by card machine';
+    default:
+      return '';
+  }
+}
+
 function describeOrderChange(before, after, req) {
   const ref = after.orderReference;
   const pickup = after.orderType === 'pickup';
@@ -21,7 +36,7 @@ function describeOrderChange(before, after, req) {
       case 'on_the_way':
         return ['order', pickup ? `marked order ${ref} ready for pickup` : `sent order ${ref} out for delivery`];
       case 'delivered':
-        return ['order', pickup ? `marked order ${ref} as collected` : `marked order ${ref} as delivered`];
+        return ['order', (pickup ? `marked order ${ref} as collected` : `marked order ${ref} as delivered`) + howPaid(after)];
       case 'cancelled': {
         const why = after.cancellationReason ? ` — ${after.cancellationReason}` : '';
         return ['order', `cancelled order ${ref}${why}`];

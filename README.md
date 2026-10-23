@@ -170,6 +170,13 @@ today; the Action Center logs every pickup, delivery and hand-back. Staff can st
 without the app ("Out for delivery (no app)") or mark it delivered. A new PIN or switching a rider
 off signs them out; six wrong PINs lock the phone number for 15 minutes.
 
+When staff press **Mark delivered** (or **Mark collected**) in the console, they first say how the
+customer paid: the rider got the cash (added to the cash that rider hands in), bank transfer, or
+card — at the counter for pickups (`paidVia`; `deliveredBy: 'parlour'`). A card order paid online
+needs no answer. If the order was with a rider, the rider app tells them the parlour finished it,
+and their Done list shows how it was paid. Card orders show as "Paid by card" everywhere: the
+orders list, the order popup, the rider app and the kitchen slip.
+
 ## Checkout
 
 The tray (`QuickOrderModal.tsx`) runs in four numbered steps: delivery or pickup, address (or
@@ -196,7 +203,20 @@ setting in Vercel, redeploy so it takes effect.
 
 ## Payments
 
-Online card payment is switched off (`ONLINE_CARD_PAYMENTS_ENABLED` in
-`frontend/src/config.ts`) until a real payment gateway such as PayHere is connected.
-Customers can pay cash on delivery or pay at the parlour; the backend refuses card orders
-too (`backend/src/orderRules.js`).
+Real online card payment is switched off (`ONLINE_CARD_PAYMENTS_ENABLED` in
+`frontend/src/config.ts`) until a payment gateway such as PayHere is connected. Customers pay
+cash on delivery or at the parlour.
+
+**Demo card payment** (`DEMO_CARD_PAYMENTS`, on): checkout also offers **Card** for deliveries. It
+works only with test cards (`frontend/src/utils/demoCard.ts`), so nobody can think they paid with a
+real card; no money is taken:
+
+| Card | Result |
+| --- | --- |
+| `4242 4242 4242 4242` (Visa), `5555 5555 5555 4444` (Mastercard) | approved |
+| `4000 0000 0000 0002` | declined |
+
+Any future expiry date and any 3-digit CVC. **Use test card** fills one in. Only the card's brand
+and last 4 digits are sent with the order; the backend accepts card orders only with those, only
+for delivery, and never as a later change (`DEMO_CARD_PAYMENTS` in `backend/src/orderRules.js`).
+To hide it, set both flags to `false`.

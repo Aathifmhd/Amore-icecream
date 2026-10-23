@@ -31,6 +31,7 @@ import { ApiError, getRiderSession } from '../api';
 import { AMORE_BRANCHES } from '../data/iceCreamData';
 import { formatPrice } from '../utils/currency';
 import { distanceKm, useParlourZones } from '../utils/branchLocation';
+import { paidViaLabel } from '../utils/payment';
 import { RiderLogin } from './RiderLogin';
 import {
   agoText,
@@ -98,6 +99,24 @@ const RiderHome: React.FC<{ onSignedOut: (why: string | null) => void }> = ({ on
     seen.current = refs;
   }, [board]);
 
+  // Say so when the parlour finishes (or takes back) an order this rider was carrying
+  const carrying = useRef<Set<string> | null>(null);
+  const actedOn = useRef(new Set<string>());
+  useEffect(() => {
+    if (!board) return;
+    const refs = new Set(board.mine.map((o) => o.orderReference));
+    const gone = carrying.current ? [...carrying.current].filter((r) => !refs.has(r) && !actedOn.current.has(r)) : [];
+    if (gone.length) {
+      const delivered = gone.filter((r) => board.done.some((o) => o.orderReference === r));
+      setToast(
+        delivered.length
+          ? `The parlour marked ${delivered.map(shortRef).join(', ')} as delivered`
+          : `The parlour took ${gone.map(shortRef).join(', ')} off your list`
+      );
+    }
+    carrying.current = refs;
+  }, [board]);
+
   if (!board) {
     return (
       <div className="min-h-[100dvh] bg-[#FAF7F2] flex flex-col items-center justify-center gap-3 text-[#7A6458]">
@@ -123,7 +142,8 @@ const RiderHome: React.FC<{ onSignedOut: (why: string | null) => void }> = ({ on
   const cashToday = done.reduce((s, o) => s + (o.cashCollectedLKR || 0), 0);
   const cashCarrying = mine.filter((o) => o.collectCash).reduce((s, o) => s + o.grandTotalLKR, 0);
 
-  const run = async (action: () => Promise<unknown>, message: string, nextTab?: Tab) => {
+  const run = async (ref: string, action: () => Promise<unknown>, message: string, nextTab?: Tab) => {
+    actedOn.current.add(ref);
     try {
       await action();
       setSheet(null);
@@ -264,8 +284,10 @@ const RiderHome: React.FC<{ onSignedOut: (why: string | null) => void }> = ({ on
                     >
                       {o.collectCash ? <Banknote className="w-6 h-6 shrink-0" /> : <CreditCard className="w-6 h-6 shrink-0" />}
                       <span className="leading-tight">
-                        <span className="block font-bold">{o.collectCash ? `Collect ${lkr(o.grandTotalLKR)} cash` : 'Paid by card'}</span>
-                        <span className="block text-xs opacity-80">{o.collectCash ? 'Cash on delivery' : 'Nothing to collect'}</span>
+                        <span className="block font-bold">
+                          {o.collectCash ? `Collect ${lkr(o.grandTotalLKR)} cash` : `Paid by card${o.cardBrand ? ` (${o.cardBrand})` : ''}`}
+                        </span>
+                        <span className="block text-xs opacity-80">{o.collectCash ? 'Cash on delivery' : 'Paid online — don’t collect any cash'}</span>
                       </span>
                     </div>
                     <div className="p-4 space-y-2">
@@ -324,9 +346,10 @@ const RiderHome: React.FC<{ onSignedOut: (why: string | null) => void }> = ({ on
                       <span className="block text-xs text-[#7A6458] truncate">
                         {o.city || o.deliveryAddress} · {clock(o.deliveredAt)}
                       </span>
+                      {o.deliveredBy === 'parlour' && <span className="block text-xs font-semibold text-[#8C102A]">Marked delivered by the parlour</span>}
                     </span>
                     <span className="text-sm font-bold text-right whitespace-nowrap">
-                      {o.cashCollectedLKR ? lkr(o.cashCollectedLKR) : <span className="text-[#8A7970] font-medium">Card</span>}
+                      {o.cashCollectedLKR ? lkr(o.cashCollectedLKR) : <span className="text-[#8A7970] font-medium">{paidViaLabel(o) ?? '—'}</span>}
                     </span>
                   </li>
                 ))}
@@ -352,20 +375,20 @@ const RiderHome: React.FC<{ onSignedOut: (why: string | null) => void }> = ({ on
       )}
 
       {sheet?.kind === 'pickup' && sheet.order && (
-        <PickupSheet order={sheet.order} onClose={() => setSheet(null)} onConfirm={() => run(() => pickUp(sheet.order!.orderReference), 'Picked up — ride safe!', 'mine')} />
+        <PickupSheet order={sheet.order} onClose={() => setSheet(null)} onConfirm={() => run(sheet.order!.orderReference, () => pickUp(sheet.order!.orderReference), 'Picked up — ride safe!', 'mine')} />
       )}
       {sheet?.kind === 'deliver' && sheet.order && (
         <DeliverSheet
           order={sheet.order}
           onClose={() => setSheet(null)}
-          onConfirm={(cash) => run(() => markDelivered(sheet.order!.orderReference, cash), 'Delivered — well done!', mine.length > 1 ? 'mine' : 'done')}
+          onConfirm={(cash) => run(sheet.order!.orderReference, () => markDelivered(sheet.order!.orderReference, cash), 'Delivered — well done!', mine.length > 1 ? 'mine' : 'done')}
         />
       )}
       {sheet?.kind === 'handback' && sheet.order && (
         <HandBackSheet
           order={sheet.order}
           onClose={() => setSheet(null)}
-          onConfirm={(reason) => run(() => handBack(sheet.order!.orderReference, reason), 'Handed back — please bring it to the parlour', 'ready')}
+          onConfirm={(reason) => run(sheet.order!.orderReference, () => handBack(sheet.order!.orderReference, reason), 'Handed back — please bring it to the parlour', 'ready')}
         />
       )}
       {sheet?.kind === 'signout' && (
@@ -550,7 +573,7 @@ const PayChip: React.FC<{ order: RiderOrder }> = ({ order }) =>
     </span>
   ) : (
     <span className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold">
-      <CreditCard className="w-3.5 h-3.5" /> Paid · {lkr(order.grandTotalLKR)}
+      <CreditCard className="w-3.5 h-3.5" /> Paid by card
     </span>
   );
 

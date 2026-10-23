@@ -19,12 +19,19 @@ export const ORDER_FIELDS = [
   'customerDeletedHistory',
   // Riders: ready for a rider, who took it, cash they collected, why they handed it back
   'readyAt', 'riderId', 'riderName', 'riderPhone', 'cashCollectedLKR', 'riderNote',
+  // How a cash / counter order was paid in the end, and who finished it (the rider or the parlour)
+  'paidVia', 'deliveredBy',
 ];
 
 const STATUSES = ['pending_confirmation', 'paid', 'confirmed', 'cancelled', 'preparing', 'on_the_way', 'delivered'];
 const BRANCHES = ['akurana', 'colombo', 'arugambay'];
-// No online card gateway is connected yet (see ONLINE_CARD_PAYMENTS_ENABLED in the frontend)
+// No online card gateway is connected yet (see ONLINE_CARD_PAYMENTS_ENABLED in the frontend).
+// Demo card payments (DEMO_CARD_PAYMENTS there): a delivery can be "paid" with a test card at
+// checkout; no money is taken and only the card's brand and last 4 digits reach us.
+const DEMO_CARD_PAYMENTS = true;
 const CUSTOMER_PAYMENTS = ['cod', 'cash', 'pay_at_parlour'];
+const CHECKOUT_PAYMENTS = DEMO_CARD_PAYMENTS ? [...CUSTOMER_PAYMENTS, 'card'] : CUSTOMER_PAYMENTS;
+const CARD_BRANDS = ['Visa', 'Mastercard'];
 
 // Fields a customer may send when placing an order
 const NEW_ORDER_FIELDS = [
@@ -32,6 +39,7 @@ const NEW_ORDER_FIELDS = [
   'deliveryAddress', 'city', 'deliveryCoordinates', 'specialNote', 'whatsappNumber',
   'emailAddress', 'branchId', 'branchName', 'branchCity', 'items', 'subtotalLKR',
   'deliveryFeeLKR', 'grandTotalLKR', 'currency', 'status', 'paymentMethod', 'userId',
+  'cardLast4', 'cardBrand',
 ];
 
 // While an order awaits confirmation, its owner may edit delivery details, pause/resume
@@ -76,7 +84,7 @@ const FIELD_CHECKS = {
   status: (v) => STATUSES.includes(v),
   paymentMethod: (v) => ['card', 'cash', 'cod', 'pay_at_parlour'].includes(v),
   paidAt: isDate,
-  cardLast4: (v) => str(v, 4),
+  cardLast4: (v) => typeof v === 'string' && /^\d{4}$/.test(v),
   cardBrand: (v) => str(v, 30),
   userId: (v) => str(v, 128),
   cancelledAt: isDate,
@@ -101,6 +109,8 @@ const FIELD_CHECKS = {
   riderPhone: (v) => str(v, 30),
   cashCollectedLKR: (v) => num(v),
   riderNote: (v) => str(v, 300),
+  paidVia: (v) => ['cash', 'bank_transfer', 'card_machine'].includes(v),
+  deliveredBy: (v) => v === 'rider' || v === 'parlour',
 };
 
 function isItem(i) {
@@ -178,8 +188,15 @@ export function newCustomerOrder(body, customer, parlours) {
     if (d[key] === undefined) throw bad(`Missing ${key}`);
   }
   if (d.items.length === 0) throw bad('The order has no items');
-  if (d.paymentMethod !== undefined && !CUSTOMER_PAYMENTS.includes(d.paymentMethod)) {
+  if (d.paymentMethod !== undefined && !CHECKOUT_PAYMENTS.includes(d.paymentMethod)) {
     throw bad('Card payments are not available yet');
+  }
+  if (d.paymentMethod === 'card') {
+    if (d.orderType !== 'delivery') throw bad('Pickup orders are paid at the parlour');
+    if (!d.cardLast4 || !CARD_BRANDS.includes(d.cardBrand)) throw bad('The card payment did not go through. Please try again.');
+  } else {
+    delete d.cardLast4;
+    delete d.cardBrand;
   }
   const itemsTotal = d.items.reduce((sum, i) => sum + i.priceLKR * i.quantity, 0);
   if (!close(itemsTotal, d.subtotalLKR) || !close(d.subtotalLKR + d.deliveryFeeLKR, d.grandTotalLKR)) {
@@ -221,8 +238,9 @@ export function orderUpdate(body, existing, { admin, customer, parlours }) {
     const next = { ...existing, ...set };
     for (const k of unset) delete next[k];
 
+    // Paying by card happens at checkout; an order can't be switched to card afterwards
     if (changed.includes('paymentMethod') && !CUSTOMER_PAYMENTS.includes(next.paymentMethod)) {
-      throw bad('Card payments are not available yet');
+      throw bad('Card payments are only taken when you place the order');
     }
     // A moved pin must still be within the parlour's delivery range
     if (changed.includes('deliveryCoordinates')) checkDeliveryRange(next, parlours);

@@ -5,11 +5,12 @@
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { Banknote, Bike, CheckCircle2, Clock, Copy, KeyRound, Pencil, Plus, Smartphone, Trash2, UserRound } from 'lucide-react';
-import { BranchId } from '../../../types';
+import { BranchId, PaidVia } from '../../../types';
 import { AMORE_BRANCHES } from '../../../data/iceCreamData';
 import { api, ApiError, type AdminProfile } from '../../../api';
 import { startPolling } from '../../../utils/poll';
 import { formatPrice } from '../../../utils/currency';
+import { paidViaLabel } from '../../../utils/payment';
 import { Badge, Button, Card, EmptyState, Field, Popup, Switch, cx, inputClass, useConsoleUi } from './ui';
 import type { BranchFilter } from './useConsoleData';
 import { clockTime, shortRef, timeAgo } from './orderMeta';
@@ -27,8 +28,11 @@ interface RiderOrder {
   onTheWayAt: string | null;
   deliveredAt: string | null;
   grandTotalLKR: number;
+  paymentMethod: string;
   collectCash: boolean;
   cashCollectedLKR: number | null;
+  paidVia: PaidVia | null;
+  deliveredBy: 'rider' | 'parlour' | null;
   status: string;
   branchId: BranchId;
 }
@@ -157,6 +161,7 @@ export const RidersView: React.FC<{ admin: AdminProfile; branch: BranchFilter }>
                 <span className="font-semibold">{o.customerName}</span>
                 <span className="text-[#7A6458]">· {o.city || o.deliveryAddress}</span>
                 {branch === 'all' && <span className="text-[#7A6458]">· {BRANCH_SHORT[o.branchId]} parlour</span>}
+                <span className={o.collectCash ? 'text-[#7A6458]' : 'font-semibold text-sky-800'}>· {o.collectCash ? `collect ${lkr(o.grandTotalLKR)}` : 'paid by card'}</span>
                 <span className={cx('ml-auto', o.readyAt && Date.now() - Date.parse(o.readyAt) > 10 * 60_000 ? 'text-red-700 font-semibold' : 'text-[#7A6458]')}>
                   ready {timeAgo(o.readyAt || undefined)}
                 </span>
@@ -402,12 +407,13 @@ const RiderHistory: React.FC<{ rider: Rider; onClose: () => void }> = ({ rider, 
                     {new Date(o.deliveredAt!).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} · picked up {clockTime(o.onTheWayAt || undefined)}, delivered{' '}
                     {clockTime(o.deliveredAt || undefined)}
                     {minutes(o) !== null && <> ({minutes(o)} min)</>}
+                    {o.deliveredBy === 'parlour' && <> · marked by the parlour</>}
                   </>
                 ) : (
                   <Badge tone="blue">On the way since {clockTime(o.onTheWayAt || undefined)}</Badge>
                 )}
               </span>
-              <span className="w-28 text-right font-semibold text-[#241A18]">{o.cashCollectedLKR ? lkr(o.cashCollectedLKR) : o.collectCash ? '—' : 'Card'}</span>
+              <span className="w-28 text-right font-semibold text-[#241A18]">{o.cashCollectedLKR ? lkr(o.cashCollectedLKR) : (o.status === 'delivered' && paidViaLabel(o)) || (o.collectCash ? '—' : 'Paid by card')}</span>
             </li>
           ))}
         </ul>

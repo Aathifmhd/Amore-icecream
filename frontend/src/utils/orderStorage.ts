@@ -1,4 +1,4 @@
-import { OrderRecord, BranchId } from '../types';
+import { OrderRecord, BranchId, PaidVia } from '../types';
 import { AMORE_BRANCHES, resolveBundledImage } from '../data/iceCreamData';
 import { api, ApiError } from '../api';
 import { isStaleFetch, ordersWithPendingWrites, queueWrite, setOrderHandlers } from './outbox';
@@ -680,16 +680,21 @@ export function adminSetOnTheWay(orderReference: string): OrderRecord | null {
 }
 
 /**
- * Admin: Marks order as completed / delivered
+ * Admin: Marks order as completed / delivered, with how it was paid (not asked for card orders).
+ * Cash a rider took at the door counts towards the cash they hand in.
  */
-export function adminSetDelivered(orderReference: string): OrderRecord | null {
+export function adminSetDelivered(orderReference: string, paidVia?: PaidVia): OrderRecord | null {
   const now = new Date().toISOString();
   const existing = getOrder(orderReference);
+  const riderCash = paidVia === 'cash' && existing?.riderId && existing.orderType !== 'pickup';
   return updateOrder(orderReference, {
     status: 'delivered',
     // Cash / counter orders are paid on hand-over; keep an earlier card capture time as is
     paidAt: existing?.paidAt || now,
     deliveredAt: now,
+    deliveredBy: 'parlour',
+    ...(paidVia && { paidVia }),
+    ...(riderCash && { cashCollectedLKR: existing.grandTotalLKR }),
     updatedAt: now,
   });
 }

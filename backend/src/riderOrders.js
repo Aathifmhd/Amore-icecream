@@ -42,10 +42,14 @@ export const riderOrderView = (o) => ({
   items: (o.items || []).map((i) => ({ name: i.name, format: i.format || null, quantity: i.quantity })),
   grandTotalLKR: o.grandTotalLKR,
   paymentMethod: o.paymentMethod || 'cod',
+  cardBrand: o.paymentMethod === 'card' ? o.cardBrand || null : null,
   collectCash: collectsCash(o),
   branchId: o.branchId,
   onTheWayAt: o.onTheWayAt || null,
   deliveredAt: o.deliveredAt || null,
   cashCollectedLKR: o.cashCollectedLKR ?? null,
+  // How it was paid in the end (cash, bank transfer, card machine) and who marked it delivered
+  paidVia: o.paidVia || null,
+  deliveredBy: o.deliveredBy || null,
   riderNote: o.riderNote || null,
 });

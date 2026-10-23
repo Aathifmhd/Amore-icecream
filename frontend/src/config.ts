@@ -11,3 +11,11 @@
  * (The backend refuses card orders too — see backend/src/orderRules.js.)
  */
 export const ONLINE_CARD_PAYMENTS_ENABLED = false;
+
+/**
+ * Demo card payments: checkout offers "Card" for deliveries, which works with test cards only
+ * (see utils/demoCard.ts). No money is taken; the order keeps the card's brand and last 4 digits
+ * and shows as "Paid by card" in the console and the rider app. Set to false to hide it
+ * (and DEMO_CARD_PAYMENTS in backend/src/orderRules.js).
+ */
+export const DEMO_CARD_PAYMENTS = true;

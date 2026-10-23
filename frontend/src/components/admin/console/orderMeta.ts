@@ -1,7 +1,7 @@
 /**
  * Plain-language order status, colours and "next step" for the operations console.
  */
-import { OrderRecord } from '../../../types';
+import { OrderRecord, PaidVia } from '../../../types';
 import type { Tone } from './ui';
 
 export type Stage = 'new' | 'preparing' | 'ready' | 'done' | 'cancelled';
@@ -76,10 +76,21 @@ export function nextStep(o: OrderRecord): { step: NextStep; label: string; quiet
   }
 }
 
+/** "Visa •••• 4242" for a card payment */
+export const cardText = (o: Pick<OrderRecord, 'cardBrand' | 'cardLast4'>) =>
+  [o.cardBrand, o.cardLast4 && `•••• ${o.cardLast4}`].filter(Boolean).join(' ');
+
+const PAID_VIA: Record<PaidVia, string> = { cash: 'Paid in cash', bank_transfer: 'Paid by bank transfer', card_machine: 'Paid by card machine' };
+
+/** How the order is (or was) paid, in a few words */
 export function paymentLabel(o: OrderRecord): string {
+  if (o.status === 'delivered' && o.paidVia && o.paymentMethod !== 'card') {
+    if (o.paidVia === 'cash' && o.riderName && o.cashCollectedLKR) return `Cash · collected by ${o.riderName.split(' ')[0]}`;
+    return PAID_VIA[o.paidVia];
+  }
   switch (o.paymentMethod) {
     case 'card':
-      return 'Card';
+      return 'Paid by card';
     case 'pay_at_parlour':
       return 'Pay at counter';
     case 'cash':

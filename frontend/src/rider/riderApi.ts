@@ -4,6 +4,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError, getRiderSession, saveRiderSession, type RiderProfile, type RiderSession } from '../api';
+import type { PaidVia } from '../types';
 import { startPolling } from '../utils/poll';
 
 export interface RiderOrder {
@@ -20,11 +21,16 @@ export interface RiderOrder {
   items: { name: string; format: string | null; quantity: number }[];
   grandTotalLKR: number;
   paymentMethod: string;
+  /** Card orders: the card's brand (paid online at checkout) */
+  cardBrand: string | null;
   collectCash: boolean;
   branchId: RiderProfile['branchId'];
   onTheWayAt: string | null;
   deliveredAt: string | null;
   cashCollectedLKR: number | null;
+  /** How it was paid in the end, and whether the rider or the parlour marked it delivered */
+  paidVia: PaidVia | null;
+  deliveredBy: 'rider' | 'parlour' | null;
   riderNote: string | null;
 }
 

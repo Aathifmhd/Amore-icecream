@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Phone, MessageCircle, MapPin, Printer, Pencil, Ban, Trash2, Copy, Mail, Store, Bike, StickyNote, Check } from 'lucide-react';
+import { Phone, MessageCircle, MapPin, Printer, Pencil, Ban, Trash2, Copy, Mail, Store, Bike, StickyNote, Check, CreditCard } from 'lucide-react';
 import { OrderRecord } from '../../../types';
 import {
   adminCancelOrderWithReason,
@@ -11,7 +11,8 @@ import {
 } from '../../../utils/orderStorage';
 import { formatPrice } from '../../../utils/currency';
 import { Badge, Button, Dialog, Popup, Field, cx, inputClass, useConsoleUi } from './ui';
-import { clockTime, formatLabel, isPickup, nextStep, paymentLabel, shortRef, statusLabel } from './orderMeta';
+import { cardText, clockTime, formatLabel, isPickup, nextStep, paymentLabel, shortRef, statusLabel } from './orderMeta';
+import { DEMO_CARD_PAYMENTS } from '../../../config';
 import { NextStepButton } from './OrdersView';
 import { printSlip } from './printSlip';
 
@@ -252,7 +253,7 @@ export const OrderDrawer: React.FC<{ order: OrderRecord | null; onClose: () => v
     ['Preparing', order.preparingAt],
     ...(isPickup(order) ? [] : ([['Ready for rider', order.readyAt]] as [string, string | undefined][])),
     [isPickup(order) ? 'Ready for pickup' : order.riderName ? `Picked up by ${order.riderName}` : 'Out for delivery', order.onTheWayAt],
-    [isPickup(order) ? 'Collected' : 'Delivered', order.deliveredAt],
+    [isPickup(order) ? 'Collected' : order.deliveredBy === 'parlour' && order.riderName ? 'Delivered (marked by the parlour)' : 'Delivered', order.deliveredAt],
     ['Cancelled', order.cancelledAt],
   ];
 
@@ -398,10 +399,21 @@ export const OrderDrawer: React.FC<{ order: OrderRecord | null; onClose: () => v
                 <dt>Total</dt>
                 <dd>{lkr(order.grandTotalLKR)}</dd>
               </div>
-              <div className="flex justify-between text-[#5C4D44]">
+              <div className="flex justify-between gap-3 text-[#5C4D44]">
                 <dt>Payment</dt>
-                <dd>{paymentLabel(order)}</dd>
+                <dd className="text-right">{paymentLabel(order)}</dd>
               </div>
+              {order.paymentMethod === 'card' && (
+                <div className="!mt-3 rounded-xl bg-sky-50 border border-sky-200 px-3 py-2.5 flex items-center gap-2.5 text-sky-900">
+                  <CreditCard className="w-5 h-5 shrink-0" />
+                  <span className="leading-tight">
+                    <span className="block font-semibold">Paid by card online{cardText(order) ? ` · ${cardText(order)}` : ''}</span>
+                    <span className="block text-xs opacity-80">
+                      Nothing to collect at the door{DEMO_CARD_PAYMENTS ? ' · demo payment, no money was taken' : ''}
+                    </span>
+                  </span>
+                </div>
+              )}
             </dl>
           </Section>
 
