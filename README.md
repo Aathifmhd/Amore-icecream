@@ -155,10 +155,14 @@ Google account can sign in, not only test users.
 
 ## Riders
 
-Riders deliver from one parlour each. An admin adds them on the console's **Riders** page (name,
-mobile number, parlour, a 4–6 digit PIN); a branch admin manages their own parlour's riders. Riders
-open **/rider** on their phone (it can be saved to the home screen) and sign in with their mobile
-number and PIN.
+Riders deliver from one parlour each. An admin adds them on the console's **Riders** page: full name
+(as on the NIC), the name shown in the app, NIC number, joined date, mobile number, emergency
+contact number (and whose it is), address, an optional photo, the parlour and a 4–6 digit PIN. A
+branch admin manages their own parlour's riders. The personal details are for the console only
+(never the rider app or customers); riders added before them can be filled in later, and once
+given they can be changed but not emptied. Clicking a rider shows their details and deliveries.
+Riders open **/rider** on their phone (it can be saved to the home screen) and sign in with their
+mobile number and PIN.
 
 A delivery order moves like this:
 

@@ -11,9 +11,14 @@ import { ratingSummary } from '../riderRatings.js';
  * Riders, managed from the console (a branch admin: their own parlour's riders).
  *
  *   GET    /                    riders with what they are doing now and today, + orders waiting for a rider
+ *   GET    /photos              the riders' photos (kept out of the list, which is asked for every few seconds)
  *   GET    /:id/deliveries      a rider's latest deliveries
- *   POST   /                    { name, phone, branchId, pin } add a rider
- *   PATCH  /:id                 { name?, phone?, branchId?, active?, pin? } (a new PIN or switching off signs them out)
+ *   POST   /                    { name, phone, branchId, pin, ...details } add a rider
+ *   PATCH  /:id                 { name?, phone?, branchId?, active?, pin?, ...details } (a new PIN or switching off signs them out)
+ *
+ * Details (personal, for the console only — never the rider app or customers): fullName, nic,
+ * joinedOn, emergencyPhone, emergencyName, address, photo. All but the photo and the emergency
+ * contact's name are needed for a new rider; once given they can be changed but not emptied.
  *   DELETE /:id                 remove a rider (not while they are out with orders or hold cash)
  */
 const router = Router();
@@ -46,6 +51,81 @@ const cleanBranch = (req, v) => {
   if (!BRANCHES.includes(v)) throw new HttpError(400, 'Choose the rider’s parlour');
   return v;
 };
+const MAX_PHOTO_CHARS = 200_000; // a small JPEG (the console shrinks photos to 320 px)
+
+const text = (max) => (v, label) => {
+  if (v === undefined || v === null) return '';
+  if (typeof v !== 'string' || v.trim().length > max) throw new HttpError(400, `${label}: up to ${max} characters`);
+  return v.trim();
+};
+
+// Detail → [label, needed for a new rider, check]. Same rules as employee records (routes/employees.js).
+const DETAILS = {
+  fullName: ['Full name', true, text(100)],
+  nic: [
+    'NIC number',
+    true,
+    (v, label) => {
+      const nic = text(12)(v, label).toUpperCase();
+      // Old NIC: 9 digits + V or X. New NIC: 12 digits.
+      if (nic && !/^(\d{9}[VX]|\d{12})$/.test(nic)) throw new HttpError(400, 'NIC number: 9 digits and V/X, or 12 digits');
+      return nic;
+    },
+  ],
+  joinedOn: [
+    'Joined date',
+    true,
+    (v, label) => {
+      const d = text(10)(v, label);
+      if (d && (!/^\d{4}-\d{2}-\d{2}$/.test(d) || Number.isNaN(Date.parse(d)))) throw new HttpError(400, 'Joined date: use a valid date');
+      return d;
+    },
+  ],
+  emergencyPhone: [
+    'Emergency contact number',
+    true,
+    (v, label) => {
+      const p = text(20)(v, label);
+      if (p && phoneKey(p).length !== 9) throw new HttpError(400, 'Emergency contact number: a phone number, e.g. 077 123 4567');
+      return p;
+    },
+  ],
+  emergencyName: ['Emergency contact name', false, text(100)],
+  address: ['Address', true, text(300)],
+  photo: [
+    'Photo',
+    false,
+    (v) => {
+      if (v === undefined || v === null || v === '') return '';
+      if (typeof v !== 'string' || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v)) throw new HttpError(400, 'Photo: a JPEG, PNG or WebP image');
+      if (v.length > MAX_PHOTO_CHARS) throw new HttpError(413, 'The photo is too large');
+      return v;
+    },
+  ],
+};
+
+/**
+ * Cleaned details from a request. A new rider (`existing` null) needs every required one;
+ * a change may fill in missing ones, but not empty one that was given.
+ */
+function readDetails(body, existing) {
+  const out = {};
+  for (const [key, [label, needed, check]] of Object.entries(DETAILS)) {
+    if (existing && !(key in body)) continue;
+    const value = check(body[key], label);
+    if (needed && !value && (!existing || existing[key])) throw new HttpError(400, `${label} is needed`);
+    out[key] = value;
+  }
+  return out;
+}
+
+/** What the console shows of a rider (personal details, but not the photo) */
+const riderForConsole = (r) => ({
+  ...publicRider(r),
+  ...Object.fromEntries(Object.keys(DETAILS).filter((k) => k !== 'photo').map((k) => [k, r[k] || ''])),
+  hasPhoto: Boolean(r.photo),
+});
+
 const phoneTaken = async (phone, exceptId) => {
   const other = await col('riders').findOne({ phoneKey: phoneKey(phone), ...(exceptId && { id: { $ne: exceptId } }) });
   if (other) throw new HttpError(409, `${other.name} already uses this phone number`);
@@ -70,7 +150,7 @@ router.get('/', async (req, res) => {
       const out = mine.filter((o) => o.status === 'on_the_way');
       const done = mine.filter((o) => o.status === 'delivered');
       return {
-        ...publicRider(r),
+        ...riderForConsole(r),
         outWith: out.map((o) => ({ orderReference: o.orderReference, customerName: o.customerName, city: o.city, onTheWayAt: o.onTheWayAt, grandTotalLKR: o.grandTotalLKR, collectCash: collectsCash(o) })),
         deliveredToday: done.length,
         cashToday: done.reduce((s, o) => s + (o.cashCollectedLKR || 0), 0),
@@ -84,6 +164,11 @@ router.get('/', async (req, res) => {
     waiting: waiting.map(riderOrderView),
     serverTime: now(),
   });
+});
+
+router.get('/photos', async (req, res) => {
+  const riders = await col('riders').find({ ...scope(req), photo: { $nin: [null, ''] } }, { projection: { _id: 0, id: 1, photo: 1 } }).toArray();
+  res.json({ photos: Object.fromEntries(riders.map((r) => [r.id, r.photo])) });
 });
 
 router.get('/:id/deliveries', async (req, res) => {
@@ -104,6 +189,7 @@ router.post('/', async (req, res) => {
     name: cleanName(name),
     phone: cleanPhone(phone),
     branchId: cleanBranch(req, branchId),
+    ...readDetails(req.body || {}, null),
     active: true,
     sessionVersion: 0,
     createdAt: now(),
@@ -114,13 +200,13 @@ router.post('/', async (req, res) => {
   Object.assign(rider, await riderPinFields(pin));
   await col('riders').insertOne({ ...rider });
   await logActivity(req, { category: 'riders', summary: `added ${rider.name} as a rider for ${branchName(rider.branchId)}`, branchId: rider.branchId });
-  res.status(201).json({ rider: publicRider(rider) });
+  res.status(201).json({ rider: riderForConsole(rider) });
 });
 
 router.patch('/:id', async (req, res) => {
   const rider = await findRider(req);
   const body = req.body || {};
-  const set = { updatedAt: now() };
+  const set = { updatedAt: now(), ...readDetails(body, rider) };
   const said = [];
   if (body.name !== undefined) set.name = cleanName(body.name);
   if (body.phone !== undefined) {
@@ -151,7 +237,7 @@ router.patch('/:id', async (req, res) => {
   const after = await col('riders').findOne({ id: rider.id });
   const what = said.length ? said.join(', ') : 'updated the details';
   await logActivity(req, { category: 'riders', summary: `rider ${after.name}: ${what}`, branchId: after.branchId });
-  res.json({ rider: publicRider(after) });
+  res.json({ rider: riderForConsole(after) });
 });
 
 router.delete('/:id', async (req, res) => {

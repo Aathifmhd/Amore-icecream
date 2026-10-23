@@ -4,12 +4,13 @@
  * at /rider (phone number + PIN). A branch admin sees and manages their own parlour's riders.
  * The second tab, Cash collection, records the cash riders hand in (RiderCashView).
  */
-import React, { useCallback, useEffect, useState } from 'react';
-import { Banknote, Bike, CheckCircle2, Clock, Copy, HandCoins, KeyRound, Pencil, Plus, Smartphone, Star, Trash2, UserRound } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Banknote, Bike, Camera, CheckCircle2, Clock, Copy, HandCoins, KeyRound, Pencil, Plus, Smartphone, Star, Trash2, UserRound, X } from 'lucide-react';
 import { BranchId, PaidVia } from '../../../types';
 import { AMORE_BRANCHES } from '../../../data/iceCreamData';
 import { api, ApiError, type AdminProfile } from '../../../api';
 import { startPolling } from '../../../utils/poll';
+import { photoDataUrl } from '../../../utils/imageUpload';
 import { formatPrice } from '../../../utils/currency';
 import { paidViaLabel } from '../../../utils/payment';
 import { Stars } from '../../Stars';
@@ -55,6 +56,14 @@ interface Rider {
   /** Cash from delivered orders not yet handed in (Cash collection page) */
   holdingLKR: number;
   rating: { average: number | null; count: number };
+  /** Personal details (console only) */
+  fullName: string;
+  nic: string;
+  joinedOn: string;
+  emergencyPhone: string;
+  emergencyName: string;
+  address: string;
+  hasPhoto: boolean;
 }
 
 const errorText = (err: unknown, fallback: string) => (err instanceof ApiError ? err.message : fallback);
@@ -141,6 +150,14 @@ const RidersList: React.FC<{ admin: AdminProfile; branch: BranchFilter; riders: 
   const [editing, setEditing] = useState<Rider | 'new' | null>(null);
   const [pinFor, setPinFor] = useState<Rider | null>(null);
   const [historyOf, setHistoryOf] = useState<Rider | null>(null);
+  // Photos load once (and after a change), not with the list every few seconds
+  const [photos, setPhotos] = useState<Record<string, string>>({});
+  const loadPhotos = useCallback(() => {
+    api<{ photos: Record<string, string> }>('/riders/photos', { as: 'admin' })
+      .then((r) => setPhotos(r.photos))
+      .catch(() => {});
+  }, []);
+  useEffect(loadPhotos, [loadPhotos]);
   const isSuper = admin.role !== 'branch';
 
   if (!data) return <p className="text-sm text-[#8A7970]">{error || 'Loading riders…'}</p>;
@@ -261,9 +278,7 @@ const RidersList: React.FC<{ admin: AdminProfile; branch: BranchFilter; riders: 
           {riders.map((r) => (
             <div key={r.id} className="px-4 py-3.5 flex flex-wrap items-center gap-x-4 gap-y-3">
               <button type="button" onClick={() => setHistoryOf(r)} className="flex items-center gap-3 min-w-0 flex-1 text-left cursor-pointer group">
-                <span className={cx('w-11 h-11 rounded-full flex items-center justify-center font-bold shrink-0', r.active ? 'bg-[#81001E]/10 text-[#81001E]' : 'bg-stone-100 text-stone-400')}>
-                  {r.name.trim()[0]?.toUpperCase()}
-                </span>
+                <RiderAvatar name={r.name} photo={photos[r.id]} active={r.active} />
                 <span className="min-w-0">
                   <span className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold text-[#241A18] group-hover:underline">{r.name}</span>
@@ -310,9 +325,18 @@ const RidersList: React.FC<{ admin: AdminProfile; branch: BranchFilter; riders: 
         </Card>
       )}
 
-      {editing && <RiderEditor rider={editing === 'new' ? null : editing} isSuper={isSuper} admin={admin} onClose={() => setEditing(null)} onSaved={reload} />}
+      {editing && (
+        <RiderEditor
+          rider={editing === 'new' ? null : editing}
+          photo={editing === 'new' ? '' : photos[editing.id]}
+          isSuper={isSuper}
+          admin={admin}
+          onClose={() => setEditing(null)}
+          onSaved={() => (reload(), loadPhotos())}
+        />
+      )}
       {pinFor && <PinPopup rider={pinFor} onClose={() => setPinFor(null)} />}
-      {historyOf && <RiderHistory rider={historyOf} onClose={() => setHistoryOf(null)} />}
+      {historyOf && <RiderHistory rider={historyOf} photo={photos[historyOf.id]} onClose={() => setHistoryOf(null)} />}
     </div>
   );
 };
@@ -320,30 +344,86 @@ const RidersList: React.FC<{ admin: AdminProfile; branch: BranchFilter; riders: 
 
 const pinInput = cx(inputClass, 'text-center text-xl tracking-[0.4em]');
 
-const RiderEditor: React.FC<{ rider: Rider | null; isSuper: boolean; admin: AdminProfile; onClose: () => void; onSaved: () => void }> = ({
+const NIC_RE = /^(\d{9}[VX]|\d{12})$/;
+const todayISO = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD, this device's day
+/** "Kamal Asanka Perera" → "Kamal Perera" (what the app and customers see) */
+const shortName = (full: string) => {
+  const w = full.trim().split(/\s+/).filter(Boolean);
+  return w.length > 2 ? `${w[0]} ${w[w.length - 1]}` : w.join(' ');
+};
+
+const RiderAvatar: React.FC<{ name: string; photo?: string; active?: boolean; size?: string }> = ({ name, photo, active = true, size = 'w-11 h-11' }) =>
+  photo ? (
+    <img src={photo} alt="" className={cx(size, 'rounded-full object-cover shrink-0 bg-[#F3EDE3]', !active && 'grayscale opacity-60')} />
+  ) : (
+    <span className={cx(size, 'rounded-full flex items-center justify-center font-bold shrink-0', active ? 'bg-[#81001E]/10 text-[#81001E]' : 'bg-stone-100 text-stone-400')}>
+      {name.trim()[0]?.toUpperCase()}
+    </span>
+  );
+
+const RiderEditor: React.FC<{ rider: Rider | null; photo?: string; isSuper: boolean; admin: AdminProfile; onClose: () => void; onSaved: () => void }> = ({
   rider,
+  photo: savedPhoto = '',
   isSuper,
   admin,
   onClose,
   onSaved,
 }) => {
   const { toast } = useConsoleUi();
+  const [fullName, setFullName] = useState(rider?.fullName ?? '');
   const [name, setName] = useState(rider?.name ?? '');
+  // The short name follows the full name until it is typed in
+  const [nameTyped, setNameTyped] = useState(Boolean(rider));
+  const [nic, setNic] = useState(rider?.nic ?? '');
+  const [joinedOn, setJoinedOn] = useState(rider ? rider.joinedOn : todayISO());
   const [phone, setPhone] = useState(rider?.phone ?? '');
+  const [emergencyPhone, setEmergencyPhone] = useState(rider?.emergencyPhone ?? '');
+  const [emergencyName, setEmergencyName] = useState(rider?.emergencyName ?? '');
+  const [address, setAddress] = useState(rider?.address ?? '');
+  const [photo, setPhoto] = useState(savedPhoto);
   const [branchId, setBranchId] = useState<BranchId>(rider?.branchId ?? (admin.branchId as BranchId) ?? 'akurana');
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const pickPhoto = async (file?: File) => {
+    if (!file) return;
+    try {
+      setPhoto(await photoDataUrl(file));
+    } catch {
+      setError('Could not use that photo. Try a JPEG or PNG.');
+    }
+  };
+
+  // A new rider needs everything but the photo; an older rider can be saved while details are missing
+  const missing = [
+    !fullName.trim() && 'full name',
+    !NIC_RE.test(nic) && 'NIC number',
+    !joinedOn && 'joined date',
+    emergencyPhone.replace(/\D/g, '').length < 9 && 'emergency contact number',
+    !address.trim() && 'address',
+  ].filter(Boolean) as string[];
+  const ready = name.trim() && phone.trim() && (rider ? true : missing.length === 0 && /^\d{4,6}$/.test(pin));
 
   const save = async () => {
     setBusy(true);
     setError(null);
+    const details = {
+      fullName,
+      nic,
+      joinedOn,
+      emergencyPhone,
+      emergencyName,
+      address,
+      ...(photo !== savedPhoto && { photo }),
+    };
     try {
       if (rider) {
-        await api(`/riders/${rider.id}`, { method: 'PATCH', body: { name, phone, ...(isSuper && { branchId }) }, as: 'admin' });
+        await api(`/riders/${rider.id}`, { method: 'PATCH', body: { name, phone, ...details, ...(isSuper && { branchId }) }, as: 'admin' });
         toast(`${name} saved`);
       } else {
-        await api('/riders', { method: 'POST', body: { name, phone, branchId, pin }, as: 'admin' });
+        await api('/riders', { method: 'POST', body: { name, phone, branchId, pin, ...details }, as: 'admin' });
         toast(`${name} added — they can sign in at ${RIDER_APP}`);
       }
       onSaved();
@@ -360,14 +440,14 @@ const RiderEditor: React.FC<{ rider: Rider | null; isSuper: boolean; admin: Admi
       open
       onClose={onClose}
       title={rider ? `Edit ${rider.name}` : 'Add a rider'}
-      subtitle={rider ? undefined : 'They sign in to the rider app with this mobile number and PIN.'}
+      subtitle={rider ? 'Personal details are seen only here in the console.' : 'They sign in to the rider app with this mobile number and PIN.'}
       footer={
         <>
           <span className="flex-1" />
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={save} disabled={busy || !name.trim() || !phone.trim() || (!rider && !/^\d{4,6}$/.test(pin))}>
+          <Button variant="primary" onClick={save} disabled={busy || !ready}>
             {busy ? 'Saving…' : rider ? 'Save' : 'Add rider'}
           </Button>
         </>
@@ -375,14 +455,72 @@ const RiderEditor: React.FC<{ rider: Rider | null; isSuper: boolean; admin: Admi
     >
       <div className="space-y-4">
         {error && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{error}</p>}
-        <Field label="Name">
+        {rider && missing.length > 0 && (
+          <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">Please add the missing {missing.join(', ')}.</p>
+        )}
+
+        <div className="flex items-center gap-4">
+          <RiderAvatar name={name || fullName || '?'} photo={photo} size="w-16 h-16" />
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="secondary" icon={<Camera className="w-4 h-4" />} onClick={() => fileRef.current?.click()}>
+              {photo ? 'Change photo' : 'Add photo'}
+            </Button>
+            {photo && (
+              <Button size="sm" variant="ghost" icon={<X className="w-4 h-4" />} onClick={() => setPhoto('')}>
+                Remove
+              </Button>
+            )}
+            <span className="w-full text-xs text-[#8A7970]">Optional</span>
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => pickPhoto(e.target.files?.[0])} />
+        </div>
+
+        <Field label="Full name (as on the NIC)">
           <span className="relative block">
             <UserRound className="w-4 h-4 text-[#A8988B] absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input value={name} onChange={(e) => setName(e.target.value)} className={cx(inputClass, 'pl-10')} placeholder="e.g. Kamal Perera" />
+            <input
+              value={fullName}
+              onChange={(e) => {
+                setFullName(e.target.value);
+                if (!nameTyped) setName(shortName(e.target.value));
+              }}
+              maxLength={100}
+              className={cx(inputClass, 'pl-10')}
+              placeholder="e.g. Kamal Asanka Perera"
+            />
           </span>
         </Field>
-        <Field label="Mobile number">
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" inputMode="tel" className={inputClass} placeholder="077 123 4567" />
+        <Field label="Name in the app" hint="Shown to the rider and to customers (“Kamal is on the way”).">
+          <input
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              setNameTyped(true);
+            }}
+            maxLength={60}
+            className={inputClass}
+            placeholder="e.g. Kamal Perera"
+          />
+        </Field>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Field label="NIC number" hint="9 digits + V/X, or 12 digits">
+            <input value={nic} onChange={(e) => setNic(e.target.value.toUpperCase().replace(/[^0-9VX]/g, '').slice(0, 12))} className={inputClass} placeholder="e.g. 199912345678" />
+          </Field>
+          <Field label="Joined date">
+            <input type="date" value={joinedOn} max={todayISO()} onChange={(e) => setJoinedOn(e.target.value)} className={inputClass} />
+          </Field>
+          <Field label="Mobile number" hint="They sign in with this.">
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" inputMode="tel" className={inputClass} placeholder="077 123 4567" />
+          </Field>
+          <Field label="Emergency contact number">
+            <input value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} type="tel" inputMode="tel" className={inputClass} placeholder="077 765 4321" />
+          </Field>
+        </div>
+        <Field label="Emergency contact (optional)">
+          <input value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} maxLength={100} className={inputClass} placeholder="e.g. Mother – Sunethra" />
+        </Field>
+        <Field label="Address">
+          <textarea value={address} onChange={(e) => setAddress(e.target.value)} maxLength={300} rows={2} className={cx(inputClass, 'h-auto py-2.5')} placeholder="House number, street, town" />
         </Field>
         <Field label="Parlour">
           {isSuper ? (
@@ -450,7 +588,14 @@ const PinPopup: React.FC<{ rider: Rider; onClose: () => void }> = ({ rider, onCl
   );
 };
 
-const RiderHistory: React.FC<{ rider: Rider; onClose: () => void }> = ({ rider, onClose }) => {
+const Detail: React.FC<{ label: string; wide?: boolean; children: React.ReactNode }> = ({ label, wide, children }) => (
+  <div className={cx('min-w-0', wide && 'sm:col-span-2')}>
+    <dt className="text-xs font-semibold text-[#8A7970]">{label}</dt>
+    <dd className="text-[#241A18] break-words">{children || '—'}</dd>
+  </div>
+);
+
+const RiderHistory: React.FC<{ rider: Rider; photo?: string; onClose: () => void }> = ({ rider, photo, onClose }) => {
   const [list, setList] = useState<RiderOrder[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -460,7 +605,32 @@ const RiderHistory: React.FC<{ rider: Rider; onClose: () => void }> = ({ rider, 
   }, [rider.id]);
   const minutes = (o: RiderOrder) => (o.onTheWayAt && o.deliveredAt ? Math.round((Date.parse(o.deliveredAt) - Date.parse(o.onTheWayAt)) / 60000) : null);
   return (
-    <Popup open onClose={onClose} title={rider.name} subtitle={`${rider.phone} · ${BRANCH_SHORT[rider.branchId]} · latest deliveries`} wide>
+    <Popup open onClose={onClose} title={rider.name} subtitle={`Rider · Amore ${BRANCH_SHORT[rider.branchId]}`} wide>
+      <div className="mb-5 rounded-2xl border border-[#EAE2D6] bg-white p-4 flex flex-col sm:flex-row gap-4">
+        <RiderAvatar name={rider.name} photo={photo} active={rider.active} size="w-20 h-20" />
+        <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2.5 text-sm flex-1 min-w-0">
+          <Detail label="Full name">{rider.fullName}</Detail>
+          <Detail label="NIC number">{rider.nic}</Detail>
+          <Detail label="Mobile">
+            <a href={`tel:${rider.phone}`} className="font-semibold text-[#81001E] hover:underline">
+              {rider.phone}
+            </a>
+          </Detail>
+          <Detail label="Joined">{rider.joinedOn && new Date(`${rider.joinedOn}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}</Detail>
+          <Detail label="Emergency contact">
+            {rider.emergencyPhone && (
+              <>
+                <a href={`tel:${rider.emergencyPhone}`} className="font-semibold text-[#81001E] hover:underline">
+                  {rider.emergencyPhone}
+                </a>
+                {rider.emergencyName && <span className="text-[#7A6458]"> · {rider.emergencyName}</span>}
+              </>
+            )}
+          </Detail>
+          <Detail label="Address">{rider.address}</Detail>
+        </dl>
+      </div>
+      <p className="text-xs font-bold uppercase tracking-wider text-[#8A7970] mb-2">Latest deliveries</p>
       {error && <p className="text-sm text-red-700">{error}</p>}
       {!list && !error && <p className="text-sm text-[#8A7970]">Loading…</p>}
       {list && list.length === 0 && <p className="text-sm text-[#8A7970]">No deliveries yet.</p>}
