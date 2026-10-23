@@ -21,7 +21,8 @@ import { useIsMobile } from './components/mobile/mobileHooks';
 import { ALL_20_FLAVOURS } from './data/iceCreamData';
 import { formatPrice } from './utils/currency';
 import { ShoppingBag } from 'lucide-react';
-import { getUserOrdersList, ORDERS_UPDATED_EVENT } from './utils/orderStorage';
+import { getUserOrdersList, ORDERS_UPDATED_EVENT, syncUserOrdersFromServer, watchUserOrders } from './utils/orderStorage';
+import { deliveryToRate } from './utils/deliveryFeedback';
 import { SYNC_ERROR_EVENT } from './utils/outbox';
 import { useCustomerBranch } from './utils/stock';
 import {
@@ -44,6 +45,9 @@ const QuickOrderModal = lazy(() =>
 );
 const SignInModal = lazy(() =>
   import('./components/SignInModal').then((m) => ({ default: m.SignInModal }))
+);
+const DeliveryFeedbackSheet = lazy(() =>
+  import('./components/DeliveryFeedbackSheet').then((m) => ({ default: m.DeliveryFeedbackSheet }))
 );
 const YourOrdersModal = lazy(() =>
   import('./components/YourOrdersModal').then((m) => ({ default: m.YourOrdersModal }))
@@ -173,6 +177,31 @@ export default function App() {
   const ongoingOrdersCount = userOrders.filter(
     (o) => o.status !== 'cancelled' && o.status !== 'delivered'
   ).length;
+
+  // A signed-in customer's orders: fetched on arrival, and followed while one is on its way,
+  // so "How was your delivery?" can pop up the moment it is delivered
+  const hasOngoingOrder = ongoingOrdersCount > 0;
+  useEffect(() => {
+    if (currentUser?.uid) syncUserOrdersFromServer(currentUser.uid).catch(() => {});
+  }, [currentUser?.uid]);
+  useEffect(() => {
+    // "Your orders" follows them itself while it is open
+    if (!currentUser?.uid || !hasOngoingOrder || isOrdersModalOpen) return;
+    return watchUserOrders(currentUser.uid);
+  }, [currentUser?.uid, hasOngoingOrder, isOrdersModalOpen]);
+
+  // The delivery being rated stays on screen (through the thank-you) until it is closed
+  const [ratingRef, setRatingRef] = useState<string | null>(null);
+  const toRate = currentUser ? deliveryToRate(userOrders) : null;
+  useEffect(() => {
+    if (!ratingRef && toRate && !isOrdersModalOpen && !isOrderModalOpen) setRatingRef(toRate.orderReference);
+  }, [ratingRef, toRate?.orderReference, isOrdersModalOpen, isOrderModalOpen]);
+  const ratingOrder = ratingRef ? userOrders.find((o) => o.orderReference === ratingRef) : undefined;
+  const feedbackPrompt = ratingOrder ? (
+    <Suspense fallback={null}>
+      <DeliveryFeedbackSheet key={ratingOrder.orderReference} order={ratingOrder} onClose={() => setRatingRef(null)} />
+    </Suspense>
+  ) : null;
 
   // Shows the console link in the navbar; the backend checks the session on every request
   const isAdminLoggedIn = hasAdminSession();
@@ -500,6 +529,7 @@ export default function App() {
             />
           </Suspense>
         )}
+        {feedbackPrompt}
       </div>
     );
   }
@@ -589,6 +619,7 @@ export default function App() {
             />
           </Suspense>
         )}
+        {feedbackPrompt}
       </div>
     );
   }
@@ -780,6 +811,7 @@ export default function App() {
           />
         </Suspense>
       )}
+      {feedbackPrompt}
     </div>
   );
 }

@@ -3,13 +3,17 @@ import { col, now, PUBLIC } from '../db.js';
 import { HttpError, publicRider, requireRider, riderLogin } from '../auth.js';
 import { logActivity, lkr } from '../activity.js';
 import { collectsCash, readyQuery, riderOrderView, startOfTodayColombo } from '../riderOrders.js';
+import { cashByRider } from '../riderCash.js';
+import { ratingSummary, riderRatings } from '../riderRatings.js';
 
 /*
  * The rider app (amore-icecream.vercel.app/rider).
  *
  *   POST /login                 { phone, pin } → rider session
  *   GET  /me                    the signed-in rider
- *   GET  /orders                ready to pick up at my parlour, mine on the way, my deliveries today
+ *   GET  /orders                ready to pick up at my parlour, mine on the way, my deliveries today,
+ *                               the cash I hold and my star rating
+ *   GET  /ratings               my stars from customers and their comments
  *   POST /orders/:ref/pickup    take a ready order (only one rider can)
  *   POST /orders/:ref/delivered { cashCollected } hand it over at the door
  *   POST /orders/:ref/hand-back { reason } couldn't deliver: it goes back to the parlour's ready list
@@ -39,7 +43,7 @@ router.get('/me', (req, res) => res.json({ rider: publicRider(req.rider) }));
 
 router.get('/orders', async (req, res) => {
   const r = req.rider;
-  const [ready, mine, done, upcoming] = await Promise.all([
+  const [ready, mine, done, upcoming, cash, rating] = await Promise.all([
     col('orders').find(readyQuery(r.branchId), PUBLIC).sort({ readyAt: 1 }).toArray(),
     col('orders').find({ riderId: r.id, status: 'on_the_way' }, PUBLIC).sort({ onTheWayAt: 1 }).toArray(),
     col('orders')
@@ -53,6 +57,8 @@ router.get('/orders', async (req, res) => {
       status: { $in: ['confirmed', 'paid', 'preparing'] },
       readyAt: { $in: [null, ''] },
     }),
+    cashByRider([r.id]),
+    ratingSummary([r.id]),
   ]);
   res.json({
     rider: publicRider(r),
@@ -60,9 +66,13 @@ router.get('/orders', async (req, res) => {
     mine: mine.map(riderOrderView),
     done: done.map(riderOrderView),
     upcoming,
+    cash: cash[r.id],
+    rating: rating[r.id],
     serverTime: now(),
   });
 });
+
+router.get('/ratings', async (req, res) => res.json(await riderRatings(req.rider.id)));
 
 const findMine = async (req) => {
   const order = await col('orders').findOne({ orderReference: req.params.ref, riderId: req.rider.id }, PUBLIC);

@@ -13,6 +13,7 @@ import { formatPrice } from '../../../utils/currency';
 import { Badge, Button, Dialog, Popup, Field, cx, inputClass, useConsoleUi } from './ui';
 import { cardText, clockTime, formatLabel, isPickup, nextStep, paymentLabel, shortRef, statusLabel } from './orderMeta';
 import { DEMO_CARD_PAYMENTS } from '../../../config';
+import { Stars } from '../../Stars';
 import { NextStepButton } from './OrdersView';
 import { printSlip } from './printSlip';
 
@@ -425,6 +426,17 @@ export const OrderDrawer: React.FC<{ order: OrderRecord | null; onClose: () => v
               </span>
             </div>
           )}
+
+          {order.riderRating ? (
+            <Section title="Customer’s rating">
+              <p className="flex items-center gap-2 text-sm text-[#241A18]">
+                <Stars value={order.riderRating} />
+                <span className="font-semibold">{order.riderRating} of 5</span>
+                {order.riderName && <span className="text-[#7A6458]">for {order.riderName}</span>}
+              </p>
+              {order.riderFeedback && <p className="mt-1.5 text-sm italic text-[#5C4D44]">“{order.riderFeedback}”</p>}
+            </Section>
+          ) : null}
 
           {order.status === 'cancelled' && (
             <Section title="Cancellation">

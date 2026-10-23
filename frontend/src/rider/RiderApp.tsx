@@ -4,7 +4,8 @@
  *
  *   Ready   → "Pick up" (check the items)          → the order is out for delivery with this rider
  *   On way  → call / navigate → "Delivered" (confirm the cash) or "Can't deliver" (hand it back)
- *   Done    → today's deliveries and the cash to hand in
+ *   Done    → today's deliveries and the cash to hand in at the parlour
+ *   Ratings → the stars customers gave after their deliveries
  */
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -22,6 +23,7 @@ import {
   PackageCheck,
   Phone,
   RotateCw,
+  Star,
   StickyNote,
   WifiOff,
   X,
@@ -32,13 +34,16 @@ import { AMORE_BRANCHES } from '../data/iceCreamData';
 import { formatPrice } from '../utils/currency';
 import { distanceKm, useParlourZones } from '../utils/branchLocation';
 import { paidViaLabel } from '../utils/payment';
+import { Stars } from '../components/Stars';
 import { RiderLogin } from './RiderLogin';
 import {
   agoText,
   alertNewOrder,
   clock,
+  dayOrClock,
   directionsUrl,
   handBack,
+  loadRatings,
   markDelivered,
   minutesSince,
   pickUp,
@@ -46,11 +51,13 @@ import {
   shortRef,
   useRiderBoard,
   whatsappUrl,
+  type RiderCash,
   type RiderOrder,
+  type RiderRatings,
 } from './riderApi';
 
 const lkr = (n: number) => formatPrice(n, 'LKR');
-type Tab = 'ready' | 'mine' | 'done';
+type Tab = 'ready' | 'mine' | 'done' | 'ratings';
 
 export default function RiderApp() {
   const [signedIn, setSignedIn] = useState(() => Boolean(getRiderSession()));
@@ -117,6 +124,14 @@ const RiderHome: React.FC<{ onSignedOut: (why: string | null) => void }> = ({ on
     carrying.current = refs;
   }, [board]);
 
+  // A new rating from a customer
+  const ratingCount = useRef<number | null>(null);
+  useEffect(() => {
+    if (!board) return;
+    if (ratingCount.current !== null && board.rating.count > ratingCount.current) setToast('⭐ A customer just rated your delivery');
+    ratingCount.current = board.rating.count;
+  }, [board]);
+
   if (!board) {
     return (
       <div className="min-h-[100dvh] bg-[#FAF7F2] flex flex-col items-center justify-center gap-3 text-[#7A6458]">
@@ -164,7 +179,14 @@ const RiderHome: React.FC<{ onSignedOut: (why: string | null) => void }> = ({ on
         <div className="max-w-md mx-auto px-4 h-16 flex items-center gap-3">
           <AmoreLogo size="sm" showShadow={false} />
           <div className="min-w-0 flex-1 leading-tight">
-            <p className="font-bold truncate">Hi, {rider.name.split(' ')[0]}</p>
+            <p className="font-bold truncate flex items-center gap-1.5">
+              Hi, {rider.name.split(' ')[0]}
+              {board.rating.average !== null && (
+                <button type="button" onClick={() => setTab('ratings')} className="inline-flex items-center gap-0.5 text-xs font-bold text-amber-800 bg-amber-100 rounded-full px-1.5 py-0.5 cursor-pointer">
+                  <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> {board.rating.average.toFixed(1)}
+                </button>
+              )}
+            </p>
             <p className="text-xs text-[#7A6458] truncate">Rider · Amore {parlour?.name ?? rider.branchId}</p>
           </div>
           {offline ? (
@@ -322,12 +344,7 @@ const RiderHome: React.FC<{ onSignedOut: (why: string | null) => void }> = ({ on
                 <p className="text-2xl font-bold mt-1 text-[#8C102A]">{lkr(cashToday)}</p>
               </div>
             </div>
-            {(cashToday > 0 || cashCarrying > 0) && (
-              <p className="mb-4 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-950">
-                Hand <strong>{lkr(cashToday)}</strong> to the parlour at the end of your shift
-                {cashCarrying > 0 && <> (plus {lkr(cashCarrying)} still to collect)</>}.
-              </p>
-            )}
+            <CashCard cash={board.cash} carrying={cashCarrying} />
             {done.length === 0 ? (
               <Empty icon={<CheckCircle2 className="w-8 h-8" />} title="No deliveries yet today">
                 Delivered orders show here.
@@ -347,6 +364,7 @@ const RiderHome: React.FC<{ onSignedOut: (why: string | null) => void }> = ({ on
                         {o.city || o.deliveryAddress} · {clock(o.deliveredAt)}
                       </span>
                       {o.deliveredBy === 'parlour' && <span className="block text-xs font-semibold text-[#8C102A]">Marked delivered by the parlour</span>}
+                      {o.riderRating ? <Stars value={o.riderRating} size="w-3.5 h-3.5" className="mt-0.5" /> : null}
                     </span>
                     <span className="text-sm font-bold text-right whitespace-nowrap">
                       {o.cashCollectedLKR ? lkr(o.cashCollectedLKR) : <span className="text-[#8A7970] font-medium">{paidViaLabel(o) ?? '—'}</span>}
@@ -357,6 +375,7 @@ const RiderHome: React.FC<{ onSignedOut: (why: string | null) => void }> = ({ on
             )}
           </section>
         )}
+        {tab === 'ratings' && <RatingsTab count={board.rating.count} />}
       </main>
 
       {/* Bottom tabs, like the shop's phone layout */}
@@ -365,6 +384,7 @@ const RiderHome: React.FC<{ onSignedOut: (why: string | null) => void }> = ({ on
           <TabButton active={tab === 'ready'} onClick={() => setTab('ready')} icon={<PackageCheck className="w-[22px] h-[22px]" />} label="Ready" count={ready.length} tone="bg-amber-400 text-[#5C1A00]" />
           <TabButton active={tab === 'mine'} onClick={() => setTab('mine')} icon={<Bike className="w-[22px] h-[22px]" />} label="On the way" count={mine.length} tone="bg-[#8C102A] text-white" />
           <TabButton active={tab === 'done'} onClick={() => setTab('done')} icon={<CheckCircle2 className="w-[22px] h-[22px]" />} label="Done" count={done.length} tone="bg-emerald-600 text-white" />
+          <TabButton active={tab === 'ratings'} onClick={() => setTab('ratings')} icon={<Star className="w-[22px] h-[22px]" />} label="Ratings" count={0} tone="" />
         </div>
       </nav>
 
@@ -525,6 +545,111 @@ const HandBackSheet: React.FC<{ order: RiderOrder; onClose: () => void; onConfir
         Hand back to the parlour
       </button>
     </Sheet>
+  );
+};
+
+// ---- Cash and ratings -------------------------------------------------------------------
+
+/** The cash the rider holds from cash-on-delivery orders, until they hand it in at the parlour */
+const CashCard: React.FC<{ cash: RiderCash; carrying: number }> = ({ cash, carrying }) => {
+  const holding = cash.holdingLKR > 0;
+  return (
+    <div className={`mb-4 rounded-3xl border p-4 ${holding ? 'bg-amber-50 border-amber-200' : 'bg-white border-[#E8DFC8]'}`}>
+      <div className="flex items-center gap-3">
+        <span className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${holding ? 'bg-amber-200 text-amber-900' : 'bg-emerald-50 text-emerald-600'}`}>
+          {holding ? <Banknote className="w-6 h-6" /> : <CheckCircle2 className="w-6 h-6" />}
+        </span>
+        <span className="min-w-0 leading-tight">
+          <span className="block text-xs font-bold uppercase tracking-wider text-[#8A7970]">Cash with you</span>
+          <span className={`block text-2xl font-bold ${holding ? 'text-amber-950' : 'text-emerald-700'}`}>{holding ? lkr(cash.holdingLKR) : 'All handed in'}</span>
+        </span>
+      </div>
+      {holding && <p className="mt-2 text-sm text-amber-950">Hand it in at the parlour — they’ll record it.</p>}
+      {carrying > 0 && <p className="mt-1 text-sm text-[#5C4D44]">Plus {lkr(carrying)} to collect on deliveries you’re carrying.</p>}
+      {cash.lastHandIn && (
+        <p className="mt-2 pt-2 border-t border-black/5 text-xs text-[#7A6458]">
+          Last handed in: <strong className="text-[#3D2C24]">{lkr(cash.lastHandIn.amountLKR)}</strong> · {dayOrClock(cash.lastHandIn.receivedAt)}
+          {cash.lastHandIn.receivedBy && <> · to {cash.lastHandIn.receivedBy}</>}
+        </p>
+      )}
+    </div>
+  );
+};
+
+/** The stars customers gave, with their comments (loaded when the tab opens, and on a new rating) */
+const RatingsTab: React.FC<{ count: number }> = ({ count }) => {
+  const [data, setData] = useState<RiderRatings | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    loadRatings()
+      .then((r) => (setData(r), setFailed(false)))
+      .catch(() => setFailed(true));
+  }, [count]);
+
+  return (
+    <section>
+      <Title title="Your ratings" sub="Stars from your customers after each delivery" />
+      {!data ? (
+        failed ? (
+          <Empty icon={<WifiOff className="w-8 h-8" />} title="Couldn’t load your ratings">
+            Check your connection.
+          </Empty>
+        ) : (
+          <div className="py-10 flex justify-center">
+            <Loader2 className="w-6 h-6 animate-spin text-[#8C102A]" />
+          </div>
+        )
+      ) : data.count === 0 ? (
+        <Empty icon={<Star className="w-8 h-8" />} title="No ratings yet">
+          Customers rate you right after a delivery. Their stars show up here.
+        </Empty>
+      ) : (
+        <>
+          <div className="bg-white rounded-3xl border border-[#E8DFC8] p-5 flex items-center gap-5">
+            <div className="text-center shrink-0">
+              <p className="text-5xl font-bold text-[#241A18] leading-none">{data.average!.toFixed(1)}</p>
+              <Stars value={data.average!} size="w-4 h-4" className="mt-2" />
+              <p className="text-xs text-[#7A6458] mt-1">
+                {data.count} {data.count === 1 ? 'rating' : 'ratings'}
+              </p>
+            </div>
+            <ul className="flex-1 space-y-1.5" aria-label="Ratings by stars">
+              {[5, 4, 3, 2, 1].map((s) => {
+                const n = data.breakdown[s] || 0;
+                return (
+                  <li key={s} className="flex items-center gap-2 text-xs text-[#5C4D44]">
+                    <span className="w-6 inline-flex items-center gap-0.5 font-semibold">
+                      {s}
+                      <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                    </span>
+                    <span className="flex-1 h-2 rounded-full bg-[#F3EDE3] overflow-hidden">
+                      <span className="block h-full rounded-full bg-amber-400" style={{ width: `${(n / data.count) * 100}%` }} />
+                    </span>
+                    <span className="w-6 text-right tabular-nums">{n}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
+          <h2 className="font-bold mt-6 mb-3">What customers said</h2>
+          <ul className="space-y-3">
+            {data.recent.map((r) => (
+              <li key={r.orderReference} className="bg-white rounded-3xl border border-[#E8DFC8] p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <Stars value={r.rating} />
+                  <span className="text-xs text-[#8A7970]">{dayOrClock(r.ratedAt)}</span>
+                </div>
+                {r.comment ? <p className="mt-2 text-[15px] text-[#3D2C24]">“{r.comment}”</p> : <p className="mt-2 text-sm text-[#A8988B]">No comment</p>}
+                <p className="mt-1.5 text-xs text-[#7A6458]">
+                  {r.customerFirstName} · {shortRef(r.orderReference)}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
   );
 };
 

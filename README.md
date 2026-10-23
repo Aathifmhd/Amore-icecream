@@ -51,7 +51,8 @@ whole site (website + API) from the backend on one port.
 | `/api/activity` | super admin — the Action Center log (what happened, who, which branch; kept 90 days) |
 | `GET /api/parlours`, `PUT /api/parlours/:id` | everyone reads / super admin sets — each parlour's map location and delivery distance |
 | `/api/riders` | admin — riders (a branch admin: their parlour's): add, edit, new PIN, switch off, remove; today's deliveries and cash |
-| `/api/rider/*` | the rider app — sign in (phone + PIN), orders, pick up, delivered, hand back |
+| `/api/rider/*` | the rider app — sign in (phone + PIN), orders, pick up, delivered, hand back, ratings |
+| `/api/rider-cash` | admin — the cash each rider holds; record cash they hand in (a branch admin: their parlour's riders) |
 | `POST /api/orders` | signed-in customer (checked like the old Firestore rules) or admin |
 | `GET /api/orders/mine` | signed-in customer — their own orders |
 | `GET / PATCH / DELETE /api/orders/:ref` | the customer who placed it (limited) or admin |
@@ -177,6 +178,22 @@ card — at the counter for pickups (`paidVia`; `deliveredBy: 'parlour'`). A car
 needs no answer. If the order was with a rider, the rider app tells them the parlour finished it,
 and their Done list shows how it was paid. Card orders show as "Paid by card" everywhere: the
 orders list, the order popup, the rider app and the kitchen slip.
+
+**Cash collection** (console): the cash each rider holds = all the cash they collected at the door
+minus everything they handed in (`backend/src/riderCash.js`, hand-ins in `cash_handins`). Staff
+count the cash and press **Receive cash**: the popup lists the deliveries not handed in yet (oldest
+count as paid first) and takes the amount received — all of it, or part, with an optional note.
+Today's hand-ins can be undone. The rider app shows "Cash with you" and the last hand-in; a rider
+can't be removed while holding cash.
+
+**Ratings:** the moment a customer's delivery is marked delivered, the shop asks "How was your
+delivery?" (1–5 stars for the rider and an optional comment). The shop follows the customer's
+orders while one is on its way so the question pops up straight away; "Not now" is remembered on
+that device, and the delivery can still be rated from Your Orders for 14 days. One rating per
+delivery, from the customer only (`riderRating`, `riderFeedback`, `ratedAt`;
+`backend/src/riderRatings.js`). Riders see their average, the stars breakdown and comments
+(first name only) on the **Ratings** tab; the console shows each rider's average on the Riders page
+and the rating on the order.
 
 ## Checkout
 

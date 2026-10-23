@@ -15,6 +15,7 @@ import activity from './routes/activity.js';
 import parlours from './routes/parlours.js';
 import riders from './routes/riders.js';
 import rider from './routes/rider.js';
+import riderCash from './routes/riderCash.js';
 
 export function createApp() {
   const app = express();
@@ -40,6 +41,7 @@ export function createApp() {
   app.use('/api/parlours', parlours);
   app.use('/api/riders', riders);
   app.use('/api/rider', rider);
+  app.use('/api/rider-cash', riderCash);
   app.use('/api/orders', orders);
   app.use('/api/menu', menu);
   app.use('/api/images', images);

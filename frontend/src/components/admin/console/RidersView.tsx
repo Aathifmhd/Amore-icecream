@@ -4,19 +4,20 @@
  * at /rider (phone number + PIN). A branch admin sees and manages their own parlour's riders.
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { Banknote, Bike, CheckCircle2, Clock, Copy, KeyRound, Pencil, Plus, Smartphone, Trash2, UserRound } from 'lucide-react';
+import { Banknote, Bike, CheckCircle2, Clock, Copy, KeyRound, Pencil, Plus, Smartphone, Star, Trash2, UserRound } from 'lucide-react';
 import { BranchId, PaidVia } from '../../../types';
 import { AMORE_BRANCHES } from '../../../data/iceCreamData';
 import { api, ApiError, type AdminProfile } from '../../../api';
 import { startPolling } from '../../../utils/poll';
 import { formatPrice } from '../../../utils/currency';
 import { paidViaLabel } from '../../../utils/payment';
+import { Stars } from '../../Stars';
 import { Badge, Button, Card, EmptyState, Field, Popup, Switch, cx, inputClass, useConsoleUi } from './ui';
 import type { BranchFilter } from './useConsoleData';
 import { clockTime, shortRef, timeAgo } from './orderMeta';
 
 const lkr = (n: number) => formatPrice(n, 'LKR');
-const BRANCH_SHORT: Record<BranchId, string> = { akurana: 'Akurana', colombo: 'Colombo', arugambay: 'Arugam Bay' };
+export const BRANCH_SHORT: Record<BranchId, string> = { akurana: 'Akurana', colombo: 'Colombo', arugambay: 'Arugam Bay' };
 const RIDER_APP = 'amore-icecream.vercel.app/rider';
 
 interface RiderOrder {
@@ -33,6 +34,8 @@ interface RiderOrder {
   cashCollectedLKR: number | null;
   paidVia: PaidVia | null;
   deliveredBy: 'rider' | 'parlour' | null;
+  riderRating: number | null;
+  riderFeedback: string;
   status: string;
   branchId: BranchId;
 }
@@ -47,6 +50,9 @@ interface Rider {
   deliveredToday: number;
   cashToday: number;
   cashOnTheWay: number;
+  /** Cash from delivered orders not yet handed in (Cash collection page) */
+  holdingLKR: number;
+  rating: { average: number | null; count: number };
 }
 
 const errorText = (err: unknown, fallback: string) => (err instanceof ApiError ? err.message : fallback);
@@ -122,7 +128,7 @@ export const RidersView: React.FC<{ admin: AdminProfile; branch: BranchFilter }>
           alert={waiting.some((o) => o.readyAt && Date.now() - Date.parse(o.readyAt) > 10 * 60_000)}
         />
         <Stat icon={<CheckCircle2 className="w-5 h-5" />} label="Delivered today" value={`${deliveredToday}`} hint="By riders, since midnight" />
-        <Stat icon={<Banknote className="w-5 h-5" />} label="Cash collected today" value={lkr(cashToday)} hint="To be handed in by riders" />
+        <Stat icon={<Banknote className="w-5 h-5" />} label="Cash collected today" value={lkr(cashToday)} hint="Record hand-ins on Cash collection" />
       </div>
 
       {/* The rider app */}
@@ -206,6 +212,12 @@ export const RidersView: React.FC<{ admin: AdminProfile; branch: BranchFilter }>
                       <Badge tone="green">Available</Badge>
                     )}
                     {branch === 'all' && <span className="text-xs text-[#8A7970]">{BRANCH_SHORT[r.branchId]}</span>}
+                    {r.rating.average !== null && (
+                      <span className="inline-flex items-center gap-0.5 text-xs font-bold text-amber-800" title={`${r.rating.count} customer ratings`}>
+                        <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" /> {r.rating.average.toFixed(1)}
+                        <span className="font-normal text-[#8A7970]">({r.rating.count})</span>
+                      </span>
+                    )}
                   </span>
                   <span className="block text-sm text-[#7A6458] mt-0.5">
                     {r.phone}
@@ -215,7 +227,10 @@ export const RidersView: React.FC<{ admin: AdminProfile; branch: BranchFilter }>
               </button>
               <div className="text-sm text-right">
                 <p className="font-semibold text-[#241A18]">{r.deliveredToday} delivered today</p>
-                <p className="text-[#7A6458]">{lkr(r.cashToday)} cash{r.cashOnTheWay ? ` · ${lkr(r.cashOnTheWay)} to collect` : ''}</p>
+                <p className="text-[#7A6458]">
+                  {lkr(r.cashToday)} cash today{r.cashOnTheWay ? ` · ${lkr(r.cashOnTheWay)} to collect` : ''}
+                </p>
+                {r.holdingLKR > 0 && <p className="text-amber-800 font-semibold">{lkr(r.holdingLKR)} to hand in</p>}
               </div>
               <div className="flex items-center gap-1">
                 <Switch checked={r.active} label={`${r.name} can sign in`} onChange={(v) => setActive(r, v)} />
@@ -235,7 +250,7 @@ export const RidersView: React.FC<{ admin: AdminProfile; branch: BranchFilter }>
   );
 };
 
-const Stat: React.FC<{ icon: React.ReactNode; label: string; value: string; hint: string; alert?: boolean }> = ({ icon, label, value, hint, alert }) => (
+export const Stat: React.FC<{ icon: React.ReactNode; label: string; value: string; hint: string; alert?: boolean }> = ({ icon, label, value, hint, alert }) => (
   <Card className={cx('p-4', alert && 'border-red-200 bg-red-50/40')}>
     <p className="text-sm text-[#7A6458] flex items-center gap-2">
       <span className={alert ? 'text-red-600' : 'text-[#81001E]'}>{icon}</span>
@@ -400,6 +415,12 @@ const RiderHistory: React.FC<{ rider: Rider; onClose: () => void }> = ({ rider, 
               <span className="min-w-0 flex-1">
                 <span className="font-semibold text-[#241A18]">{o.customerName}</span>
                 <span className="text-[#7A6458]"> · {o.city || o.deliveryAddress}</span>
+                {o.riderRating ? (
+                  <span className="flex items-center gap-1.5 mt-0.5">
+                    <Stars value={o.riderRating} size="w-3.5 h-3.5" />
+                    {o.riderFeedback && <span className="text-xs italic text-[#7A6458] truncate">“{o.riderFeedback}”</span>}
+                  </span>
+                ) : null}
               </span>
               <span className="text-[#7A6458]">
                 {o.status === 'delivered' ? (

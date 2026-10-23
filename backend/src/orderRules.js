@@ -21,7 +21,13 @@ export const ORDER_FIELDS = [
   'readyAt', 'riderId', 'riderName', 'riderPhone', 'cashCollectedLKR', 'riderNote',
   // How a cash / counter order was paid in the end, and who finished it (the rider or the parlour)
   'paidVia', 'deliveredBy',
+  // The customer's stars for the rider, once it is delivered (only the customer can set these)
+  'riderRating', 'riderFeedback', 'ratedAt',
 ];
+const RATING_FIELDS = ['riderRating', 'riderFeedback', 'ratedAt'];
+const FEEDBACK_FIELDS = [...RATING_FIELDS, 'updatedAt'];
+// A delivery can be rated this long after it arrived
+const FEEDBACK_DAYS = 14;
 
 const STATUSES = ['pending_confirmation', 'paid', 'confirmed', 'cancelled', 'preparing', 'on_the_way', 'delivered'];
 const BRANCHES = ['akurana', 'colombo', 'arugambay'];
@@ -111,6 +117,9 @@ const FIELD_CHECKS = {
   riderNote: (v) => str(v, 300),
   paidVia: (v) => ['cash', 'bank_transfer', 'card_machine'].includes(v),
   deliveredBy: (v) => v === 'rider' || v === 'parlour',
+  riderRating: (v) => Number.isInteger(v) && v >= 1 && v <= 5,
+  riderFeedback: (v) => str(v, 300),
+  ratedAt: isDate,
 };
 
 function isItem(i) {
@@ -214,7 +223,7 @@ export function newCustomerOrder(body, customer, parlours) {
 
 /** An admin adding an order or refund record by hand. */
 export function newAdminOrder(body) {
-  const { set: d } = pick(body, ORDER_FIELDS);
+  const { set: d } = pick(body, ORDER_FIELDS.filter((f) => !RATING_FIELDS.includes(f)));
   for (const key of ['orderReference', 'customerName', 'branchId', 'status', 'items']) {
     if (d[key] === undefined) throw bad(`Missing ${key}`);
   }
@@ -226,7 +235,8 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 /** Turn a PATCH body into a Mongo update for this caller, or throw 400/403. */
 export function orderUpdate(body, existing, { admin, customer, parlours }) {
-  const editable = ORDER_FIELDS.filter((f) => f !== 'orderReference' && f !== 'userId');
+  // Ratings come from the customer only
+  const editable = ORDER_FIELDS.filter((f) => f !== 'orderReference' && f !== 'userId' && !(admin && RATING_FIELDS.includes(f)));
   const { set, unset } = pick(body, editable, { forUpdate: true });
 
   if (!admin) {
@@ -245,6 +255,18 @@ export function orderUpdate(body, existing, { admin, customer, parlours }) {
     // A moved pin must still be within the parlour's delivery range
     if (changed.includes('deliveryCoordinates')) checkDeliveryRange(next, parlours);
     const historyHide = changed.every((k) => HISTORY_HIDE_FIELDS.includes(k));
+    // Rating the delivery: once, after it arrived
+    const feedback = changed.includes('riderRating') && changed.every((k) => FEEDBACK_FIELDS.includes(k));
+    if (feedback) {
+      if (existing.status !== 'delivered' || existing.orderType !== 'delivery') throw bad('You can rate a delivery once it has arrived');
+      if (existing.riderRating) throw new HttpError(409, 'You have already rated this delivery. Thank you!');
+      if (Date.now() - Date.parse(existing.deliveredAt || existing.updatedAt || 0) > FEEDBACK_DAYS * 86_400_000) {
+        throw new HttpError(403, 'This delivery is too old to rate');
+      }
+      set.ratedAt = new Date().toISOString();
+      if (typeof set.riderFeedback === 'string') set.riderFeedback = set.riderFeedback.trim();
+      return { $set: set };
+    }
     const pendingEdit =
       existing.status === 'pending_confirmation' &&
       changed.every((k) => CUSTOMER_EDIT_FIELDS.includes(k)) &&

@@ -11,6 +11,9 @@ import {
   pauseOrderGracePeriod,
   resumeOrderGracePeriod,
 } from '../utils/orderStorage';
+import { DeliveryFeedbackSheet } from './DeliveryFeedbackSheet';
+import { Stars } from './Stars';
+import { canRate } from '../utils/deliveryFeedback';
 import { type User } from '../customerAuth';
 import { formatPrice } from '../utils/currency';
 import { AMORE_BRANCHES } from '../data/iceCreamData';
@@ -66,6 +69,8 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
   // Active tab: 'ongoing' for live orders, 'history' for past orders
   const [activeOrdersTab, setActiveOrdersTab] = useState<'ongoing' | 'history'>('ongoing');
   const [selectedHistoryOrder, setSelectedHistoryOrder] = useState<OrderRecord | null>(null);
+  // "Rate your delivery" opened from a past order
+  const [ratingRef, setRatingRef] = useState<string | null>(null);
 
   // Cancellation toast notification
   const [cancelNotification, setCancelNotification] = useState<string | null>(null);
@@ -1179,6 +1184,26 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                         </p>
                       </div>
 
+                      {/* Delivery rating: the stars given, or a button to rate it */}
+                      {isDelivered && order.riderRating ? (
+                        <div className="flex items-start gap-2 text-xs text-[#5D4E46]">
+                          <Stars value={order.riderRating} className="shrink-0 mt-px" />
+                          <span>
+                            You rated {order.riderName ? `${order.riderName.split(' ')[0]}’s` : 'this'} delivery
+                            {order.riderFeedback && <span className="block italic text-[#7A6458]">“{order.riderFeedback}”</span>}
+                          </span>
+                        </div>
+                      ) : isDelivered && canRate(order) ? (
+                        <button
+                          type="button"
+                          onClick={() => setRatingRef(order.orderReference)}
+                          className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-xs font-bold cursor-pointer transition-colors"
+                        >
+                          <span>Rate your delivery{order.riderName ? ` with ${order.riderName.split(' ')[0]}` : ''}</span>
+                          <Stars value={0} />
+                        </button>
+                      ) : null}
+
                       {/* Bottom Row: Payment & Action Buttons */}
                       <div className="flex items-center justify-between pt-1 border-t border-[#E8DFC8]/50 gap-2 flex-wrap">
                         <span className="text-[11px] text-[#7A6458]">
@@ -1234,6 +1259,10 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
           </button>
         </div>
       </div>
+
+      {ratingRef && orders.some((o) => o.orderReference === ratingRef) && (
+        <DeliveryFeedbackSheet order={orders.find((o) => o.orderReference === ratingRef)!} onClose={() => setRatingRef(null)} />
+      )}
 
       {/* ======================================================== */}
       {/* USER-FRIENDLY HISTORY ORDER DETAILS POPUP (WANTED DETAILS ONLY) */}

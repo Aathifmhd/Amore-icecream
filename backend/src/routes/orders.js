@@ -45,6 +45,11 @@ function describeOrderChange(before, after, req) {
         return ['order', `changed order ${ref} to ${after.status}`];
     }
   }
+  if (!before.riderRating && after.riderRating) {
+    const who = after.riderName ? `${after.riderName}'s delivery` : 'the delivery';
+    const said = after.riderFeedback ? ` — “${after.riderFeedback}”` : '';
+    return ['riders', `rated ${who} of order ${ref}: ${'★'.repeat(after.riderRating)}${'☆'.repeat(5 - after.riderRating)}${said}`];
+  }
   if (!before.readyAt && after.readyAt && after.status === 'preparing') {
     return ['order', `marked order ${ref} ready for a rider`];
   }

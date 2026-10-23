@@ -2,8 +2,10 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import { col, now, PUBLIC } from '../db.js';
 import { BRANCHES, HttpError, adminBranch, phoneKey, publicRider, requireAdmin, riderPinFields } from '../auth.js';
-import { branchName, logActivity } from '../activity.js';
+import { branchName, logActivity, lkr } from '../activity.js';
 import { collectsCash, readyQuery, riderOrderView, startOfTodayColombo } from '../riderOrders.js';
+import { cashByRider } from '../riderCash.js';
+import { ratingSummary } from '../riderRatings.js';
 
 /*
  * Riders, managed from the console (a branch admin: their own parlour's riders).
@@ -12,7 +14,7 @@ import { collectsCash, readyQuery, riderOrderView, startOfTodayColombo } from '.
  *   GET    /:id/deliveries      a rider's latest deliveries
  *   POST   /                    { name, phone, branchId, pin } add a rider
  *   PATCH  /:id                 { name?, phone?, branchId?, active?, pin? } (a new PIN or switching off signs them out)
- *   DELETE /:id                 remove a rider (not while they are out with orders)
+ *   DELETE /:id                 remove a rider (not while they are out with orders or hold cash)
  */
 const router = Router();
 router.use(requireAdmin);
@@ -54,11 +56,13 @@ router.get('/', async (req, res) => {
   const ids = riders.map((r) => r.id);
   const today = startOfTodayColombo();
   const branches = adminBranch(req.admin) ? [adminBranch(req.admin)] : BRANCHES;
-  const [active, waiting] = await Promise.all([
+  const [active, waiting, cash, ratings] = await Promise.all([
     col('orders')
       .find({ riderId: { $in: ids }, $or: [{ status: 'on_the_way' }, { status: 'delivered', deliveredAt: { $gte: today } }] }, PUBLIC)
       .toArray(),
     col('orders').find({ $or: branches.map((b) => readyQuery(b)) }, PUBLIC).sort({ readyAt: 1 }).toArray(),
+    cashByRider(ids),
+    ratingSummary(ids),
   ]);
   res.json({
     riders: riders.map((r) => {
@@ -72,6 +76,9 @@ router.get('/', async (req, res) => {
         cashToday: done.reduce((s, o) => s + (o.cashCollectedLKR || 0), 0),
         // Cash still with the rider: collected today and on its way back
         cashOnTheWay: out.filter(collectsCash).reduce((s, o) => s + (o.grandTotalLKR || 0), 0),
+        // Cash from delivered orders not yet handed in at the parlour (Cash collection page)
+        holdingLKR: cash[r.id].holdingLKR,
+        rating: ratings[r.id],
       };
     }),
     waiting: waiting.map(riderOrderView),
@@ -151,6 +158,8 @@ router.delete('/:id', async (req, res) => {
   if (await col('orders').countDocuments({ riderId: rider.id, status: 'on_the_way' })) {
     throw new HttpError(409, `${rider.name} is out with orders. Mark them delivered or handed back first.`);
   }
+  const { holdingLKR } = (await cashByRider([rider.id]))[rider.id];
+  if (holdingLKR > 0) throw new HttpError(409, `${rider.name} still holds ${lkr(holdingLKR)} cash. Receive it on the Cash collection page first.`);
   await col('riders').deleteOne({ id: rider.id });
   await logActivity(req, { category: 'riders', summary: `removed the rider ${rider.name} (${branchName(rider.branchId)})`, branchId: rider.branchId });
   res.json({ deleted: true });

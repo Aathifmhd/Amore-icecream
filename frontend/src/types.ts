@@ -186,6 +186,10 @@ export interface OrderRecord {
   paidVia?: PaidVia;
   /** Who marked it delivered: the rider in the rider app, or the parlour in the console */
   deliveredBy?: 'rider' | 'parlour';
+  /** The customer's stars for the delivery (1–5) and an optional comment, given once it arrived */
+  riderRating?: number;
+  riderFeedback?: string;
+  ratedAt?: string;
 }
 
 export type PaidVia = 'cash' | 'bank_transfer' | 'card_machine';

@@ -86,6 +86,9 @@ export async function setup() {
     col('riders').createIndex({ id: 1 }, { unique: true }),
     col('riders').createIndex({ phoneKey: 1 }, { unique: true }),
     col('orders').createIndex({ riderId: 1, status: 1 }),
+    col('cash_handins').createIndex({ id: 1 }, { unique: true }),
+    col('cash_handins').createIndex({ riderId: 1, receivedAt: -1 }),
+    col('cash_handins').createIndex({ branchId: 1, receivedAt: -1 }),
   ]);
 }
 

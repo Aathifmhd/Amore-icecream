@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Activity, Bike, ClipboardList, LayoutDashboard, RotateCcw, UtensilsCrossed, BarChart3, CloudOff, ExternalLink, IdCard, Lock, MapPin, MoreHorizontal, Power, Settings, UserCog } from 'lucide-react';
+import { Activity, Bike, ClipboardList, HandCoins, LayoutDashboard, RotateCcw, UtensilsCrossed, BarChart3, CloudOff, ExternalLink, IdCard, Lock, MapPin, MoreHorizontal, Power, Settings, UserCog } from 'lucide-react';
 import { BranchId, Currency, OrderRecord } from '../../../types';
 import { AMORE_BRANCHES } from '../../../data/iceCreamData';
 import { isCapturedReturnedBill } from '../../../utils/orderStorage';
@@ -23,14 +23,16 @@ import { SettingsView } from './SettingsView';
 import { DashboardView } from './DashboardView';
 import { ActionCenterView } from './ActionCenterView';
 import { RidersView } from './RidersView';
+import { RiderCashView } from './RiderCashView';
 
-type Section = 'dashboard' | 'activity' | 'orders' | 'refunds' | 'menu' | 'reports' | 'employees' | 'riders' | 'users' | 'settings';
+type Section = 'dashboard' | 'activity' | 'orders' | 'refunds' | 'menu' | 'reports' | 'employees' | 'riders' | 'cash' | 'users' | 'settings';
 
 const ALL_SECTIONS: { id: Section; label: string; icon: React.ReactNode; title: string; group: string; superOnly?: boolean; phoneTab?: 'all' | 'super' | 'branch' }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, title: 'Dashboard', group: 'Overview', phoneTab: 'all' },
   { id: 'activity', label: 'Action Center', icon: <Activity className="w-5 h-5" />, title: 'Action Center', group: 'Overview', superOnly: true, phoneTab: 'super' },
   { id: 'orders', label: 'Orders', icon: <ClipboardList className="w-5 h-5" />, title: 'Orders', group: 'Daily work', phoneTab: 'all' },
   { id: 'refunds', label: 'Refunds', icon: <RotateCcw className="w-5 h-5" />, title: 'Refunds', group: 'Daily work', phoneTab: 'branch' },
+  { id: 'cash', label: 'Cash collection', icon: <HandCoins className="w-5 h-5" />, title: 'Cash collection from riders', group: 'Daily work' },
   { id: 'menu', label: 'Menu', icon: <UtensilsCrossed className="w-5 h-5" />, title: 'Menu & stock', group: 'Menu', phoneTab: 'all' },
   { id: 'reports', label: 'Reports', icon: <BarChart3 className="w-5 h-5" />, title: 'Reports', group: 'Insights' },
   { id: 'employees', label: 'Staff', icon: <IdCard className="w-5 h-5" />, title: 'Employees', group: 'Team', phoneTab: 'all' },
@@ -52,6 +54,7 @@ function sectionFromUrl(): Section {
   if (t === 'employees' || t === 'staff') return 'employees';
   if (t === 'users') return 'users';
   if (t === 'riders') return 'riders';
+  if (t === 'cash' || t === 'rider-cash') return 'cash';
   if (t === 'settings') return 'settings';
   if (t === 'orders') return 'orders';
   if (t === 'activity' || t === 'action-center') return 'activity';
@@ -397,6 +400,7 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
         {section === 'reports' && <ReportsView orders={orders} branch={branch} />}
         {section === 'employees' && <EmployeesView branch={branch} lockedBranch={lockedBranch} />}
         {section === 'riders' && <RidersView admin={admin} branch={branch} />}
+        {section === 'cash' && <RiderCashView branch={branch} />}
         {section === 'users' && isSuper && <UsersView me={admin} />}
         {section === 'settings' && (
           <SettingsView key={settingsKey} admin={admin} menu={menu} soundOn={soundOn} onSoundChange={changeSound} onTestSound={chime} onOpenUsers={() => go('users')} />

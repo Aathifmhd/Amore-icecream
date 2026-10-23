@@ -31,7 +31,28 @@ export interface RiderOrder {
   /** How it was paid in the end, and whether the rider or the parlour marked it delivered */
   paidVia: PaidVia | null;
   deliveredBy: 'rider' | 'parlour' | null;
+  /** The customer's stars for this delivery */
+  riderRating: number | null;
+  riderFeedback: string;
   riderNote: string | null;
+}
+
+/** Cash from cash-on-delivery orders: what the rider holds now and what they handed in */
+export interface RiderCash {
+  holdingLKR: number;
+  collectedTodayLKR: number;
+  handedInTodayLKR: number;
+  lastHandIn: { amountLKR: number; receivedAt: string; receivedBy: string } | null;
+}
+
+export interface RatingSummary {
+  average: number | null;
+  count: number;
+}
+
+export interface RiderRatings extends RatingSummary {
+  breakdown: Record<string, number>;
+  recent: { orderReference: string; customerFirstName: string; rating: number; comment: string; ratedAt: string }[];
 }
 
 export interface RiderBoard {
@@ -40,6 +61,8 @@ export interface RiderBoard {
   mine: RiderOrder[];
   done: RiderOrder[];
   upcoming: number;
+  cash: RiderCash;
+  rating: RatingSummary;
 }
 
 export async function riderSignIn(phone: string, pin: string): Promise<RiderSession> {
@@ -55,6 +78,8 @@ export const markDelivered = (ref: string, cashCollected: boolean) =>
   api<{ order: RiderOrder }>(`/rider/orders/${encodeURIComponent(ref)}/delivered`, { method: 'POST', body: { cashCollected }, as: 'rider' });
 export const handBack = (ref: string, reason: string) =>
   api<{ order: RiderOrder }>(`/rider/orders/${encodeURIComponent(ref)}/hand-back`, { method: 'POST', body: { reason }, as: 'rider' });
+
+export const loadRatings = () => api<RiderRatings>('/rider/ratings', { as: 'rider' });
 
 /** The rider's board, kept fresh (every few seconds while the app is open). */
 export function useRiderBoard(onSignedOut: () => void) {
@@ -129,4 +154,7 @@ export const agoText = (iso: string | null, now = Date.now()) => {
   return `${Math.floor(m / 60)} h ${m % 60} min ago`;
 };
 export const clock = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '');
+/** "6:30 PM" today, otherwise "12 Oct" */
+export const dayOrClock = (iso: string | null) =>
+  !iso ? '' : new Date(iso).toDateString() === new Date().toDateString() ? clock(iso) : new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short' });
 export const shortRef = (ref: string) => '#' + ref.replace(/^AMO-(M)?/, (_, m) => m || '');

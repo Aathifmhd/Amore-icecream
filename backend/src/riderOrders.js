@@ -51,5 +51,8 @@ export const riderOrderView = (o) => ({
   // How it was paid in the end (cash, bank transfer, card machine) and who marked it delivered
   paidVia: o.paidVia || null,
   deliveredBy: o.deliveredBy || null,
+  // The customer's stars for this delivery (riderRatings.js)
+  riderRating: o.riderRating ?? null,
+  riderFeedback: o.riderFeedback || '',
   riderNote: o.riderNote || null,
 });
