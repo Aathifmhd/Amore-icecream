@@ -398,6 +398,10 @@ html {
   background-size: 100% 100%;
   background-repeat: no-repeat;
 }
+/* Tiles are a fraction of a pixel wide (e.g. 687.6px): overlap them so no hairline shows where they meet */
+.overflow-ribbon__tile + .overflow-ribbon__tile {
+  margin-left: -2px;
+}
 .overflow-ribbon__band {
   position: absolute;
   left: 0;

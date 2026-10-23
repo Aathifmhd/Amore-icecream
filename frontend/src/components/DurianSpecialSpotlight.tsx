@@ -100,7 +100,10 @@ export const DurianSpecialSpotlight: React.FC<DurianSpecialSpotlightProps> = ({
   };
 
   return (
-    <section id="durian-spotlight" className="py-16 md:py-24 bg-[#F8F2E6] relative overflow-hidden border-y border-[#E8DFC8]">
+    <section id="durian-spotlight" className="py-16 md:py-24 bg-[#F8F2E6] relative overflow-hidden border-b border-[#E8DFC8]">
+      {/* The sauce ribbon's drips hang over the top: no top border, and the hero's colour fades in,
+          so no line shows between the drips */}
+      <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-[#FAF7F2] to-transparent pointer-events-none" />
       {/* Decorative subtle aura */}
       <div className="absolute top-1/2 left-0 w-72 h-72 bg-[#FFE380]/30 rounded-full filter blur-3xl pointer-events-none -translate-y-1/2" />
       <div className="absolute top-0 right-1/4 w-80 h-80 bg-[#FDE8EC]/40 rounded-full filter blur-3xl pointer-events-none" />
