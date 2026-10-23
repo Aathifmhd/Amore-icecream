@@ -42,6 +42,8 @@ export interface RiderCash {
   collectedTodayLKR: number;
   handedInTodayLKR: number;
   lastHandIn: { amountLKR: number; receivedAt: string; receivedBy: string } | null;
+  /** Cash still held from deliveries before today, by day ("2026-10-22"), oldest first */
+  earlier: { day: string; amountLKR: number; deliveries: number }[];
 }
 
 export interface RatingSummary {
@@ -50,6 +52,7 @@ export interface RatingSummary {
 }
 
 export interface RiderRatings extends RatingSummary {
+  deliveries: { total: number; thisMonth: number };
   breakdown: Record<string, number>;
   recent: { orderReference: string; customerFirstName: string; rating: number; ratedAt: string }[];
 }
@@ -62,6 +65,8 @@ export interface RiderBoard {
   upcoming: number;
   cash: RiderCash;
   rating: RatingSummary;
+  /** The day the Done list is for ("2026-10-23", Sri Lanka); it starts fresh every day */
+  day: string;
 }
 
 export async function riderSignIn(phone: string, pin: string): Promise<RiderSession> {
@@ -80,8 +85,8 @@ export const handBack = (ref: string, reason: string) =>
 
 export const loadRatings = () => api<RiderRatings>('/rider/ratings', { as: 'rider' });
 
-/** The rider's board, kept fresh (every few seconds while the app is open). */
-export function useRiderBoard(onSignedOut: () => void) {
+/** The rider's board, kept fresh (every few seconds while the app is open). `nextDay`: the demo of tomorrow. */
+export function useRiderBoard(onSignedOut: () => void, nextDay = false) {
   const [board, setBoard] = useState<RiderBoard | null>(null);
   const [offline, setOffline] = useState(false);
   const signedOut = useRef(onSignedOut);
@@ -90,7 +95,7 @@ export function useRiderBoard(onSignedOut: () => void) {
   const load = useCallback(async () => {
     if (!getRiderSession()) return signedOut.current();
     try {
-      const next = await api<RiderBoard>('/rider/orders', { as: 'rider' });
+      const next = await api<RiderBoard>(`/rider/orders${nextDay ? '?day=next' : ''}`, { as: 'rider' });
       setBoard(next);
       setOffline(false);
     } catch (err) {
@@ -99,7 +104,7 @@ export function useRiderBoard(onSignedOut: () => void) {
         signedOut.current();
       } else setOffline(true);
     }
-  }, []);
+  }, [nextDay]);
 
   useEffect(() => startPolling(load, { visibleMs: 8000, hiddenMs: 30000 }), [load]);
   return { board, offline, reload: load };

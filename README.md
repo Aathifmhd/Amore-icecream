@@ -189,8 +189,14 @@ orders list, the order popup, the rider app and the kitchen slip.
 minus everything they handed in (`backend/src/riderCash.js`, hand-ins in `cash_handins`). Staff
 count the cash and press **Receive cash**: the popup lists the deliveries not handed in yet (oldest
 count as paid first) and takes the amount received — all of it, or part, with an optional note.
-Today's hand-ins can be undone. The rider app shows "Cash with you" and the last hand-in; a rider
-can't be removed while holding cash.
+Today's hand-ins can be undone. A rider can't be removed while holding cash.
+
+The rider app's **Done** page is for one day (Sri Lanka time) and starts fresh every morning: today's
+deliveries, today's cash collected and today's cash still to hand in. Cash not handed in from
+earlier days stays on top in red ("Pending from earlier days", by day) until the parlour receives
+it. **Ratings** also shows the rider's total deliveries and this month's. For now the Done page has
+a **Demo: see tomorrow** button (`RIDER_NEXT_DAY_DEMO` in `frontend/src/config.ts`): it shows the
+next day's Done page (`GET /api/rider/orders?day=next`) without changing anything.
 
 **Ratings:** the moment a customer's delivery is marked delivered, the shop asks "How was your
 delivery?" (1–5 stars for the rider and an optional comment). The shop follows the customer's

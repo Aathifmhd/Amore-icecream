@@ -15,6 +15,16 @@ export function startOfTodayColombo(nowMs = Date.now()) {
   return new Date(day - offset).toISOString();
 }
 
+/** "2026-10-22": the day (in Sri Lanka) of an ISO time */
+export const colomboDay = (iso) => new Date(Date.parse(iso) + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+
+/** The first moment of this month in Sri Lanka, as an ISO time */
+export function startOfMonthColombo(nowMs = Date.now()) {
+  const offset = 5.5 * 3600 * 1000;
+  const local = new Date(nowMs + offset);
+  return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), 1) - offset).toISOString();
+}
+
 /** A delivery waiting for a rider at this parlour */
 export const readyQuery = (branchId) => ({
   branchId,

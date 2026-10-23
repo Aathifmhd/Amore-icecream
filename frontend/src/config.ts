@@ -19,3 +19,10 @@ export const ONLINE_CARD_PAYMENTS_ENABLED = false;
  * (and DEMO_CARD_PAYMENTS in backend/src/orderRules.js).
  */
 export const DEMO_CARD_PAYMENTS = true;
+
+/**
+ * A "Demo: see tomorrow" button on the rider app's Done page: shows what the rider sees on the
+ * next day (Done starts empty; cash not handed in shows as from an earlier day). Nothing is
+ * changed. Set to false to remove the button.
+ */
+export const RIDER_NEXT_DAY_DEMO = true;

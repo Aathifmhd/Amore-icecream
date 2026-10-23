@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { col, now, PUBLIC } from '../db.js';
 import { HttpError, publicRider, requireRider, riderLogin } from '../auth.js';
 import { logActivity, lkr } from '../activity.js';
-import { collectsCash, readyQuery, riderOrderView, startOfTodayColombo } from '../riderOrders.js';
-import { cashByRider } from '../riderCash.js';
+import { collectsCash, colomboDay, readyQuery, riderOrderView, startOfTodayColombo } from '../riderOrders.js';
+import { cashByRider, earlierDays, unpaidCashOrders } from '../riderCash.js';
 import { ratingSummary, riderRatings } from '../riderRatings.js';
 import { kickFeedbackEmails } from '../feedback.js';
 
@@ -12,8 +12,9 @@ import { kickFeedbackEmails } from '../feedback.js';
  *
  *   POST /login                 { phone, pin } → rider session
  *   GET  /me                    the signed-in rider
- *   GET  /orders                ready to pick up at my parlour, mine on the way, my deliveries today,
- *                               the cash I hold and my star rating
+ *   GET  /orders?day=next       (?day=next: a demo of tomorrow — nothing is changed)
+ *                               ready to pick up at my parlour, mine on the way, my deliveries today,
+ *                               the cash I hold (and what is left from earlier days), my star rating
  *   GET  /ratings               my stars from customers (comments are for the parlour only)
  *   POST /orders/:ref/pickup    take a ready order (only one rider can)
  *   POST /orders/:ref/delivered { cashCollected } hand it over at the door
@@ -45,11 +46,14 @@ router.get('/me', (req, res) => res.json({ rider: publicRider(req.rider) }));
 router.get('/orders', async (req, res) => {
   await kickFeedbackEmails();
   const r = req.rider;
+  // "Today" in Sri Lanka; the demo button asks for tomorrow, so Done is empty and today's
+  // cash counts as from an earlier day. Only this reply changes.
+  const today = startOfTodayColombo(Date.now() + (req.query.day === 'next' ? 86_400_000 : 0));
   const [ready, mine, done, upcoming, cash, rating] = await Promise.all([
     col('orders').find(readyQuery(r.branchId), PUBLIC).sort({ readyAt: 1 }).toArray(),
     col('orders').find({ riderId: r.id, status: 'on_the_way' }, PUBLIC).sort({ onTheWayAt: 1 }).toArray(),
     col('orders')
-      .find({ riderId: r.id, status: 'delivered', deliveredAt: { $gte: startOfTodayColombo() } }, PUBLIC)
+      .find({ riderId: r.id, status: 'delivered', deliveredAt: { $gte: today } }, PUBLIC)
       .sort({ deliveredAt: -1 })
       .toArray(),
     // Deliveries being made now: they will be ready soon
@@ -68,8 +72,10 @@ router.get('/orders', async (req, res) => {
     mine: mine.map(riderOrderView),
     done: done.map(riderOrderView),
     upcoming,
-    cash: cash[r.id],
+    // Done starts fresh each day; cash not handed in from earlier days is listed by day
+    cash: { ...cash[r.id], earlier: earlierDays(await unpaidCashOrders(r.id, cash[r.id].holdingLKR), today) },
     rating: rating[r.id],
+    day: colomboDay(today),
     serverTime: now(),
   });
 });

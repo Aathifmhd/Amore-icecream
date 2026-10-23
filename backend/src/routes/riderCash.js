@@ -34,7 +34,7 @@ router.get('/', async (req, res) => {
   const cash = await cashByRider(riders.map((r) => r.id));
   // Which deliveries make up what each rider holds (only riders holding cash)
   const unpaid = Object.fromEntries(
-    await Promise.all(riders.filter((r) => cash[r.id].holdingLKR > 0).map(async (r) => [r.id, await unpaidCashOrders(r.id)]))
+    await Promise.all(riders.filter((r) => cash[r.id].holdingLKR > 0).map(async (r) => [r.id, await unpaidCashOrders(r.id, cash[r.id].holdingLKR)]))
   );
   const handIns = await col('cash_handins').find(scope(req)).sort({ receivedAt: -1 }).limit(40).toArray();
   res.json({
@@ -56,11 +56,11 @@ router.get('/', async (req, res) => {
 
 router.get('/:riderId', async (req, res) => {
   const rider = await findRider(req);
-  const [cash, orders, handIns] = await Promise.all([
+  const [cash, handIns] = await Promise.all([
     cashByRider([rider.id]),
-    unpaidCashOrders(rider.id),
     col('cash_handins').find({ riderId: rider.id }).sort({ receivedAt: -1 }).limit(20).toArray(),
   ]);
+  const orders = await unpaidCashOrders(rider.id, cash[rider.id].holdingLKR);
   res.json({ rider: { id: rider.id, name: rider.name, branchId: rider.branchId }, ...cash[rider.id], orders, handIns: handIns.map(handInView) });
 });
 

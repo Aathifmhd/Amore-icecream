@@ -1,5 +1,5 @@
 import { col } from './db.js';
-import { startOfTodayColombo } from './riderOrders.js';
+import { colomboDay, startOfTodayColombo } from './riderOrders.js';
 
 /*
  * Cash riders collect at the door and hand in at the parlour.
@@ -58,21 +58,38 @@ export async function cashByRider(riderIds) {
   return out;
 }
 
-/** The deliveries whose cash the rider still holds (oldest first), with what is owed on each. */
-export async function unpaidCashOrders(riderId) {
-  const [orders, handed] = await Promise.all([
-    col('orders')
-      .find(cashOrders([riderId]), { projection: { _id: 0, orderReference: 1, customerName: 1, city: 1, deliveredAt: 1, cashCollectedLKR: 1 } })
-      .sort({ deliveredAt: 1 })
-      .toArray(),
-    col('cash_handins').aggregate([{ $match: { riderId } }, { $group: { _id: null, total: { $sum: '$amountLKR' } } }]).toArray(),
-  ]);
-  let paid = handed[0]?.total || 0;
+/**
+ * The deliveries whose cash the rider still holds (oldest first), with what is owed on each.
+ * The oldest count as paid first, so these are the latest deliveries adding up to what they hold
+ * (only those are read, however long the rider has worked).
+ */
+export async function unpaidCashOrders(riderId, holdingLKR) {
+  const holding = holdingLKR ?? (await cashByRider([riderId]))[riderId].holdingLKR;
+  if (holding <= 0) return [];
+  const cursor = col('orders')
+    .find(cashOrders([riderId]), { projection: { _id: 0, orderReference: 1, customerName: 1, city: 1, deliveredAt: 1, cashCollectedLKR: 1 } })
+    .sort({ deliveredAt: -1 });
   const unpaid = [];
-  for (const o of orders) {
-    const covered = Math.min(paid, o.cashCollectedLKR);
-    paid -= covered;
-    if (o.cashCollectedLKR > covered) unpaid.push({ ...o, owedLKR: o.cashCollectedLKR - covered });
+  let left = holding;
+  for await (const o of cursor) {
+    const owed = Math.min(o.cashCollectedLKR, left);
+    unpaid.push({ ...o, owedLKR: owed });
+    left -= owed;
+    if (left <= 0) break;
   }
-  return unpaid;
+  await cursor.close();
+  return unpaid.reverse();
+}
+
+/** Cash still held from deliveries before today, by day (Sri Lanka time), oldest first */
+export function earlierDays(unpaid, today = startOfTodayColombo()) {
+  const days = new Map();
+  for (const o of unpaid.filter((x) => x.deliveredAt < today)) {
+    const day = colomboDay(o.deliveredAt);
+    const d = days.get(day) || { day, amountLKR: 0, deliveries: 0 };
+    d.amountLKR += o.owedLKR;
+    d.deliveries += 1;
+    days.set(day, d);
+  }
+  return [...days.values()];
 }
