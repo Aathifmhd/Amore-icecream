@@ -5,10 +5,10 @@ import { col, now } from './db.js';
  * The Action Center's log: what happened, who did it and at which branch. Entries are
  * written after an action succeeds and are kept for ACTIVITY_DAYS (a TTL index removes older ones).
  *
- * Categories: order, refund, stock, menu, staff, users, gallery, signin
+ * Categories: order, refund, stock, menu, staff, users, gallery, parlours, riders, signin
  */
 export const ACTIVITY_DAYS = 90;
-export const ACTIVITY_CATEGORIES = ['order', 'refund', 'stock', 'menu', 'staff', 'users', 'gallery', 'parlours', 'signin'];
+export const ACTIVITY_CATEGORIES = ['order', 'refund', 'stock', 'menu', 'staff', 'users', 'gallery', 'parlours', 'riders', 'signin'];
 
 const BRANCH_NAMES = { akurana: 'Akurana', colombo: 'Colombo', arugambay: 'Arugam Bay' };
 export const branchName = (id) => BRANCH_NAMES[id] || id || '';
@@ -22,6 +22,7 @@ export function actorOf(req) {
       : { kind: 'admin', username: a.username, name: a.displayName || a.username, role: a.role === 'branch' ? 'branch' : 'superadmin', branchId: a.role === 'branch' ? a.branchId : null };
   }
   if (req.customer) return { kind: 'customer', username: null, name: req.customer.name || req.customer.email || 'A customer', role: 'customer', branchId: null };
+  if (req.rider) return { kind: 'rider', username: req.rider.phone, name: req.rider.name, role: 'rider', branchId: req.rider.branchId };
   return { kind: 'system', username: null, name: 'Amore', role: 'system', branchId: null };
 }
 

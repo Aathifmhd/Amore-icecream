@@ -35,6 +35,7 @@ whole site (website + API) from the backend on one port.
 | `/?page=menu` | Full menu and ordering |
 | `/?confirmOrder=AMO-XXXXXX` | Order confirmation and live tracking |
 | `/admin` | Admin console (orders, kitchen stages, refunds, menu editing) |
+| `/rider` | Rider app (phone): orders ready to pick up, deliveries on the way, today's deliveries |
 
 ## API (`backend/src`)
 
@@ -49,6 +50,8 @@ whole site (website + API) from the backend on one port.
 | `/api/gallery` | admins see, super admin adds / removes photos in the photo gallery |
 | `/api/activity` | super admin — the Action Center log (what happened, who, which branch; kept 90 days) |
 | `GET /api/parlours`, `PUT /api/parlours/:id` | everyone reads / super admin sets — each parlour's map location and delivery distance |
+| `/api/riders` | admin — riders (a branch admin: their parlour's): add, edit, new PIN, switch off, remove; today's deliveries and cash |
+| `/api/rider/*` | the rider app — sign in (phone + PIN), orders, pick up, delivered, hand back |
 | `POST /api/orders` | signed-in customer (checked like the old Firestore rules) or admin |
 | `GET /api/orders/mine` | signed-in customer — their own orders |
 | `GET / PATCH / DELETE /api/orders/:ref` | the customer who placed it (limited) or admin |
@@ -142,6 +145,30 @@ Web application) with these **Authorized JavaScript origins**:
 Put the client ID in `GOOGLE_CLIENT_ID` (Vercel settings and `backend/.env`). The client
 secret is not needed. The OAuth consent screen must be published ("In production") so any
 Google account can sign in, not only test users.
+
+## Riders
+
+Riders deliver from one parlour each. An admin adds them on the console's **Riders** page (name,
+mobile number, parlour, a 4–6 digit PIN); a branch admin manages their own parlour's riders. Riders
+open **/rider** on their phone (it can be saved to the home screen) and sign in with their mobile
+number and PIN.
+
+A delivery order moves like this:
+
+1. The kitchen accepts it and prepares it, then presses **Ready for rider** (the order gets
+   `readyAt`; its status stays "preparing").
+2. Every rider of that parlour sees it under **Ready** (with a chime). One presses **Pick up** after
+   checking the items: the order is "out for delivery" with that rider (`riderId`, `riderName`).
+   Only one rider can take it.
+3. The rider calls / navigates to the customer and presses **Delivered**, confirming the cash for a
+   cash-on-delivery order (`cashCollectedLKR`). Or **Can't deliver** with a reason: the order goes
+   back to the parlour's ready list and the reason shows on the order (`riderNote`).
+
+The customer sees "Packed & ready for a rider" and then "<rider> is on the way". The Riders page
+shows who is out with which order, orders waiting for a rider, and each rider's deliveries and cash
+today; the Action Center logs every pickup, delivery and hand-back. Staff can still send an order
+without the app ("Out for delivery (no app)") or mark it delivered. A new PIN or switching a rider
+off signs them out; six wrong PINs lock the phone number for 15 minutes.
 
 ## Checkout
 

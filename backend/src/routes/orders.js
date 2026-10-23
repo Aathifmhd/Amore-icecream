@@ -30,6 +30,9 @@ function describeOrderChange(before, after, req) {
         return ['order', `changed order ${ref} to ${after.status}`];
     }
   }
+  if (!before.readyAt && after.readyAt && after.status === 'preparing') {
+    return ['order', `marked order ${ref} ready for a rider`];
+  }
   if (before.refundStatus !== 'completed' && after.refundStatus === 'completed') {
     return ['refund', `paid the refund for ${ref} (${lkr(after.refundAmountLKR ?? after.grandTotalLKR)})`];
   }

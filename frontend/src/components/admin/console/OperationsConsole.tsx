@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Activity, ClipboardList, LayoutDashboard, RotateCcw, UtensilsCrossed, BarChart3, CloudOff, ExternalLink, IdCard, Lock, MapPin, MoreHorizontal, Power, Settings, UserCog } from 'lucide-react';
+import { Activity, Bike, ClipboardList, LayoutDashboard, RotateCcw, UtensilsCrossed, BarChart3, CloudOff, ExternalLink, IdCard, Lock, MapPin, MoreHorizontal, Power, Settings, UserCog } from 'lucide-react';
 import { BranchId, Currency, OrderRecord } from '../../../types';
 import { AMORE_BRANCHES } from '../../../data/iceCreamData';
 import { isCapturedReturnedBill } from '../../../utils/orderStorage';
@@ -22,8 +22,9 @@ import { UsersView } from './UsersView';
 import { SettingsView } from './SettingsView';
 import { DashboardView } from './DashboardView';
 import { ActionCenterView } from './ActionCenterView';
+import { RidersView } from './RidersView';
 
-type Section = 'dashboard' | 'activity' | 'orders' | 'refunds' | 'menu' | 'reports' | 'employees' | 'users' | 'settings';
+type Section = 'dashboard' | 'activity' | 'orders' | 'refunds' | 'menu' | 'reports' | 'employees' | 'riders' | 'users' | 'settings';
 
 const ALL_SECTIONS: { id: Section; label: string; icon: React.ReactNode; title: string; group: string; superOnly?: boolean; phoneTab?: 'all' | 'super' | 'branch' }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, title: 'Dashboard', group: 'Overview', phoneTab: 'all' },
@@ -33,6 +34,7 @@ const ALL_SECTIONS: { id: Section; label: string; icon: React.ReactNode; title: 
   { id: 'menu', label: 'Menu', icon: <UtensilsCrossed className="w-5 h-5" />, title: 'Menu & stock', group: 'Menu', phoneTab: 'all' },
   { id: 'reports', label: 'Reports', icon: <BarChart3 className="w-5 h-5" />, title: 'Reports', group: 'Insights' },
   { id: 'employees', label: 'Staff', icon: <IdCard className="w-5 h-5" />, title: 'Employees', group: 'Team', phoneTab: 'all' },
+  { id: 'riders', label: 'Riders', icon: <Bike className="w-5 h-5" />, title: 'Riders', group: 'Team' },
   { id: 'users', label: 'Users', icon: <UserCog className="w-5 h-5" />, title: 'Users & access', group: 'Team', superOnly: true },
 ];
 // When the Action Center was last looked at (on this device), for its "new" count
@@ -49,6 +51,7 @@ function sectionFromUrl(): Section {
   if (t === 'overview' || t === 'branches' || t === 'reports') return 'reports';
   if (t === 'employees' || t === 'staff') return 'employees';
   if (t === 'users') return 'users';
+  if (t === 'riders') return 'riders';
   if (t === 'settings') return 'settings';
   if (t === 'orders') return 'orders';
   if (t === 'activity' || t === 'action-center') return 'activity';
@@ -393,6 +396,7 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
         {section === 'menu' && <MenuView menu={menu} branch={branch} isSuper={isSuper} />}
         {section === 'reports' && <ReportsView orders={orders} branch={branch} />}
         {section === 'employees' && <EmployeesView branch={branch} lockedBranch={lockedBranch} />}
+        {section === 'riders' && <RidersView admin={admin} branch={branch} />}
         {section === 'users' && isSuper && <UsersView me={admin} />}
         {section === 'settings' && (
           <SettingsView key={settingsKey} admin={admin} menu={menu} soundOn={soundOn} onSoundChange={changeSound} onTestSound={chime} onOpenUsers={() => go('users')} />

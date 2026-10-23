@@ -172,5 +172,15 @@ export interface OrderRecord {
   refundedAt?: string;
   refundAmountLKR?: number;
   customerDeletedHistory?: boolean;
+  /** Delivery packed and waiting for a rider (the status stays "preparing" until one picks it up) */
+  readyAt?: string;
+  /** The rider who picked it up (rider app) */
+  riderId?: string;
+  riderName?: string;
+  riderPhone?: string;
+  /** Cash the rider confirmed collecting at the door */
+  cashCollectedLKR?: number;
+  /** Why the last rider handed it back ("Kamal: Customer not answering") */
+  riderNote?: string;
 }
 

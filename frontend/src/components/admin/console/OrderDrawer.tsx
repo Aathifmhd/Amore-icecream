@@ -250,7 +250,8 @@ export const OrderDrawer: React.FC<{ order: OrderRecord | null; onClose: () => v
     ['Placed', order.createdAt],
     ['Accepted', order.confirmedAt],
     ['Preparing', order.preparingAt],
-    [isPickup(order) ? 'Ready for pickup' : 'Out for delivery', order.onTheWayAt],
+    ...(isPickup(order) ? [] : ([['Ready for rider', order.readyAt]] as [string, string | undefined][])),
+    [isPickup(order) ? 'Ready for pickup' : order.riderName ? `Picked up by ${order.riderName}` : 'Out for delivery', order.onTheWayAt],
     [isPickup(order) ? 'Collected' : 'Delivered', order.deliveredAt],
     ['Cancelled', order.cancelledAt],
   ];
@@ -354,6 +355,22 @@ export const OrderDrawer: React.FC<{ order: OrderRecord | null; onClose: () => v
                   <a href={mapHref} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-[#81001E] hover:underline">
                     <MapPin className="w-4 h-4" /> Open in Google Maps
                   </a>
+                )}
+                {order.riderName && (
+                  <p className="mt-3 text-sm text-[#241A18] flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="font-semibold">Rider: {order.riderName}</span>
+                    {order.riderPhone && (
+                      <a href={`tel:${order.riderPhone}`} className="font-semibold text-[#81001E] hover:underline">
+                        {order.riderPhone}
+                      </a>
+                    )}
+                    {order.cashCollectedLKR ? <span className="text-emerald-700">· collected {lkr(order.cashCollectedLKR)} cash</span> : null}
+                  </p>
+                )}
+                {order.riderNote && !order.riderName && (
+                  <p className="mt-3 text-sm rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-amber-900">
+                    Handed back by {order.riderNote}
+                  </p>
                 )}
               </>
             )}

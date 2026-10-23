@@ -660,6 +660,14 @@ export function adminSetPreparing(orderReference: string): OrderRecord | null {
 }
 
 /**
+ * Admin: a delivery is packed and waiting for a rider (riders see it in the rider app)
+ */
+export function adminSetReadyForRider(orderReference: string): OrderRecord | null {
+  const now = new Date().toISOString();
+  return updateOrder(orderReference, { readyAt: now, updatedAt: now });
+}
+
+/**
  * Admin: Marks order as handed over to delivery partner / on the way
  */
 export function adminSetOnTheWay(orderReference: string): OrderRecord | null {

@@ -114,13 +114,49 @@ export function clearCustomerSession(): void {
   window.dispatchEvent(new CustomEvent(CUSTOMER_SESSION_EVENT));
 }
 
+// ---- Rider sessions (the /rider app) ------------------------------------------
+
+export interface RiderProfile {
+  id: string;
+  name: string;
+  phone: string;
+  branchId: 'akurana' | 'colombo' | 'arugambay';
+  active: boolean;
+  lastSeenAt: string | null;
+}
+export interface RiderSession {
+  token: string;
+  expiresAt: string;
+  rider: RiderProfile;
+}
+const RIDER_KEY = 'amore_rider_session_v1';
+
+export function getRiderSession(): RiderSession | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const s = JSON.parse(localStorage.getItem(RIDER_KEY) || 'null') as RiderSession | null;
+    return s && s.token && Date.parse(s.expiresAt) > Date.now() ? s : null;
+  } catch {
+    return null;
+  }
+}
+export function saveRiderSession(session: RiderSession | null): void {
+  try {
+    if (session) localStorage.setItem(RIDER_KEY, JSON.stringify(session));
+    else localStorage.removeItem(RIDER_KEY);
+  } catch {
+    /* storage blocked */
+  }
+}
+
 // ---- Requests ----------------------------------------------------------------
 
 /** Which sign-in to send: 'auto' = the admin session if there is one, else the customer's. */
-export type Caller = 'auto' | 'admin' | 'customer' | 'none';
+export type Caller = 'auto' | 'admin' | 'customer' | 'rider' | 'none';
 
 function tokenFor(caller: Caller): string | null {
   if (caller === 'none') return null;
+  if (caller === 'rider') return getRiderSession()?.token ?? null;
   if (caller !== 'customer') {
     const session = getAdminSession();
     if (session || caller === 'admin') return session?.token ?? null;

@@ -17,6 +17,8 @@ export const ORDER_FIELDS = [
   'onTheWayAt', 'deliveredAt', 'isGracePeriodPaused', 'gracePeriodRemainingSeconds',
   'gracePeriodPausedAt', 'refundStatus', 'refundedAt', 'refundAmountLKR',
   'customerDeletedHistory',
+  // Riders: ready for a rider, who took it, cash they collected, why they handed it back
+  'readyAt', 'riderId', 'riderName', 'riderPhone', 'cashCollectedLKR', 'riderNote',
 ];
 
 const STATUSES = ['pending_confirmation', 'paid', 'confirmed', 'cancelled', 'preparing', 'on_the_way', 'delivered'];
@@ -93,6 +95,12 @@ const FIELD_CHECKS = {
   refundedAt: isDate,
   refundAmountLKR: (v) => num(v),
   customerDeletedHistory: (v) => typeof v === 'boolean',
+  readyAt: isDate,
+  riderId: (v) => str(v, 40),
+  riderName: (v) => str(v, 100),
+  riderPhone: (v) => str(v, 30),
+  cashCollectedLKR: (v) => num(v),
+  riderNote: (v) => str(v, 300),
 };
 
 function isItem(i) {

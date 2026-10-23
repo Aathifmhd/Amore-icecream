@@ -250,14 +250,85 @@ async function customerFromToken(token) {
   return payload?.uid ? { uid: payload.uid, email: payload.email, name: payload.name, picture: payload.picture } : null;
 }
 
+// ---- Riders ------------------------------------------------------------------
+// Riders sign in to /rider with their phone number and a 4–6 digit PIN. The admins add them
+// (riders collection: id, name, phone, branchId, PIN salt + hash, active, sessionVersion).
+
+const RIDER_SESSION_DAYS = 30;
+const MAX_PIN_FAILURES = 6;
+
+/** "077 123 4567", "+94771234567" → "771234567" (the last 9 digits identify a Sri Lankan mobile) */
+export const phoneKey = (phone) => String(phone || '').replace(/\D/g, '').slice(-9);
+export const isValidPin = (pin) => /^\d{4,6}$/.test(String(pin ?? ''));
+
+/** What the console and the rider app see of a rider (never the PIN). */
+export const publicRider = (r) => ({
+  id: r.id,
+  name: r.name,
+  phone: r.phone,
+  branchId: r.branchId,
+  active: r.active !== false,
+  lastSeenAt: r.lastSeenAt || null,
+  createdAt: r.createdAt,
+});
+
+export async function riderPinFields(pin) {
+  if (!isValidPin(pin)) throw new HttpError(400, 'The PIN must be 4 to 6 digits');
+  const { salt, hash } = await hashSecret(pin);
+  return { salt, hash, failedLogins: 0, lockedUntil: null };
+}
+
+export async function riderLogin(phone, pin) {
+  const key = phoneKey(phone);
+  const rider = key.length === 9 ? await col('riders').findOne({ phoneKey: key }) : null;
+  if (rider?.lockedUntil && new Date(rider.lockedUntil) > new Date()) {
+    throw new HttpError(429, `Too many wrong PINs. Try again after ${LOGIN_LOCK_MINUTES} minutes, or ask the parlour.`);
+  }
+  const ok = rider && isValidPin(pin) ? await secretMatches(String(pin), rider.salt, rider.hash) : await hashSecret('x').then(() => false);
+  if (!ok) {
+    if (rider) {
+      const failed = (rider.failedLogins || 0) + 1;
+      await col('riders').updateOne(
+        { id: rider.id },
+        {
+          $set: {
+            failedLogins: failed >= MAX_PIN_FAILURES ? 0 : failed,
+            lockedUntil: failed >= MAX_PIN_FAILURES ? new Date(Date.now() + LOGIN_LOCK_MINUTES * 60_000).toISOString() : null,
+          },
+        }
+      );
+    }
+    throw new HttpError(401, 'Wrong phone number or PIN');
+  }
+  if (rider.active === false) throw new HttpError(403, 'Your rider account is switched off. Please ask the parlour.');
+  await col('riders').updateOne({ id: rider.id }, { $set: { failedLogins: 0, lockedUntil: null, lastSeenAt: now() } });
+  const exp = Date.now() + RIDER_SESSION_DAYS * 24 * 3600 * 1000;
+  const token = await sign('rdr', { sub: rider.id, ver: rider.sessionVersion ?? 0, exp });
+  return { token, expiresAt: new Date(exp).toISOString(), rider: publicRider(rider) };
+}
+
+async function riderFromToken(token) {
+  const payload = await readToken(token);
+  if (!payload?.sub) return null;
+  const rider = await col('riders').findOne({ id: payload.sub });
+  if (!rider || rider.active === false || (rider.sessionVersion ?? 0) !== payload.ver) return null;
+  return rider;
+}
+
+export function requireRider(req, res, next) {
+  if (!req.rider) throw new HttpError(401, 'Please sign in to the rider app');
+  next();
+}
+
 // ---- Middleware --------------------------------------------------------------
 
-/** Sets req.admin or req.customer from the Authorization header (if any). Never rejects. */
+/** Sets req.admin, req.customer or req.rider from the Authorization header (if any). Never rejects. */
 export async function identify(req, res, next) {
   const header = req.get('authorization') || '';
   const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
   if (token.startsWith('adm.')) req.admin = await adminFromToken(token);
   else if (token.startsWith('cus.')) req.customer = await customerFromToken(token);
+  else if (token.startsWith('rdr.')) req.rider = await riderFromToken(token);
   next();
 }
 

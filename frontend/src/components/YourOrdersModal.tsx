@@ -837,7 +837,9 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                             {isPreparing && (
                               <span className="w-2 h-2 rounded-full bg-[#8C102A] animate-pulse inline-block" />
                             )}
-                            {isPreparing
+                            {isPreparing && order.readyAt && order.orderType !== 'pickup'
+                              ? 'Packed & ready for a rider'
+                              : isPreparing
                               ? 'Scooping & Churning Fresh Ice Cream'
                               : order.orderType === 'pickup'
                               ? 'Order Confirmed at Parlour'
@@ -846,7 +848,9 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                               : 'Order Confirmed (Cash on Delivery)'}
                           </span>
                           <span className="text-[11px] text-[#5D4E46] block mt-0.5">
-                            {isPreparing
+                            {isPreparing && order.readyAt && order.orderType !== 'pickup'
+                              ? 'Your order is packed in thermal containers. One of our riders will pick it up in a moment.'
+                              : isPreparing
                               ? order.orderType === 'pickup'
                                 ? 'Our parlour artisans are crafting your custom flavours. Your order will be ready for pickup shortly.'
                                 : 'Our parlour artisans are crafting your custom flavours and biscuit cones right now.'
@@ -911,7 +915,9 @@ export const YourOrdersModal: React.FC<YourOrdersModalProps> = ({
                               }`}
                             />
                             {order.orderType === 'delivery'
-                              ? 'Delivery partner on the way'
+                              ? order.riderName
+                                ? `${order.riderName} is on the way`
+                                : 'Delivery partner on the way'
                               : 'Ready to pickup'}
                           </span>
                           <span

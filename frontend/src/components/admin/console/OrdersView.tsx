@@ -48,9 +48,12 @@ export const NextStepButton: React.FC<{ order: OrderRecord; size?: 'sm' | 'md' |
     );
   }
   return (
-    <Button size={size} variant={next.step === 'finish' ? 'success' : 'primary'} onClick={go} className={cx('w-full whitespace-nowrap', className)}>
-      {next.label}
-    </Button>
+    <span className={cx('block text-right', className)}>
+      <Button size={size} variant={next.quiet ? 'secondary' : next.step === 'finish' ? 'success' : 'primary'} onClick={go} className="w-full whitespace-nowrap">
+        {next.label}
+      </Button>
+      {next.quiet && <span className="block text-[11px] text-[#8A7970] mt-1 whitespace-nowrap">A rider with the app picks it up</span>}
+    </span>
   );
 };
 

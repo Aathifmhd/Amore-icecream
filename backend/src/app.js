@@ -13,6 +13,8 @@ import employees from './routes/employees.js';
 import gallery from './routes/gallery.js';
 import activity from './routes/activity.js';
 import parlours from './routes/parlours.js';
+import riders from './routes/riders.js';
+import rider from './routes/rider.js';
 
 export function createApp() {
   const app = express();
@@ -36,6 +38,8 @@ export function createApp() {
   app.use('/api/gallery', gallery);
   app.use('/api/activity', activity);
   app.use('/api/parlours', parlours);
+  app.use('/api/riders', riders);
+  app.use('/api/rider', rider);
   app.use('/api/orders', orders);
   app.use('/api/menu', menu);
   app.use('/api/images', images);

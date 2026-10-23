@@ -6,6 +6,9 @@ import type { Tone } from './ui';
 
 export type Stage = 'new' | 'preparing' | 'ready' | 'done' | 'cancelled';
 
+/** A delivery packed and waiting for a rider to pick it up (rider app) */
+export const waitingForRider = (o: OrderRecord) => o.orderType !== 'pickup' && o.status === 'preparing' && Boolean(o.readyAt);
+
 /** Where an order sits on the board. Accepted-but-not-started orders wait in "Preparing". */
 export function stageOf(o: OrderRecord): Stage {
   switch (o.status) {
@@ -13,8 +16,9 @@ export function stageOf(o: OrderRecord): Stage {
       return 'new';
     case 'paid':
     case 'confirmed':
-    case 'preparing':
       return 'preparing';
+    case 'preparing':
+      return waitingForRider(o) ? 'ready' : 'preparing';
     case 'on_the_way':
       return 'ready';
     case 'delivered':
@@ -35,9 +39,10 @@ export function statusLabel(o: OrderRecord): { label: string; tone: Tone } {
     case 'confirmed':
       return { label: 'Accepted – not started', tone: 'blue' };
     case 'preparing':
-      return { label: 'Preparing', tone: 'violet' };
+      return waitingForRider(o) ? { label: 'Ready – waiting for a rider', tone: 'amber' } : { label: 'Preparing', tone: 'violet' };
     case 'on_the_way':
-      return isPickup(o) ? { label: 'Ready for pickup', tone: 'blue' } : { label: 'Out for delivery', tone: 'blue' };
+      if (isPickup(o)) return { label: 'Ready for pickup', tone: 'blue' };
+      return { label: o.riderName ? `Out with ${o.riderName}` : 'Out for delivery', tone: 'blue' };
     case 'delivered':
       return isPickup(o) ? { label: 'Collected', tone: 'green' } : { label: 'Delivered', tone: 'green' };
     case 'cancelled':
@@ -47,10 +52,13 @@ export function statusLabel(o: OrderRecord): { label: string; tone: Tone } {
   }
 }
 
-export type NextStep = 'accept' | 'start' | 'send' | 'finish';
+export type NextStep = 'accept' | 'start' | 'ready' | 'send' | 'finish';
 
-/** The single main action for an order, or null when there is nothing left to do. */
-export function nextStep(o: OrderRecord): { step: NextStep; label: string } | null {
+/**
+ * The single main action for an order, or null when there is nothing left to do.
+ * `quiet`: shown as a plain button (a delivery waiting for the riders' app).
+ */
+export function nextStep(o: OrderRecord): { step: NextStep; label: string; quiet?: boolean } | null {
   switch (o.status) {
     case 'pending_confirmation':
       return { step: 'accept', label: 'Accept order' };
@@ -58,7 +66,9 @@ export function nextStep(o: OrderRecord): { step: NextStep; label: string } | nu
     case 'confirmed':
       return { step: 'start', label: 'Start preparing' };
     case 'preparing':
-      return isPickup(o) ? { step: 'send', label: 'Ready for pickup' } : { step: 'send', label: 'Out for delivery' };
+      if (isPickup(o)) return { step: 'send', label: 'Ready for pickup' };
+      // Deliveries go to the riders' app; "Out for delivery" is for a rider without the app
+      return o.readyAt ? { step: 'send', label: 'Out for delivery (no app)', quiet: true } : { step: 'ready', label: 'Ready for rider' };
     case 'on_the_way':
       return isPickup(o) ? { step: 'finish', label: 'Mark collected' } : { step: 'finish', label: 'Mark delivered' };
     default:
