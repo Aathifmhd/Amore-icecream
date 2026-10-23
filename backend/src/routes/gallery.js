@@ -49,6 +49,9 @@ router.post('/', requireSuperAdmin, async (req, res) => {
   if (!GALLERY_CATEGORIES.includes(category)) throw new HttpError(400, 'Choose a category');
   const photo = { id: `gal_${crypto.randomBytes(8).toString('hex')}`, url, name: title, category, createdAt: now(), uploadedBy: req.admin.username };
   const image = await col('images').findOneAndUpdate({ id: url.split('/').pop() }, { $set: { galleryChecked: true } }, { projection: { sha256: 1 } });
+  // The same picture uploaded again: keep the one already in the gallery
+  const same = image?.sha256 && (await col('gallery').findOne({ sha256: image.sha256 }, { projection: { _id: 0, sha256: 0 } }));
+  if (same) return res.json({ photo: same, alreadyInGallery: true });
   await col('gallery').insertOne({ ...photo, ...(image?.sha256 && { sha256: image.sha256 }) });
   await logActivity(req, { category: 'gallery', summary: `added the photo “${photo.name}” to the gallery` });
   res.status(201).json({ photo });
