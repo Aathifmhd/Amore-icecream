@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AmoreLogo } from '../AmoreLogo';
-import { ApiError } from '../../api';
+import { ApiError, api } from '../../api';
 import { renderGoogleButton } from '../../customerAuth';
 import {
   AdminGate,
@@ -46,6 +46,13 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ gate, deviceName, onBack
   const codeRef = useRef<HTMLInputElement>(null);
   const googleRef = useRef<HTMLDivElement>(null);
   const [showGoogle, setShowGoogle] = useState(false);
+  // "Owner? Sign in with Google" only when an owner's Google account may sign in (OWNER_EMAILS)
+  const [ownerGoogle, setOwnerGoogle] = useState(false);
+  useEffect(() => {
+    api<{ ownerGoogle?: boolean }>('/auth/config', { as: 'none' })
+      .then((r) => setOwnerGoogle(Boolean(r.ownerGoogle)))
+      .catch(() => setOwnerGoogle(false));
+  }, []);
   const showCodeScreen = gate === 'needs-code' && !usePassword;
 
   useEffect(() => {
@@ -292,7 +299,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ gate, deviceName, onBack
           ) : (
             <span />
           )}
-          {!showGoogle && (
+          {ownerGoogle && !showGoogle && (
             <button type="button" onClick={() => setShowGoogle(true)} className="text-[11px] font-semibold text-[#8A7970] hover:text-[#241A18] cursor-pointer">
               Owner? Sign in with Google
             </button>

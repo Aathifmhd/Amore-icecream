@@ -110,12 +110,14 @@ branch with its own price for an item keeps it.
   admins on the console's **Users** page. `npm run set-admin -- Admin` (typing is hidden)
   creates the super admin or resets a password if nobody can sign in. Changing a password signs
   that admin out on every device. Eight wrong passwords lock the login for 15 minutes.
+  `npm run set-admin -- Superadmin --rename Admin` gives a login a new name and password
+  (it keeps its role); nothing changes until the new password has been typed twice.
 - **User code** — after signing in on a device, an admin can set a 4–6 digit code; next
   time that device opens the console with just the code. The server checks the code, and
   five wrong tries make the device forget it (name + password needed again). "Lock" closes
   the console until the code is entered; "Forget this device" removes the code.
 - **Owner** — Google accounts listed in `OWNER_EMAILS` (backend settings) can also sign in
-  ("Owner? Sign in with Google").
+  ("Owner? Sign in with Google"). With no owners listed, that link isn't shown.
 
 ## Settings (`backend/.env`, or Vercel → Settings → Environment Variables)
 

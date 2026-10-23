@@ -31,7 +31,7 @@ export const googleClientId = () => process.env.GOOGLE_CLIENT_ID || '';
 const GOOGLE_KEYS_URL = process.env.GOOGLE_JWKS_URL || 'https://www.googleapis.com/oauth2/v3/certs';
 const googleKeys = createRemoteJWKSet(new URL(GOOGLE_KEYS_URL));
 
-const ownerEmails = () =>
+export const ownerEmails = () =>
   (process.env.OWNER_EMAILS || '')
     .split(',')
     .map((e) => e.trim().toLowerCase())
@@ -101,6 +101,25 @@ export async function upsertAdmin(username, password) {
   );
   if (existing) await col('admin_devices').deleteMany({ username: key });
   return key;
+}
+
+/**
+ * Give an admin login a new name (set-admin --rename). Its role and history stay; it is signed
+ * out everywhere and its devices forget their user codes.
+ */
+export async function renameAdmin(fromName, toName) {
+  const from = usernameKey(fromName);
+  const to = usernameKey(toName);
+  checkLogin(to);
+  if (from === to) return to;
+  if (!(await col('admins').findOne({ username: from }))) throw new HttpError(404, `There is no admin login "${fromName}"`);
+  if (await col('admins').findOne({ username: to })) throw new HttpError(409, `There is already an admin login "${toName}"`);
+  await col('admins').updateOne(
+    { username: from },
+    { $set: { username: to, displayName: String(toName).trim(), updatedAt: now() }, $inc: { sessionVersion: 1 } }
+  );
+  await col('admin_devices').deleteMany({ username: from });
+  return to;
 }
 
 /** First start: create the admin from ADMIN_USERNAME / ADMIN_PASSWORD when there is none yet. */
