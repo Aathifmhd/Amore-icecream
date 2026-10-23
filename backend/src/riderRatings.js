@@ -21,13 +21,13 @@ export async function ratingSummary(riderIds) {
   return out;
 }
 
-/** One rider's ratings: the average, how many of each star, and the latest comments */
+/** One rider's ratings: the average, how many of each star, and the latest ratings (stars only — comments are for the parlour) */
 export async function riderRatings(riderId, limit = 30) {
   const [summary, breakdown, recent] = await Promise.all([
     ratingSummary([riderId]),
     col('orders').aggregate([{ $match: rated([riderId]) }, { $group: { _id: '$riderRating', count: { $sum: 1 } } }]).toArray(),
     col('orders')
-      .find(rated([riderId]), { projection: { _id: 0, orderReference: 1, customerName: 1, riderRating: 1, riderFeedback: 1, ratedAt: 1 } })
+      .find(rated([riderId]), { projection: { _id: 0, orderReference: 1, customerName: 1, riderRating: 1, ratedAt: 1 } })
       .sort({ ratedAt: -1 })
       .limit(limit)
       .toArray(),
@@ -40,7 +40,6 @@ export async function riderRatings(riderId, limit = 30) {
       orderReference: o.orderReference,
       customerFirstName: String(o.customerName || '').trim().split(/\s+/)[0] || 'A customer',
       rating: o.riderRating,
-      comment: o.riderFeedback || '',
       ratedAt: o.ratedAt,
     })),
   };

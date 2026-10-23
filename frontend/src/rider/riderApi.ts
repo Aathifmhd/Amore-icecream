@@ -31,9 +31,8 @@ export interface RiderOrder {
   /** How it was paid in the end, and whether the rider or the parlour marked it delivered */
   paidVia: PaidVia | null;
   deliveredBy: 'rider' | 'parlour' | null;
-  /** The customer's stars for this delivery */
+  /** The customer's stars for this delivery (their comment is for the parlour only) */
   riderRating: number | null;
-  riderFeedback: string;
   riderNote: string | null;
 }
 
@@ -52,7 +51,7 @@ export interface RatingSummary {
 
 export interface RiderRatings extends RatingSummary {
   breakdown: Record<string, number>;
-  recent: { orderReference: string; customerFirstName: string; rating: number; comment: string; ratedAt: string }[];
+  recent: { orderReference: string; customerFirstName: string; rating: number; ratedAt: string }[];
 }
 
 export interface RiderBoard {

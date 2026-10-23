@@ -4,6 +4,7 @@ import { HttpError, adminBranch, requireAdmin, requireCustomer } from '../auth.j
 import { newCustomerOrder, newAdminOrder, orderUpdate, checkDelete, isRefundRecord } from '../orderRules.js';
 import { getParlours } from '../parlours.js';
 import { logActivity, lkr } from '../activity.js';
+import { kickFeedbackEmails } from '../feedback.js';
 
 const router = Router();
 
@@ -104,6 +105,8 @@ async function unavailableItems(order) {
 
 // Admin: every order (or the ones changed since the last read) plus the ones deleted
 router.get('/', requireAdmin, async (req, res) => {
+  // The console asks every few seconds: a good moment to send due feedback emails (feedback.js)
+  await kickFeedbackEmails();
   const serverTime = now();
   const since = sinceFilter(req.query.since);
   const [orders, deleted] = await Promise.all([

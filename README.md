@@ -36,6 +36,7 @@ whole site (website + API) from the backend on one port.
 | `/?confirmOrder=AMO-XXXXXX` | Order confirmation and live tracking |
 | `/admin` | Admin console (orders, kitchen stages, refunds, menu editing) |
 | `/rider` | Rider app (phone): orders ready to pick up, deliveries on the way, today's deliveries |
+| `/feedback/AMO-XXXXXX?k=…` | Feedback page from the email sent an hour after an order (no sign-in) |
 
 ## API (`backend/src`)
 
@@ -53,6 +54,7 @@ whole site (website + API) from the backend on one port.
 | `/api/riders` | admin — riders (a branch admin: their parlour's): add, edit, new PIN, switch off, remove; today's deliveries and cash |
 | `/api/rider/*` | the rider app — sign in (phone + PIN), orders, pick up, delivered, hand back, ratings |
 | `/api/rider-cash` | admin — the cash each rider holds; record cash they hand in (a branch admin: their parlour's riders) |
+| `/api/feedback/*` | the feedback page (with the key from the email link); the console's email status and WhatsApp link; `/cron` sends due emails |
 | `POST /api/orders` | signed-in customer (checked like the old Firestore rules) or admin |
 | `GET /api/orders/mine` | signed-in customer — their own orders |
 | `GET / PATCH / DELETE /api/orders/:ref` | the customer who placed it (limited) or admin |
@@ -133,6 +135,10 @@ branch with its own price for an item keeps it.
 | `OWNER_EMAILS` | Google accounts allowed into the console |
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD` | optional: creates the first admin on first start |
 | `SESSION_SECRET` | optional: signs admin sessions (otherwise one is generated and kept in the database) |
+| `SMTP_USER`, `SMTP_PASS` | the mailbox that sends feedback emails; for Gmail, an app password (see Feedback). Without them no email is sent |
+| `SMTP_HOST`, `SMTP_PORT`, `MAIL_FROM` | optional: default `smtp.gmail.com`, `465`, `Amore Ice Cream <SMTP_USER>` |
+| `PUBLIC_SITE_URL` | optional: the site address used in email links (default `https://amore-icecream.vercel.app`) |
+| `CRON_SECRET` | optional: lets an outside timer call `/api/feedback/cron` (`Authorization: Bearer …`) |
 
 ## Customer sign-in (Google)
 
@@ -191,9 +197,34 @@ delivery?" (1–5 stars for the rider and an optional comment). The shop follows
 orders while one is on its way so the question pops up straight away; "Not now" is remembered on
 that device, and the delivery can still be rated from Your Orders for 14 days. One rating per
 delivery, from the customer only (`riderRating`, `riderFeedback`, `ratedAt`;
-`backend/src/riderRatings.js`). Riders see their average, the stars breakdown and comments
-(first name only) on the **Ratings** tab; the console shows each rider's average on the Riders page
-and the rating on the order.
+`backend/src/riderRatings.js`). Riders see their average, the stars breakdown and their latest
+stars (customer's first name only) on the **Ratings** tab — never the comments; those are read in
+the console (Feedback, the order popup, a rider's deliveries).
+
+## Feedback
+
+An hour after an order is delivered or collected, the customer gets an email ("How was your
+order?") with a link to **/feedback/<order>?k=…**. The page needs no sign-in: the key in the link is
+signed for that one order (30 days). They give the order 1–5 stars, pick quick tags (what they
+liked, or what went wrong), write a comment, and rate the rider if they hadn't yet. One feedback
+per order; "Stop these emails" turns the emails off for that address (`email_optouts`).
+
+The console's **Feedback** page (Insights) lists everything customers said, newest first: the
+order's stars, tags and comment, and the rider's stars and comment. It shows the averages, the
+unhappy customers (1–2 stars), what customers mention most, and whether the emails are on. The
+order popup shows the feedback, or **Ask on WhatsApp** to send the link by hand.
+
+**Turning the emails on:** use a Gmail account for the shop. In its Google account, turn on 2-Step
+Verification, then create an **App password** (Security → App passwords). Set `SMTP_USER` (the
+Gmail address) and `SMTP_PASS` (the 16-letter app password) in Vercel and redeploy. Gmail sends up
+to about 500 emails a day.
+
+**When they go out:** Vercel runs no timers, so the due emails are sent when the console or the
+rider app next asks for orders (at most every 2 minutes; they do every few seconds while open).
+Orders delivered more than a day ago are not emailed. To send them even when nobody has the console
+open, set `CRON_SECRET` and have a free timer (e.g. cron-job.org) call
+`GET /api/feedback/cron` every 10 minutes with `Authorization: Bearer <CRON_SECRET>`
+(`backend/src/feedback.js`).
 
 ## Checkout
 

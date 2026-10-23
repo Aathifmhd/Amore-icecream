@@ -576,7 +576,7 @@ const CashCard: React.FC<{ cash: RiderCash; carrying: number }> = ({ cash, carry
   );
 };
 
-/** The stars customers gave, with their comments (loaded when the tab opens, and on a new rating) */
+/** The stars customers gave (loaded when the tab opens, and on a new rating). Comments go to the parlour only. */
 const RatingsTab: React.FC<{ count: number }> = ({ count }) => {
   const [data, setData] = useState<RiderRatings | null>(null);
   const [failed, setFailed] = useState(false);
@@ -632,18 +632,17 @@ const RatingsTab: React.FC<{ count: number }> = ({ count }) => {
             </ul>
           </div>
 
-          <h2 className="font-bold mt-6 mb-3">What customers said</h2>
-          <ul className="space-y-3">
+          <h2 className="font-bold mt-6 mb-3">Latest ratings</h2>
+          <ul className="space-y-2">
             {data.recent.map((r) => (
-              <li key={r.orderReference} className="bg-white rounded-3xl border border-[#E8DFC8] p-4">
-                <div className="flex items-center justify-between gap-2">
+              <li key={r.orderReference} className="bg-white rounded-2xl border border-[#E8DFC8] px-4 py-3 flex items-center gap-3">
+                <span className="min-w-0 flex-1">
                   <Stars value={r.rating} />
-                  <span className="text-xs text-[#8A7970]">{dayOrClock(r.ratedAt)}</span>
-                </div>
-                {r.comment ? <p className="mt-2 text-[15px] text-[#3D2C24]">“{r.comment}”</p> : <p className="mt-2 text-sm text-[#A8988B]">No comment</p>}
-                <p className="mt-1.5 text-xs text-[#7A6458]">
-                  {r.customerFirstName} · {shortRef(r.orderReference)}
-                </p>
+                  <span className="block mt-1 text-xs text-[#7A6458]">
+                    {r.customerFirstName} · {shortRef(r.orderReference)}
+                  </span>
+                </span>
+                <span className="text-xs text-[#8A7970] whitespace-nowrap">{dayOrClock(r.ratedAt)}</span>
               </li>
             ))}
           </ul>

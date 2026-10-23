@@ -171,6 +171,19 @@ async function readToken(token) {
   }
 }
 
+// ---- Feedback links (emailed to the customer; no sign-in needed) ----------------
+
+const FEEDBACK_LINK_DAYS = 30;
+
+/** The key in one order's feedback link: whoever has the email can give feedback on that order only */
+export const feedbackKey = (ref) => sign('fbk', { ref, exp: Date.now() + FEEDBACK_LINK_DAYS * 86_400_000 });
+
+export async function feedbackKeyFits(key, ref) {
+  if (typeof key !== 'string' || !key.startsWith('fbk.')) return false;
+  const payload = await readToken(key);
+  return payload?.ref === ref;
+}
+
 /** Session for a name+password admin or a Google owner. */
 export async function issueAdminSession(admin) {
   const exp = Date.now() + SESSION_DAYS * 24 * 3600 * 1000;

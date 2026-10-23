@@ -4,7 +4,7 @@
  * New entries appear on their own while the page is open.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Bike, CircleSlash, ClipboardList, IdCard, Images, LogIn, MapPinned, RotateCcw, ShieldAlert, UserCog, UtensilsCrossed, Activity } from 'lucide-react';
+import { Bike, CircleSlash, ClipboardList, IdCard, Images, LogIn, MapPinned, MessageSquareHeart, RotateCcw, ShieldAlert, UserCog, UtensilsCrossed, Activity } from 'lucide-react';
 import { BranchId } from '../../../types';
 import { api, ApiError } from '../../../api';
 import { startPolling } from '../../../utils/poll';
@@ -12,7 +12,7 @@ import { Badge, Button, Card, EmptyState, cx } from './ui';
 import { BranchFilter } from './useConsoleData';
 import { clockTime, timeAgo } from './orderMeta';
 
-export type ActivityCategory = 'order' | 'refund' | 'stock' | 'menu' | 'staff' | 'riders' | 'users' | 'gallery' | 'parlours' | 'signin';
+export type ActivityCategory = 'order' | 'refund' | 'stock' | 'menu' | 'staff' | 'riders' | 'feedback' | 'users' | 'gallery' | 'parlours' | 'signin';
 
 export interface ActivityItem {
   id: string;
@@ -33,6 +33,7 @@ export const CATEGORY_META: Record<ActivityCategory, { label: string; icon: Reac
   menu: { label: 'Menu', icon: <UtensilsCrossed className="w-4 h-4" />, tint: 'bg-violet-100 text-violet-700' },
   staff: { label: 'Staff', icon: <IdCard className="w-4 h-4" />, tint: 'bg-sky-100 text-sky-700' },
   riders: { label: 'Riders', icon: <Bike className="w-4 h-4" />, tint: 'bg-teal-100 text-teal-700' },
+  feedback: { label: 'Feedback', icon: <MessageSquareHeart className="w-4 h-4" />, tint: 'bg-pink-100 text-pink-700' },
   users: { label: 'Users', icon: <UserCog className="w-4 h-4" />, tint: 'bg-stone-200 text-stone-700' },
   gallery: { label: 'Photos', icon: <Images className="w-4 h-4" />, tint: 'bg-emerald-100 text-emerald-700' },
   parlours: { label: 'Parlours', icon: <MapPinned className="w-4 h-4" />, tint: 'bg-orange-100 text-orange-700' },
@@ -85,7 +86,7 @@ export const ActivityRow: React.FC<{ item: ActivityItem; onOpenOrder?: (ref: str
           {item.actor.role === 'superadmin' && <span>Super admin</span>}
         </div>
       </div>
-      {item.ref && onOpenOrder && (item.category === 'order' || item.category === 'refund' || item.category === 'riders') && !/^deleted /.test(item.summary) && (
+      {item.ref && onOpenOrder && (item.category === 'order' || item.category === 'refund' || item.category === 'riders' || item.category === 'feedback') && !/^deleted /.test(item.summary) && (
         <Button size="sm" variant="ghost" onClick={() => onOpenOrder(item.ref!)}>
           Open
         </Button>

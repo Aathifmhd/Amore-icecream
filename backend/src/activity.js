@@ -8,7 +8,7 @@ import { col, now } from './db.js';
  * Categories: order, refund, stock, menu, staff, users, gallery, parlours, riders, signin
  */
 export const ACTIVITY_DAYS = 90;
-export const ACTIVITY_CATEGORIES = ['order', 'refund', 'stock', 'menu', 'staff', 'users', 'gallery', 'parlours', 'riders', 'signin'];
+export const ACTIVITY_CATEGORIES = ['order', 'refund', 'stock', 'menu', 'staff', 'users', 'gallery', 'parlours', 'riders', 'feedback', 'signin'];
 
 const BRANCH_NAMES = { akurana: 'Akurana', colombo: 'Colombo', arugambay: 'Arugam Bay' };
 export const branchName = (id) => BRANCH_NAMES[id] || id || '';

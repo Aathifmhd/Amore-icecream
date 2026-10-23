@@ -89,6 +89,8 @@ export async function setup() {
     col('cash_handins').createIndex({ id: 1 }, { unique: true }),
     col('cash_handins').createIndex({ riderId: 1, receivedAt: -1 }),
     col('cash_handins').createIndex({ branchId: 1, receivedAt: -1 }),
+    col('orders').createIndex({ status: 1, deliveredAt: 1 }),
+    col('email_optouts').createIndex({ email: 1 }, { unique: true }),
   ]);
 }
 

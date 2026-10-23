@@ -93,7 +93,8 @@ router.get('/:id/deliveries', async (req, res) => {
     .sort({ onTheWayAt: -1 })
     .limit(60)
     .toArray();
-  res.json({ rider: publicRider(rider), deliveries: orders.map(riderOrderView) });
+  // The console also sees what customers wrote about the rider
+  res.json({ rider: publicRider(rider), deliveries: orders.map((o) => ({ ...riderOrderView(o), riderFeedback: o.riderFeedback || '' })) });
 });
 
 router.post('/', async (req, res) => {

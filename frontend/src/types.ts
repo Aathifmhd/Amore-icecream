@@ -190,6 +190,13 @@ export interface OrderRecord {
   riderRating?: number;
   riderFeedback?: string;
   ratedAt?: string;
+  /** Feedback on the order from the emailed feedback page (/feedback/<ref>): stars, quick tags, comment */
+  feedbackRating?: number;
+  feedbackComment?: string;
+  feedbackTags?: string[];
+  feedbackAt?: string;
+  /** When the feedback email went out (an hour after it was delivered or collected) */
+  feedbackEmailSentAt?: string;
 }
 
 export type PaidVia = 'cash' | 'bank_transfer' | 'card_machine';

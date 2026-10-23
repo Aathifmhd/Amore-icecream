@@ -5,6 +5,7 @@ import { logActivity, lkr } from '../activity.js';
 import { collectsCash, readyQuery, riderOrderView, startOfTodayColombo } from '../riderOrders.js';
 import { cashByRider } from '../riderCash.js';
 import { ratingSummary, riderRatings } from '../riderRatings.js';
+import { kickFeedbackEmails } from '../feedback.js';
 
 /*
  * The rider app (amore-icecream.vercel.app/rider).
@@ -13,7 +14,7 @@ import { ratingSummary, riderRatings } from '../riderRatings.js';
  *   GET  /me                    the signed-in rider
  *   GET  /orders                ready to pick up at my parlour, mine on the way, my deliveries today,
  *                               the cash I hold and my star rating
- *   GET  /ratings               my stars from customers and their comments
+ *   GET  /ratings               my stars from customers (comments are for the parlour only)
  *   POST /orders/:ref/pickup    take a ready order (only one rider can)
  *   POST /orders/:ref/delivered { cashCollected } hand it over at the door
  *   POST /orders/:ref/hand-back { reason } couldn't deliver: it goes back to the parlour's ready list
@@ -42,6 +43,7 @@ router.use(async (req, res, next) => {
 router.get('/me', (req, res) => res.json({ rider: publicRider(req.rider) }));
 
 router.get('/orders', async (req, res) => {
+  await kickFeedbackEmails();
   const r = req.rider;
   const [ready, mine, done, upcoming, cash, rating] = await Promise.all([
     col('orders').find(readyQuery(r.branchId), PUBLIC).sort({ readyAt: 1 }).toArray(),

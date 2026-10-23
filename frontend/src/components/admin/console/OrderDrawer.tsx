@@ -14,10 +14,68 @@ import { Badge, Button, Dialog, Popup, Field, cx, inputClass, useConsoleUi } fro
 import { cardText, clockTime, formatLabel, isPickup, nextStep, paymentLabel, shortRef, statusLabel } from './orderMeta';
 import { DEMO_CARD_PAYMENTS } from '../../../config';
 import { Stars } from '../../Stars';
+import { api } from '../../../api';
 import { NextStepButton } from './OrdersView';
 import { printSlip } from './printSlip';
 
 const lkr = (n: number) => formatPrice(n, 'LKR');
+
+/** What the customer said: the order feedback (feedback page) and the rider's stars; or a way to ask */
+const FeedbackSection: React.FC<{ order: OrderRecord }> = ({ order }) => {
+  const { toast } = useConsoleUi();
+  const askOnWhatsApp = async () => {
+    // Opened first, so the browser doesn't block it; the link is filled in once it arrives
+    const tab = window.open('', '_blank');
+    try {
+      const { url } = await api<{ url: string }>(`/feedback/link/${encodeURIComponent(order.orderReference)}`, { as: 'admin' });
+      const first = order.customerName.split(' ')[0];
+      const text = `Hi ${first}, thank you for your Amore order! How was it? Tell us in a minute here: ${url}`;
+      const wa = `https://wa.me/${whatsappDigits(order.whatsappNumber || order.contactNumber)}?text=${encodeURIComponent(text)}`;
+      if (tab) tab.location.href = wa;
+      else window.location.href = wa;
+    } catch {
+      tab?.close();
+      toast('Could not make the feedback link', 'error');
+    }
+  };
+  return (
+    <Section title="Customer feedback">
+      {order.feedbackAt ? (
+        <div>
+          <p className="flex items-center gap-2 text-sm text-[#241A18]">
+            <Stars value={order.feedbackRating || 0} />
+            <span className="font-semibold">{order.feedbackRating} of 5</span>
+            <span className="text-[#7A6458]">for the order</span>
+          </p>
+          {order.feedbackComment && <p className="mt-1.5 text-sm text-[#241A18]">“{order.feedbackComment}”</p>}
+          {!!order.feedbackTags?.length && <p className="mt-1.5 text-xs text-[#7A6458]">{order.feedbackTags.join(' · ')}</p>}
+        </div>
+      ) : null}
+      {order.riderRating ? (
+        <div className={cx(order.feedbackAt && 'mt-3 pt-3 border-t border-[#F0E8DC]')}>
+          <p className="flex items-center gap-2 text-sm text-[#241A18]">
+            <Stars value={order.riderRating} />
+            <span className="font-semibold">{order.riderRating} of 5</span>
+            <span className="text-[#7A6458]">for {order.riderName ? `rider ${order.riderName}` : 'the delivery'}</span>
+          </p>
+          {order.riderFeedback && <p className="mt-1.5 text-sm italic text-[#5C4D44]">“{order.riderFeedback}”</p>}
+        </div>
+      ) : null}
+      {!order.feedbackAt && (
+        <div className={cx('flex flex-wrap items-center gap-2 text-sm text-[#7A6458]', order.riderRating && 'mt-3')}>
+          <span className="flex-1 min-w-[12rem]">
+            {order.feedbackEmailSentAt ? `Feedback email sent ${clockTime(order.feedbackEmailSentAt)} — no reply yet.` : 'No feedback on the order yet.'}
+          </span>
+          {(order.whatsappNumber || order.contactNumber) && (
+            <Button size="sm" variant="secondary" icon={<MessageCircle className="w-4 h-4" />} onClick={askOnWhatsApp}>
+              Ask on WhatsApp
+            </Button>
+          )}
+        </div>
+      )}
+    </Section>
+  );
+};
 
 /** Sri Lankan local numbers (07…) → international digits for WhatsApp links. */
 export function whatsappDigits(phone: string) {
@@ -427,16 +485,7 @@ export const OrderDrawer: React.FC<{ order: OrderRecord | null; onClose: () => v
             </div>
           )}
 
-          {order.riderRating ? (
-            <Section title="Customer’s rating">
-              <p className="flex items-center gap-2 text-sm text-[#241A18]">
-                <Stars value={order.riderRating} />
-                <span className="font-semibold">{order.riderRating} of 5</span>
-                {order.riderName && <span className="text-[#7A6458]">for {order.riderName}</span>}
-              </p>
-              {order.riderFeedback && <p className="mt-1.5 text-sm italic text-[#5C4D44]">“{order.riderFeedback}”</p>}
-            </Section>
-          ) : null}
+          {order.status === 'delivered' && <FeedbackSection order={order} />}
 
           {order.status === 'cancelled' && (
             <Section title="Cancellation">
