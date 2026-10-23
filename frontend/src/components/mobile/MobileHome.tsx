@@ -249,7 +249,7 @@ export const MobileHome: React.FC<MobileHomeProps> = ({
             className="press w-full flex items-stretch rounded-3xl overflow-hidden bg-[#241A18] text-left shadow-md"
           >
             <span className="w-32 shrink-0 overflow-hidden">
-              <img src={ASSET_IMAGES.durianCone} alt="" loading="lazy" decoding="async" className="float-y w-full h-full object-cover scale-110" />
+              <img src={ASSET_IMAGES.durianSpotlight} alt="" loading="lazy" decoding="async" className="float-y w-full h-full object-cover scale-110" />
             </span>
             <span className="p-4 text-white">
               <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-300">

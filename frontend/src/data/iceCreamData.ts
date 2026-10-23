@@ -6,6 +6,7 @@ import lightHeroImg from '../assets/images/amore_light_hero_1788590242684.webp';
 import realFlavoursHeroImg from '../assets/images/amore_real_flavours_hero_1789123411620.webp';
 import durianScoopImg from '../assets/images/durian_biscuit_macro_1789128378561.webp';
 import durianConeImg from '../assets/images/durian_cone_macro_1789128785535.webp';
+import durianSpotlightImg from '../assets/images/durian_waffle_cone_pistachio_1792750000000.webp';
 import cheesecakeImg from '../assets/images/amore_cheesecake_coffee_1788549282427.webp';
 import cafeInteriorImg from '../assets/images/amore_cafe_parlour_1788549300314.webp';
 import pistachioScoopImg from '../assets/images/amore_pistachio_scoop_1788549364846.webp';
@@ -26,6 +27,8 @@ export const ASSET_IMAGES = {
   realFlavoursHero: realFlavoursHeroImg,
   durianScoop: durianScoopImg,
   durianCone: durianConeImg,
+  // The Durian spotlight's waffle cone (home page, desktop and phone)
+  durianSpotlight: durianSpotlightImg,
   cheesecakeCoffee: cheesecakeImg,
   cafeInterior: cafeInteriorImg,
   pistachioScoop: pistachioScoopImg,
@@ -74,6 +77,13 @@ export const CATALOG_PRESET_IMAGES: CatalogPresetImage[] = [
     category: 'Brand Signatures',
     url: ASSET_IMAGES.durianCone,
     description: 'Iconic golden waffle cone with handcrafted durian gelato',
+  },
+  {
+    id: 'sig-durian-double-cone',
+    name: 'Durian Waffle Cone with Pistachio',
+    category: 'Brand Signatures',
+    url: ASSET_IMAGES.durianSpotlight,
+    description: 'Two scoops of durian in a waffle cone, with pistachio crumble and fresh durian',
   },
   {
     id: 'sig-durian-biscuit',

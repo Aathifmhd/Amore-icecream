@@ -62,7 +62,7 @@ export const DurianSpecialSpotlight: React.FC<DurianSpecialSpotlightProps> = ({
   const DURIAN_SLIDES = [
     {
       id: 'biscuit-cone',
-      image: ASSET_IMAGES.durianCone,
+      image: ASSET_IMAGES.durianSpotlight,
       title: 'Waffle Biscuit Cone Durian',
       alt: 'Amore Durian Ice Cream in Crisp Waffle Biscuit Cone with Pistachio Crumb and Fresh Durian Fruit',
       tag: 'Crisp Waffle Cone',
@@ -141,7 +141,8 @@ export const DurianSpecialSpotlight: React.FC<DurianSpecialSpotlightProps> = ({
                           alt={slide.alt}
                           className={`w-full h-full object-cover object-center transform transition-transform duration-700 ease-out will-change-transform ${
                             slide.id === 'biscuit-cone'
-                              ? 'scale-[1.06] group-hover:scale-[1.16] contrast-[1.03] brightness-[1.01]'
+                              ? // The scoop sits near the top of this photo: only a gentle zoom, so it isn't cut off
+                                'group-hover:scale-[1.04]'
                               : 'group-hover:scale-110'
                           }`}
                           referrerPolicy="no-referrer"
