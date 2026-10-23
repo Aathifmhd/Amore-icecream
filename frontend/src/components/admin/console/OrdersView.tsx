@@ -121,6 +121,22 @@ const TypeCell: React.FC<{ order: OrderRecord; showBranch: boolean }> = ({ order
   </div>
 );
 
+/** Table rows: delivery / pickup, the parlour (all branches) and the address on one line */
+const TypeLine: React.FC<{ order: OrderRecord; showBranch: boolean }> = ({ order, showBranch }) => {
+  const where = [showBranch && order.branchName?.replace(' Flagship', ''), !isPickup(order) && [order.deliveryAddress, order.city].filter(Boolean).join(', ')]
+    .filter(Boolean)
+    .join(' · ');
+  return (
+    <p className="mt-1 flex items-center gap-1.5 text-xs text-[#5C4D44] max-w-[20rem]">
+      <Badge tone={isPickup(order) ? 'violet' : 'blue'} className="!px-2 shrink-0">
+        {isPickup(order) ? <Store className="w-3 h-3" /> : <Bike className="w-3 h-3" />}
+        {isPickup(order) ? 'Pickup' : 'Delivery'}
+      </Badge>
+      {where && <span className="truncate" title={where}>{where}</span>}
+    </p>
+  );
+};
+
 /** Under the total: a card order stands out as already paid */
 const PaymentLine: React.FC<{ order: OrderRecord }> = ({ order }) =>
   order.paymentMethod === 'card' ? (
@@ -133,9 +149,9 @@ const PaymentLine: React.FC<{ order: OrderRecord }> = ({ order }) =>
 
 const NoteLine: React.FC<{ order: OrderRecord }> = ({ order }) =>
   isSystemNote(order.specialNote) ? null : (
-    <p className="mt-1.5 text-xs bg-amber-50 text-amber-900 rounded-md px-2 py-1 inline-flex gap-1 max-w-[18rem]">
+    <p className="mt-1 text-xs bg-amber-50 text-amber-900 rounded-md px-2 py-0.5 inline-flex gap-1 max-w-[18rem]">
       <StickyNote className="w-3.5 h-3.5 shrink-0" />
-      <span className="line-clamp-2">{order.specialNote}</span>
+      <span className="line-clamp-1">{order.specialNote}</span>
     </p>
   );
 
@@ -198,28 +214,27 @@ const OrdersTable: React.FC<{
                     flashing.has(r.order.orderReference) && 'row-flash'
                   )}
                 >
-                  <td className={cx('py-4 pl-5 pr-3 min-w-[12rem]', r.order.status === 'pending_confirmation' && 'shadow-[inset_4px_0_0_#F59E0B]')}>
-                    <p className="flex items-baseline gap-2">
+                  <td className={cx('py-2.5 pl-5 pr-3 min-w-[14rem]', r.order.status === 'pending_confirmation' && 'shadow-[inset_4px_0_0_#F59E0B]')}>
+                    <p className="flex items-baseline gap-2 min-w-0">
                       <span className="font-mono font-bold text-[#241A18]">{shortRef(r.order.orderReference)}</span>
-                      <span className="text-xs text-[#8A7970] whitespace-nowrap">{groupByDay ? clockTime(r.order.createdAt) : timeAgo(r.order.createdAt)}</span>
+                      <span className="font-semibold text-[#241A18] truncate">{r.order.customerName}</span>
+                      <span className="text-xs text-[#8A7970] whitespace-nowrap ml-auto">{groupByDay ? clockTime(r.order.createdAt) : timeAgo(r.order.createdAt)}</span>
                     </p>
-                    <p className="font-semibold text-[#241A18] mt-0.5">{r.order.customerName}</p>
-                    <p className="text-xs text-[#7A6458] whitespace-nowrap mb-1.5">{r.order.contactNumber}</p>
-                    <TypeCell order={r.order} showBranch={showBranch} />
+                    <TypeLine order={r.order} showBranch={showBranch} />
                   </td>
-                  <td className="py-4 px-3 min-w-[11rem]">
-                    <ItemsList order={r.order} />
+                  <td className="py-2.5 px-3 min-w-[11rem]">
+                    <ItemsList order={r.order} max={2} />
                     <NoteLine order={r.order} />
                   </td>
-                  <td className="py-4 px-3 text-right">
+                  <td className="py-2.5 px-3 text-right">
                     <p className="font-bold text-[#241A18] whitespace-nowrap">{lkr(r.order.grandTotalLKR)}</p>
                     <PaymentLine order={r.order} />
                   </td>
-                  <td className="py-4 px-3">
+                  <td className="py-2.5 px-3">
                     <StatusPill order={r.order} />
                   </td>
                   {hasActions && (
-                    <td className="py-4 pl-2 pr-5 text-right w-44">
+                    <td className="py-2.5 pl-2 pr-5 text-right w-44">
                       <NextStepButton order={r.order} size="sm" />
                     </td>
                   )}
@@ -294,7 +309,6 @@ const OrdersTable: React.FC<{
 type View = 'active' | 'completed' | 'cancelled';
 type ActiveFilter = 'all' | Exclude<Stage, 'done' | 'cancelled'>;
 
-const STAGE_ORDER: Record<string, number> = { new: 0, preparing: 1, ready: 2 };
 
 export const OrdersView: React.FC<{
   orders: OrderRecord[];
@@ -332,12 +346,10 @@ export const OrdersView: React.FC<{
     return m;
   }, [scoped]);
 
-  // Active list: new first, then preparing, then ready/out — oldest first within each
+  // Active list: newest first; a row keeps its place as the order moves on (accepted, preparing, out)
   const active = useMemo(
     () =>
-      [...byStage.new, ...byStage.preparing, ...byStage.ready].sort(
-        (a, b) => STAGE_ORDER[stageOf(a)] - STAGE_ORDER[stageOf(b)] || a.createdAt.localeCompare(b.createdAt)
-      ),
+      [...byStage.new, ...byStage.preparing, ...byStage.ready].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [byStage]
   );
 
