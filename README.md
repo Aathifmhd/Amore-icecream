@@ -167,7 +167,8 @@ A delivery order moves like this:
 The customer sees "Packed & ready for a rider" and then "<rider> is on the way". The Riders page
 shows who is out with which order, orders waiting for a rider, and each rider's deliveries and cash
 today; the Action Center logs every pickup, delivery and hand-back. Staff can still send an order
-without the app ("Out for delivery (no app)") or mark it delivered. A new PIN or switching a rider
+without the app ("Out for delivery (no app)", which asks first so it isn't pressed by mistake) or
+mark it delivered. A new PIN or switching a rider
 off signs them out; six wrong PINs lock the phone number for 15 minutes.
 
 When staff press **Mark delivered** (or **Mark collected**) in the console, they first say how the

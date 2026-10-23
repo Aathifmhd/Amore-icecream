@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, Plus, MapPin, Bike, Store, StickyNote, Clock, X, BellRing, ListOrdered, CreditCard } from 'lucide-react';
 import { OrderRecord } from '../../../types';
-import { isCapturedReturnedBill } from '../../../utils/orderStorage';
+import { getOrder, isCapturedReturnedBill } from '../../../utils/orderStorage';
 import { formatPrice } from '../../../utils/currency';
 import { Badge, Button, Card, EmptyState, cx, inputClass, useConsoleUi } from './ui';
 import { Stage, clockTime, formatLabel, graceOf, isPickup, mmss, nextStep, paymentLabel, shortRef, stageOf, timeAgo } from './orderMeta';
@@ -16,17 +16,33 @@ const isSystemNote = (n?: string) => !n || n === 'Manual Admin Order';
 // ---- Next-step button (owns its own clock for the customer's change window) ----
 
 export const NextStepButton: React.FC<{ order: OrderRecord; size?: 'sm' | 'md' | 'lg'; className?: string }> = ({ order, size = 'md', className }) => {
-  const { toast } = useConsoleUi();
+  const { toast, confirm } = useConsoleUi();
   const now = useNow(1000);
   const [finishing, setFinishing] = useState(false);
   const next = nextStep(order);
   if (!next) return null;
   const grace = graceOf(order, now);
 
-  const go = (e: React.MouseEvent) => {
+  const go = async (e: React.MouseEvent) => {
     e.stopPropagation();
     // Delivered / collected: first ask how the customer paid
     if (next.step === 'finish') return setFinishing(true);
+    // "Out for delivery (no app)" takes the order away from the riders' app: make sure it's meant
+    if (next.quiet) {
+      const ok = await confirm({
+        title: `Send ${shortRef(order.orderReference)} out without the rider app?`,
+        message:
+          'Only do this if a rider who doesn’t use the app is taking it now. Riders with the app won’t see this order any more, and you’ll mark it delivered here yourself.',
+        confirmLabel: 'Yes, send it out',
+      });
+      if (!ok) return;
+      // A rider may have picked it up in the app while the question was open
+      const latest = getOrder(order.orderReference) ?? order;
+      if (nextStep(latest)?.step !== 'send') {
+        toast(latest.riderName ? `${latest.riderName} already picked up ${shortRef(order.orderReference)}` : `${shortRef(order.orderReference)} has moved on already`, 'error');
+        return;
+      }
+    }
     const msg = advanceOrder(order);
     if (msg) toast(msg);
   };
