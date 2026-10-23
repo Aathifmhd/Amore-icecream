@@ -3,14 +3,14 @@ import crypto from 'node:crypto';
 import { col, now } from '../db.js';
 import { HttpError, adminBranch, requireAdmin } from '../auth.js';
 import { actorOf, logActivity, lkr } from '../activity.js';
-import { cashByRider, handInView, unpaidCashOrders } from '../riderCash.js';
+import { cashByRider, earlierDays, handInView, unpaidCashOrders } from '../riderCash.js';
 import { startOfTodayColombo } from '../riderOrders.js';
 
 /*
  * Cash collection (console): the cash each rider holds from cash-on-delivery orders, and
  * recording what they hand in at the parlour. A branch admin sees their own parlour's riders.
  *
- *   GET    /                  every rider's cash (holding, today), and the latest hand-ins
+ *   GET    /                  every rider's cash (holding, today, still held from earlier days), and the latest hand-ins
  *   GET    /:riderId          the deliveries whose cash a rider still holds, and their hand-ins
  *   POST   /:riderId/hand-in  { amountLKR, note? } cash received from the rider
  *   DELETE /hand-ins/:id      undo a hand-in recorded by mistake (same day only)
@@ -47,6 +47,8 @@ router.get('/', async (req, res) => {
       ...cash[r.id],
       unpaidOrders: unpaid[r.id]?.length || 0,
       holdingSince: unpaid[r.id]?.[0]?.deliveredAt || null,
+      // Cash from deliveries before today that hasn't been handed in, by day
+      earlier: earlierDays(unpaid[r.id] || []),
     })),
     handIns: handIns.map(handInView),
     today: startOfTodayColombo(),
@@ -61,7 +63,7 @@ router.get('/:riderId', async (req, res) => {
     col('cash_handins').find({ riderId: rider.id }).sort({ receivedAt: -1 }).limit(20).toArray(),
   ]);
   const orders = await unpaidCashOrders(rider.id, cash[rider.id].holdingLKR);
-  res.json({ rider: { id: rider.id, name: rider.name, branchId: rider.branchId }, ...cash[rider.id], orders, handIns: handIns.map(handInView) });
+  res.json({ rider: { id: rider.id, name: rider.name, branchId: rider.branchId }, ...cash[rider.id], orders, handIns: handIns.map(handInView), today: startOfTodayColombo() });
 });
 
 router.post('/:riderId/hand-in', async (req, res) => {

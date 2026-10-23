@@ -4,7 +4,7 @@
  * them. Today's hand-ins can be undone. A branch admin sees their own parlour's riders.
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { Banknote, CheckCircle2, HandCoins, Undo2, Wallet } from 'lucide-react';
+import { Banknote, CheckCircle2, HandCoins, TriangleAlert, Undo2, Wallet } from 'lucide-react';
 import { BranchId } from '../../../types';
 import { api, ApiError } from '../../../api';
 import { startPolling } from '../../../utils/poll';
@@ -45,6 +45,8 @@ interface RiderCash {
   lastHandIn: HandIn | null;
   unpaidOrders: number;
   holdingSince: string | null;
+  /** Cash still held from deliveries before today, by day ("2026-10-22") */
+  earlier: { day: string; amountLKR: number; deliveries: number }[];
 }
 interface UnpaidOrder {
   orderReference: string;
@@ -54,6 +56,10 @@ interface UnpaidOrder {
   cashCollectedLKR: number;
   owedLKR: number;
 }
+
+const earlierLKR = (r: RiderCash) => r.earlier.reduce((s, d) => s + d.amountLKR, 0);
+/** "Thu 22 Oct" for a day like "2026-10-22" */
+const dayLabel = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
 
 function useRiderCash() {
   const [data, setData] = useState<{ riders: RiderCash[]; handIns: HandIn[]; today: string } | null>(null);
@@ -77,15 +83,17 @@ export const RiderCashView: React.FC<{ branch: BranchFilter }> = ({ branch }) =>
 
   if (!data) return <p className="text-sm text-[#8A7970]">{error || 'Loading…'}</p>;
 
-  // Riders holding cash first (most first), then the rest by name
+  // Cash from earlier days first, then riders holding the most, then the rest by name
   const riders = data.riders
     .filter((r) => branch === 'all' || r.branchId === branch)
-    .sort((a, b) => b.holdingLKR - a.holdingLKR || a.name.localeCompare(b.name));
+    .sort((a, b) => earlierLKR(b) - earlierLKR(a) || b.holdingLKR - a.holdingLKR || a.name.localeCompare(b.name));
   const handIns = data.handIns.filter((h) => branch === 'all' || h.branchId === branch);
   const holders = riders.filter((r) => r.holdingLKR > 0);
   const holding = holders.reduce((s, r) => s + r.holdingLKR, 0);
   const collectedToday = riders.reduce((s, r) => s + r.collectedTodayLKR, 0);
   const receivedToday = riders.reduce((s, r) => s + r.handedInTodayLKR, 0);
+  const late = riders.filter((r) => r.earlier.length);
+  const lateLKR = late.reduce((s, r) => s + earlierLKR(r), 0);
 
   const undo = async (h: HandIn) => {
     const ok = await confirm({
@@ -106,12 +114,19 @@ export const RiderCashView: React.FC<{ branch: BranchFilter }> = ({ branch }) =>
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat
           icon={<Wallet className="w-5 h-5" />}
           label="With riders now"
           value={lkr(holding)}
           hint={holders.length ? `${holders.length} ${holders.length === 1 ? 'rider has' : 'riders have'} cash to hand in` : 'Everything is handed in'}
+        />
+        <Stat
+          icon={<TriangleAlert className="w-5 h-5" />}
+          label="From earlier days"
+          value={lkr(lateLKR)}
+          hint={late.length ? `Not handed in by ${late.map((r) => r.name.split(' ')[0]).join(', ')}` : 'Nothing left from earlier days'}
+          alert={lateLKR > 0}
         />
         <Stat icon={<Banknote className="w-5 h-5" />} label="Collected today" value={lkr(collectedToday)} hint="Cash on delivery, since midnight" />
         <Stat icon={<HandCoins className="w-5 h-5" />} label="Received today" value={lkr(receivedToday)} hint="Handed in at the parlour" />
@@ -128,7 +143,7 @@ export const RiderCashView: React.FC<{ branch: BranchFilter }> = ({ branch }) =>
         ) : (
           <Card className="divide-y divide-[#F0E8DC] overflow-hidden">
             {riders.map((r) => (
-              <div key={r.id} className="px-4 py-3.5 flex flex-wrap items-center gap-x-4 gap-y-3">
+              <div key={r.id} className={cx('px-4 py-3.5 flex flex-wrap items-center gap-x-4 gap-y-3', r.earlier.length > 0 && 'shadow-[inset_4px_0_0_#DC2626]')}>
                 <span className={cx('w-11 h-11 rounded-full flex items-center justify-center font-bold shrink-0', r.holdingLKR ? 'bg-amber-100 text-amber-800' : 'bg-stone-100 text-stone-500')}>
                   {r.name.trim()[0]?.toUpperCase()}
                 </span>
@@ -141,6 +156,15 @@ export const RiderCashView: React.FC<{ branch: BranchFilter }> = ({ branch }) =>
                   <p className="text-sm text-[#7A6458] mt-0.5">
                     {r.lastHandIn ? <>Last handed in {lkr(r.lastHandIn.amountLKR)} · {when(r.lastHandIn.receivedAt)}</> : 'Nothing handed in yet'}
                   </p>
+                  {r.earlier.length > 0 && (
+                    <p className="mt-1 text-sm font-semibold text-red-700 flex flex-wrap items-center gap-x-1.5">
+                      <TriangleAlert className="w-4 h-4" />
+                      {lkr(earlierLKR(r))} from earlier days
+                      <span className="font-normal text-red-700/80">
+                        ({r.earlier.map((d) => `${dayLabel(d.day)} ${lkr(d.amountLKR)}`).join(' · ')})
+                      </span>
+                    </p>
+                  )}
                 </div>
                 <div className="text-right">
                   {r.holdingLKR ? (
@@ -215,14 +239,14 @@ export const RiderCashView: React.FC<{ branch: BranchFilter }> = ({ branch }) =>
 
 /** Count the cash, then record what was received (all of it, or part) */
 const ReceivePopup: React.FC<{ rider: RiderCash; onClose: () => void; onDone: (amount: number, left: number) => void }> = ({ rider, onClose, onDone }) => {
-  const [detail, setDetail] = useState<{ holdingLKR: number; orders: UnpaidOrder[] } | null>(null);
+  const [detail, setDetail] = useState<{ holdingLKR: number; orders: UnpaidOrder[]; today: string } | null>(null);
   const [amount, setAmount] = useState(String(rider.holdingLKR));
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api<{ holdingLKR: number; orders: UnpaidOrder[] }>(`/rider-cash/${rider.id}`, { as: 'admin' })
+    api<{ holdingLKR: number; orders: UnpaidOrder[]; today: string }>(`/rider-cash/${rider.id}`, { as: 'admin' })
       .then((d) => {
         setDetail(d);
         setAmount(String(d.holdingLKR));
@@ -272,11 +296,12 @@ const ReceivePopup: React.FC<{ rider: RiderCash; onClose: () => void; onDone: (a
           ) : (
             <ul className="rounded-2xl border border-[#EAE2D6] bg-white divide-y divide-[#F0E8DC] overflow-hidden">
               {detail.orders.map((o) => (
-                <li key={o.orderReference} className="px-4 py-2.5 flex items-center gap-3 text-sm">
+                <li key={o.orderReference} className={cx('px-4 py-2.5 flex items-center gap-3 text-sm', o.deliveredAt < detail.today && 'bg-red-50/60')}>
                   <span className="font-mono font-bold text-[#81001E] w-24">{shortRef(o.orderReference)}</span>
                   <span className="min-w-0 flex-1 truncate">
                     {o.customerName}
                     <span className="text-[#8A7970]"> · {when(o.deliveredAt)}</span>
+                    {o.deliveredAt < detail.today && <Badge tone="red" className="ml-2">Earlier day</Badge>}
                   </span>
                   <span className="font-semibold text-[#241A18] text-right">
                     {lkr(o.owedLKR)}
