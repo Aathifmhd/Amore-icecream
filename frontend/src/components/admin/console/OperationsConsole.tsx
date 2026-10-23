@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Activity, ClipboardList, LayoutDashboard, RotateCcw, UtensilsCrossed, BarChart3, CloudOff, ExternalLink, IdCard, LogOut, Lock, MapPin, MoreHorizontal, Settings, UserCog } from 'lucide-react';
+import { Activity, ClipboardList, LayoutDashboard, RotateCcw, UtensilsCrossed, BarChart3, CloudOff, ExternalLink, IdCard, Lock, MapPin, MoreHorizontal, Power, Settings, UserCog } from 'lucide-react';
 import { BranchId, Currency, OrderRecord } from '../../../types';
 import { AMORE_BRANCHES } from '../../../data/iceCreamData';
 import { isCapturedReturnedBill } from '../../../utils/orderStorage';
@@ -37,7 +37,7 @@ const ALL_SECTIONS: { id: Section; label: string; icon: React.ReactNode; title: 
 ];
 // When the Action Center was last looked at (on this device), for its "new" count
 const ACTIVITY_SEEN_KEY = 'amore_activity_seen_v1';
-// Settings sits at the bottom of the menu (and in "More" on phones), not with the work pages
+// Settings is the last page in the menu (and in "More" on phones), after the work pages
 const SETTINGS_TITLE = 'Settings';
 
 // Old links (?tab=returns, ?tab=overview…) still land in the right place
@@ -92,6 +92,9 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
   const [openRef, setOpenRef] = useState<string | null>(null);
   const [newOrderOpen, setNewOrderOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [powerOpen, setPowerOpen] = useState(false);
+  // Bumped to reopen Settings on a chosen section (e.g. User code)
+  const [settingsKey, setSettingsKey] = useState(0);
   const unsaved = usePendingWrites();
   const { toast } = useConsoleUi();
 
@@ -105,12 +108,51 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
   const go = (s: Section) => {
     setSection(s);
     setMoreOpen(false);
+    setPowerOpen(false);
     const url = new URL(window.location.href);
     url.searchParams.set('tab', s);
     if (s !== 'settings') url.searchParams.delete('view');
     window.history.replaceState({}, '', url.toString());
     window.scrollTo({ top: 0 });
   };
+
+  // Lock needs a user code on this device; without one, open Settings → User code to set it
+  const lockOrSetCode = () => {
+    setPowerOpen(false);
+    setMoreOpen(false);
+    if (onLock) return onLock();
+    const url = new URL(window.location.href);
+    url.searchParams.set('view', 'code');
+    window.history.replaceState({}, '', url.toString());
+    setSettingsKey((k) => k + 1);
+    go('settings');
+    toast('Set a user code on this device first; then Lock keeps the console closed until it is entered.');
+  };
+  useEffect(() => {
+    if (!powerOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setPowerOpen(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [powerOpen]);
+
+  const powerChoices = (
+    <>
+      <button type="button" onClick={lockOrSetCode} className="power-choice">
+        <span className="power-icon bg-amber-100 text-amber-800">
+          <Lock className="w-6 h-6" />
+        </span>
+        <span className="font-bold text-sm text-[#241A18]">Lock</span>
+        <span className="text-[11px] text-[#8A7970] leading-snug">{onLock ? 'Open again with your user code' : 'Set a user code first'}</span>
+      </button>
+      <button type="button" onClick={onSignOut} className="power-choice power-choice-danger">
+        <span className="power-icon bg-red-100 text-red-700">
+          <Power className="w-6 h-6" />
+        </span>
+        <span className="font-bold text-sm text-[#241A18]">Shut down</span>
+        <span className="text-[11px] text-[#8A7970] leading-snug">Sign out of this device</span>
+      </button>
+    </>
+  );
 
   const scoped = useMemo(() => orders.filter((o) => inBranch(o, branch)), [orders, branch]);
   const newCount = scoped.filter((o) => stageOf(o) === 'new' && !isCapturedReturnedBill(o)).length;
@@ -241,22 +283,26 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
               </React.Fragment>
             );
           })}
-        </nav>
-
-        <div className="rail-foot">
+          <div className="rail-group" aria-hidden="true">
+            <span className="rail-label">System</span>
+          </div>
           <button type="button" onClick={() => go('settings')} aria-current={section === 'settings' ? 'page' : undefined} aria-label={SETTINGS_TITLE} className="rail-item">
             <Settings />
             <span className="rail-label">{SETTINGS_TITLE}</span>
           </button>
-          {onLock && (
-            <button type="button" onClick={onLock} aria-label="Lock" className="rail-item rail-quiet">
-              <Lock />
-              <span className="rail-label">Lock</span>
-            </button>
-          )}
-          <button type="button" onClick={onSignOut} aria-label="Sign out" className="rail-item rail-quiet rail-danger">
-            <LogOut />
-            <span className="rail-label">Sign out</span>
+        </nav>
+
+        <div className="rail-foot">
+          <button
+            type="button"
+            onClick={() => setPowerOpen((v) => !v)}
+            aria-label="Power"
+            aria-haspopup="menu"
+            aria-expanded={powerOpen}
+            className={cx('rail-item rail-power', powerOpen && 'is-open')}
+          >
+            <Power />
+            <span className="rail-label">Power</span>
           </button>
         </div>
 
@@ -272,6 +318,16 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
           </span>
         </div>
       </aside>
+
+      {powerOpen && (
+        <>
+          <button type="button" aria-label="Close power menu" className="hidden lg:block fixed inset-0 z-40 cursor-default" onClick={() => setPowerOpen(false)} />
+          <div role="menu" aria-label="Power" className="hidden lg:block fixed left-[88px] bottom-20 z-50 w-[19rem] bg-white rounded-2xl shadow-2xl border border-[#EAE2D6] p-3 animate-scaleUp">
+            <p className="px-1 pb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[#A8988B]">Power</p>
+            <div className="grid grid-cols-2 gap-2">{powerChoices}</div>
+          </div>
+        </>
+      )}
 
       {/* Top bar */}
       <header className="sticky top-0 z-20 bg-[#F7F3EC]/90 backdrop-blur-md border-b border-[#EAE2D6]">
@@ -305,7 +361,7 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
             {moreOpen && (
               <>
                 <button type="button" aria-label="Close menu" className="fixed inset-0 cursor-default" onClick={() => setMoreOpen(false)} />
-                <div className="absolute right-0 mt-2 w-60 bg-white rounded-2xl shadow-xl border border-[#EAE2D6] p-2 z-10 animate-scaleUp">
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-[#EAE2D6] p-2 z-10 animate-scaleUp">
                   {moreSections.map((s) => {
                     const b = badges[s.id];
                     return (
@@ -328,14 +384,9 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
                   <button type="button" onClick={onBackToStore} className="w-full flex items-center gap-3 h-11 px-3 rounded-xl text-sm hover:bg-[#F3EDE3] cursor-pointer">
                     <ExternalLink className="w-4 h-4" /> View website
                   </button>
-                  {onLock && (
-                    <button type="button" onClick={onLock} className="w-full flex items-center gap-3 h-11 px-3 rounded-xl text-sm hover:bg-[#F3EDE3] cursor-pointer">
-                      <Lock className="w-4 h-4" /> Lock
-                    </button>
-                  )}
-                  <button type="button" onClick={onSignOut} className="w-full flex items-center gap-3 h-11 px-3 rounded-xl text-sm text-red-700 hover:bg-red-50 cursor-pointer">
-                    <LogOut className="w-4 h-4" /> Sign out
-                  </button>
+                  <div className="my-1.5 border-t border-[#F0E8DC]" />
+                  <p className="px-3 pt-1 pb-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-[#A8988B]">Power</p>
+                  <div className="grid grid-cols-2 gap-2 px-1 pb-1">{powerChoices}</div>
                 </div>
               </>
             )}
@@ -355,7 +406,7 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
         {section === 'employees' && <EmployeesView branch={branch} lockedBranch={lockedBranch} />}
         {section === 'users' && isSuper && <UsersView me={admin} />}
         {section === 'settings' && (
-          <SettingsView admin={admin} menu={menu} soundOn={soundOn} onSoundChange={changeSound} onTestSound={chime} onOpenUsers={() => go('users')} />
+          <SettingsView key={settingsKey} admin={admin} menu={menu} soundOn={soundOn} onSoundChange={changeSound} onTestSound={chime} onOpenUsers={() => go('users')} />
         )}
       </main>
 

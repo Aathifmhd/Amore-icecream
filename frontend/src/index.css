@@ -632,6 +632,34 @@ html {
   background: linear-gradient(135deg, #F6D58E, #E8B04B);
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.14);
 }
+/* Power button (rail foot) and its menu: Lock / Shut down */
+.rail-item.rail-power > svg { color: #fca5a5; }
+.rail-item.rail-power:hover,
+.rail-item.rail-power.is-open { background: rgba(239, 68, 68, 0.16); color: #fecaca; }
+.power-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 8px 12px;
+  border-radius: 16px;
+  border: 1px solid #eae2d6;
+  background: #fbf8f3;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, transform 0.1s;
+}
+.power-choice:hover { background: #fff; border-color: #d9cbb7; }
+.power-choice:active { transform: scale(0.98); }
+.power-choice-danger:hover { background: #fef2f2; border-color: #fca5a5; }
+.power-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .console-rail, .rail-badge { transition: none; }
 }
