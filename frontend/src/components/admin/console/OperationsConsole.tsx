@@ -137,19 +137,14 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
 
   const powerChoices = (
     <>
-      <button type="button" onClick={lockOrSetCode} className="power-choice">
-        <span className="power-icon bg-amber-100 text-amber-800">
-          <Lock className="w-6 h-6" />
-        </span>
-        <span className="font-bold text-sm text-[#241A18]">Lock</span>
-        <span className="text-[11px] text-[#8A7970] leading-snug">{onLock ? 'Open again with your user code' : 'Set a user code first'}</span>
+      <button type="button" role="menuitem" onClick={lockOrSetCode} className="power-row">
+        <Lock />
+        <span>Lock</span>
+        {!onLock && <small>Set a user code first</small>}
       </button>
-      <button type="button" onClick={onSignOut} className="power-choice power-choice-danger">
-        <span className="power-icon bg-red-100 text-red-700">
-          <Power className="w-6 h-6" />
-        </span>
-        <span className="font-bold text-sm text-[#241A18]">Shut down</span>
-        <span className="text-[11px] text-[#8A7970] leading-snug">Sign out of this device</span>
+      <button type="button" role="menuitem" onClick={onSignOut} className="power-row power-row-danger">
+        <Power />
+        <span>Sign out</span>
       </button>
     </>
   );
@@ -255,7 +250,7 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
   return (
     <div className="min-h-screen bg-[#F7F3EC] text-[#241A18] lg:pl-[72px]">
       {/* Menu (desktop): a slim icon rail that opens over the page on hover */}
-      <aside className="console-rail hidden lg:flex" aria-label="Console menu">
+      <aside className="console-rail hidden lg:flex" aria-label="Console menu" onMouseLeave={() => setPowerOpen(false)}>
         <div className="rail-brand">
           <AmoreLogo size="sm" showShadow={false} className="!w-10 !h-10" />
           <div className="rail-label leading-tight">
@@ -292,7 +287,12 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
           </button>
         </nav>
 
-        <div className="rail-foot">
+        <div className="rail-foot relative">
+          {powerOpen && (
+            <div role="menu" aria-label="Power" className="rail-power-menu animate-scaleUp">
+              {powerChoices}
+            </div>
+          )}
           <button
             type="button"
             onClick={() => setPowerOpen((v) => !v)}
@@ -318,16 +318,6 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
           </span>
         </div>
       </aside>
-
-      {powerOpen && (
-        <>
-          <button type="button" aria-label="Close power menu" className="hidden lg:block fixed inset-0 z-40 cursor-default" onClick={() => setPowerOpen(false)} />
-          <div role="menu" aria-label="Power" className="hidden lg:block fixed left-[84px] bottom-20 z-50 w-[19rem] bg-white rounded-2xl shadow-2xl border border-[#EAE2D6] p-3 animate-scaleUp">
-            <p className="px-1 pb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[#A8988B]">Power</p>
-            <div className="grid grid-cols-2 gap-2">{powerChoices}</div>
-          </div>
-        </>
-      )}
 
       {/* Top bar */}
       <header className="sticky top-0 z-20 bg-[#F7F3EC]/90 backdrop-blur-md border-b border-[#EAE2D6]">
@@ -385,8 +375,7 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
                     <ExternalLink className="w-4 h-4" /> View website
                   </button>
                   <div className="my-1.5 border-t border-[#F0E8DC]" />
-                  <p className="px-3 pt-1 pb-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-[#A8988B]">Power</p>
-                  <div className="grid grid-cols-2 gap-2 px-1 pb-1">{powerChoices}</div>
+                  {powerChoices}
                 </div>
               </>
             )}

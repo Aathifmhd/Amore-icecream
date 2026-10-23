@@ -637,29 +637,40 @@ html {
 .rail-item.rail-power > svg { color: #fca5a5; }
 .rail-item.rail-power:hover,
 .rail-item.rail-power.is-open { background: rgba(239, 68, 68, 0.16); color: #fecaca; }
-.power-choice {
+/* The dropdown above the Power button (inside the open menu, like Cargo POS's user menu) */
+.rail-power-menu {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: calc(100% - 4px);
+  z-index: 5;
+  padding: 4px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.35);
+}
+.console-rail:not(:hover):not(:has(:focus-visible)) .rail-power-menu { display: none; }
+/* A row in the Power dropdown (also used in the phone's "More" menu) */
+.power-row {
+  width: 100%;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 14px 8px 12px;
-  border-radius: 16px;
-  border: 1px solid #eae2d6;
-  background: #fbf8f3;
-  text-align: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #241a18;
+  white-space: nowrap;
+  text-align: left;
   cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s, transform 0.1s;
 }
-.power-choice:hover { background: #fff; border-color: #d9cbb7; }
-.power-choice:active { transform: scale(0.98); }
-.power-choice-danger:hover { background: #fef2f2; border-color: #fca5a5; }
-.power-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-}
+.power-row > svg { width: 16px; height: 16px; flex-shrink: 0; }
+.power-row:hover { background: #f3ede3; }
+.power-row small { margin-left: auto; font-size: 11px; font-weight: 500; color: #8a7970; }
+.power-row-danger { color: #b91c1c; }
+.power-row-danger:hover { background: #fef2f2; }
 
 @media (prefers-reduced-motion: reduce) {
   .console-rail, .rail-badge { transition: none; }
