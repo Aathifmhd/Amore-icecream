@@ -253,11 +253,11 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
   );
 
   return (
-    <div className="min-h-screen bg-[#F7F3EC] text-[#241A18] lg:pl-[76px]">
+    <div className="min-h-screen bg-[#F7F3EC] text-[#241A18] lg:pl-[72px]">
       {/* Menu (desktop): a slim icon rail that opens over the page on hover */}
       <aside className="console-rail hidden lg:flex" aria-label="Console menu">
         <div className="rail-brand">
-          <AmoreLogo size="sm" showShadow={false} />
+          <AmoreLogo size="sm" showShadow={false} className="!w-10 !h-10" />
           <div className="rail-label leading-tight">
             <p className="font-serif-title text-lg font-bold text-white">Amore</p>
             <p className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-[#E8B04B]">Operations</p>
@@ -322,7 +322,7 @@ const ConsoleShell: React.FC<Props> = ({ admin, onSignOut, onLock, onBackToStore
       {powerOpen && (
         <>
           <button type="button" aria-label="Close power menu" className="hidden lg:block fixed inset-0 z-40 cursor-default" onClick={() => setPowerOpen(false)} />
-          <div role="menu" aria-label="Power" className="hidden lg:block fixed left-[88px] bottom-20 z-50 w-[19rem] bg-white rounded-2xl shadow-2xl border border-[#EAE2D6] p-3 animate-scaleUp">
+          <div role="menu" aria-label="Power" className="hidden lg:block fixed left-[84px] bottom-20 z-50 w-[19rem] bg-white rounded-2xl shadow-2xl border border-[#EAE2D6] p-3 animate-scaleUp">
             <p className="px-1 pb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[#A8988B]">Power</p>
             <div className="grid grid-cols-2 gap-2">{powerChoices}</div>
           </div>
