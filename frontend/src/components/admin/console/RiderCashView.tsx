@@ -1,5 +1,5 @@
 /**
- * Cash collection (console): the cash each rider holds from cash-on-delivery orders, and recording
+ * Cash collection (console, a tab on the Riders page): the cash each rider holds from cash-on-delivery orders, and recording
  * what they hand in at the parlour. A hand-in can be part of what they hold; the rest stays with
  * them. Today's hand-ins can be undone. A branch admin sees their own parlour's riders.
  */
@@ -9,12 +9,13 @@ import { BranchId } from '../../../types';
 import { api, ApiError } from '../../../api';
 import { startPolling } from '../../../utils/poll';
 import { formatPrice } from '../../../utils/currency';
-import { Badge, Button, Card, EmptyState, Field, Popup, cx, inputClass, useConsoleUi } from './ui';
+import { Badge, Button, Card, EmptyState, Field, Popup, Stat, cx, inputClass, useConsoleUi } from './ui';
 import type { BranchFilter } from './useConsoleData';
 import { clockTime, shortRef, timeAgo } from './orderMeta';
-import { BRANCH_SHORT, Stat } from './RidersView';
+
 
 const lkr = (n: number) => formatPrice(n, 'LKR');
+const BRANCH_SHORT: Record<BranchId, string> = { akurana: 'Akurana', colombo: 'Colombo', arugambay: 'Arugam Bay' };
 const errorText = (err: unknown, fallback: string) => (err instanceof ApiError ? err.message : fallback);
 const when = (iso: string) =>
   new Date(iso).toDateString() === new Date().toDateString()

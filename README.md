@@ -185,7 +185,7 @@ needs no answer. If the order was with a rider, the rider app tells them the par
 and their Done list shows how it was paid. Card orders show as "Paid by card" everywhere: the
 orders list, the order popup, the rider app and the kitchen slip.
 
-**Cash collection** (console): the cash each rider holds = all the cash they collected at the door
+**Cash collection** (a tab on the console's Riders page): the cash each rider holds = all the cash they collected at the door
 minus everything they handed in (`backend/src/riderCash.js`, hand-ins in `cash_handins`). Staff
 count the cash and press **Receive cash**: the popup lists the deliveries not handed in yet (oldest
 count as paid first) and takes the amount received — all of it, or part, with an optional note.

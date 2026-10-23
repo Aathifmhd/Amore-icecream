@@ -2,9 +2,10 @@
  * Riders (console): who delivers for each parlour, what they are doing now, today's deliveries
  * and cash, orders waiting for a rider, and adding / editing riders. Riders use the rider app
  * at /rider (phone number + PIN). A branch admin sees and manages their own parlour's riders.
+ * The second tab, Cash collection, records the cash riders hand in (RiderCashView).
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { Banknote, Bike, CheckCircle2, Clock, Copy, KeyRound, Pencil, Plus, Smartphone, Star, Trash2, UserRound } from 'lucide-react';
+import { Banknote, Bike, CheckCircle2, Clock, Copy, HandCoins, KeyRound, Pencil, Plus, Smartphone, Star, Trash2, UserRound } from 'lucide-react';
 import { BranchId, PaidVia } from '../../../types';
 import { AMORE_BRANCHES } from '../../../data/iceCreamData';
 import { api, ApiError, type AdminProfile } from '../../../api';
@@ -12,12 +13,13 @@ import { startPolling } from '../../../utils/poll';
 import { formatPrice } from '../../../utils/currency';
 import { paidViaLabel } from '../../../utils/payment';
 import { Stars } from '../../Stars';
-import { Badge, Button, Card, EmptyState, Field, Popup, Switch, cx, inputClass, useConsoleUi } from './ui';
+import { Badge, Button, Card, EmptyState, Field, Popup, Stat, Switch, cx, inputClass, useConsoleUi } from './ui';
+import { RiderCashView } from './RiderCashView';
 import type { BranchFilter } from './useConsoleData';
 import { clockTime, shortRef, timeAgo } from './orderMeta';
 
 const lkr = (n: number) => formatPrice(n, 'LKR');
-export const BRANCH_SHORT: Record<BranchId, string> = { akurana: 'Akurana', colombo: 'Colombo', arugambay: 'Arugam Bay' };
+const BRANCH_SHORT: Record<BranchId, string> = { akurana: 'Akurana', colombo: 'Colombo', arugambay: 'Arugam Bay' };
 const RIDER_APP = 'amore-icecream.vercel.app/rider';
 
 interface RiderOrder {
@@ -72,9 +74,70 @@ function useRiders() {
   return { data, error, reload: load };
 }
 
+type RidersTab = 'riders' | 'cash';
+// ?view=cash (and old ?tab=cash links) open Cash collection
+const tabFromUrl = (): RidersTab => {
+  const p = new URLSearchParams(window.location.search);
+  return p.get('view') === 'cash' || p.get('tab') === 'cash' || p.get('tab') === 'rider-cash' ? 'cash' : 'riders';
+};
+
 export const RidersView: React.FC<{ admin: AdminProfile; branch: BranchFilter }> = ({ admin, branch }) => {
+  const riders = useRiders();
+  const [tab, setTab] = useState<RidersTab>(tabFromUrl);
+  const open = (t: RidersTab) => {
+    setTab(t);
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', 'riders');
+    if (t === 'cash') url.searchParams.set('view', 'cash');
+    else url.searchParams.delete('view');
+    window.history.replaceState({}, '', url.toString());
+  };
+  const inScope = (riders.data?.riders || []).filter((r) => branch === 'all' || r.branchId === branch);
+  const holding = inScope.reduce((s, r) => s + r.holdingLKR, 0);
+
+  const tabs: { id: RidersTab; label: string; icon: React.ReactNode; extra: React.ReactNode }[] = [
+    { id: 'riders', label: 'Riders', icon: <Bike className="w-4 h-4" />, extra: <span className="text-[#A8988B] font-medium">{inScope.length}</span> },
+    {
+      id: 'cash',
+      label: 'Cash collection',
+      icon: <HandCoins className="w-4 h-4" />,
+      extra: holding > 0 ? <span className="px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 text-xs font-bold">{lkr(holding)}</span> : null,
+    },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div className="inline-flex max-w-full overflow-x-auto no-scrollbar p-1 bg-[#F3EDE3] rounded-xl" role="tablist" aria-label="Riders">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => open(t.id)}
+            className={cx(
+              'h-9 px-3.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors cursor-pointer inline-flex items-center gap-2',
+              tab === t.id ? 'bg-white text-[#241A18] shadow-sm' : 'text-[#6B5A51] hover:text-[#241A18]'
+            )}
+          >
+            {t.icon}
+            {t.label}
+            {t.extra}
+          </button>
+        ))}
+      </div>
+      {tab === 'riders' ? <RidersList admin={admin} branch={branch} riders={riders} onCash={() => open('cash')} /> : <RiderCashView branch={branch} />}
+    </div>
+  );
+};
+
+const RidersList: React.FC<{ admin: AdminProfile; branch: BranchFilter; riders: ReturnType<typeof useRiders>; onCash: () => void }> = ({
+  admin,
+  branch,
+  riders: { data, error, reload },
+  onCash,
+}) => {
   const { toast, confirm } = useConsoleUi();
-  const { data, error, reload } = useRiders();
   const [editing, setEditing] = useState<Rider | 'new' | null>(null);
   const [pinFor, setPinFor] = useState<Rider | null>(null);
   const [historyOf, setHistoryOf] = useState<Rider | null>(null);
@@ -128,7 +191,7 @@ export const RidersView: React.FC<{ admin: AdminProfile; branch: BranchFilter }>
           alert={waiting.some((o) => o.readyAt && Date.now() - Date.parse(o.readyAt) > 10 * 60_000)}
         />
         <Stat icon={<CheckCircle2 className="w-5 h-5" />} label="Delivered today" value={`${deliveredToday}`} hint="By riders, since midnight" />
-        <Stat icon={<Banknote className="w-5 h-5" />} label="Cash collected today" value={lkr(cashToday)} hint="Record hand-ins on Cash collection" />
+        <Stat icon={<Banknote className="w-5 h-5" />} label="Cash collected today" value={lkr(cashToday)} hint="Record hand-ins under Cash collection" />
       </div>
 
       {/* The rider app */}
@@ -230,7 +293,11 @@ export const RidersView: React.FC<{ admin: AdminProfile; branch: BranchFilter }>
                 <p className="text-[#7A6458]">
                   {lkr(r.cashToday)} cash today{r.cashOnTheWay ? ` · ${lkr(r.cashOnTheWay)} to collect` : ''}
                 </p>
-                {r.holdingLKR > 0 && <p className="text-amber-800 font-semibold">{lkr(r.holdingLKR)} to hand in</p>}
+                {r.holdingLKR > 0 && (
+                  <button type="button" onClick={onCash} className="text-amber-800 font-semibold hover:underline cursor-pointer">
+                    {lkr(r.holdingLKR)} to hand in
+                  </button>
+                )}
               </div>
               <div className="flex items-center gap-1">
                 <Switch checked={r.active} label={`${r.name} can sign in`} onChange={(v) => setActive(r, v)} />
@@ -250,16 +317,6 @@ export const RidersView: React.FC<{ admin: AdminProfile; branch: BranchFilter }>
   );
 };
 
-export const Stat: React.FC<{ icon: React.ReactNode; label: string; value: string; hint: string; alert?: boolean }> = ({ icon, label, value, hint, alert }) => (
-  <Card className={cx('p-4', alert && 'border-red-200 bg-red-50/40')}>
-    <p className="text-sm text-[#7A6458] flex items-center gap-2">
-      <span className={alert ? 'text-red-600' : 'text-[#81001E]'}>{icon}</span>
-      {label}
-    </p>
-    <p className="text-2xl font-bold text-[#241A18] mt-1.5">{value}</p>
-    <p className={cx('text-xs mt-0.5', alert ? 'text-red-700 font-semibold' : 'text-[#8A7970]')}>{hint}</p>
-  </Card>
-);
 
 const pinInput = cx(inputClass, 'text-center text-xl tracking-[0.4em]');
 

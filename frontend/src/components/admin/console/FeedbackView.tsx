@@ -8,10 +8,9 @@ import { Bike, Mail, MessageSquareHeart, Star, ThumbsDown, ThumbsUp } from 'luci
 import { OrderRecord } from '../../../types';
 import { api } from '../../../api';
 import { Stars } from '../../Stars';
-import { Badge, Card, EmptyState, cx } from './ui';
+import { Badge, Card, EmptyState, Stat, cx } from './ui';
 import { BranchFilter, inBranch } from './useConsoleData';
 import { isPickup, shortRef, timeAgo } from './orderMeta';
-import { Stat } from './RidersView';
 
 type Filter = 'all' | 'unhappy' | 'okay' | 'happy' | 'comments';
 

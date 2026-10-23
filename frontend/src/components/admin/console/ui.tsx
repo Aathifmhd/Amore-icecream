@@ -78,6 +78,18 @@ export const Card: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className
   <div {...rest} className={cx('bg-white rounded-2xl border border-[#EAE2D6] shadow-[0_1px_2px_rgba(36,26,24,0.04)]', className)} />
 );
 
+/** One figure on a page's top row: an icon and label, the value, and a short hint */
+export const Stat: React.FC<{ icon: React.ReactNode; label: string; value: string; hint: string; alert?: boolean }> = ({ icon, label, value, hint, alert }) => (
+  <Card className={cx('p-4', alert && 'border-red-200 bg-red-50/40')}>
+    <p className="text-sm text-[#7A6458] flex items-center gap-2">
+      <span className={alert ? 'text-red-600' : 'text-[#81001E]'}>{icon}</span>
+      {label}
+    </p>
+    <p className="text-2xl font-bold text-[#241A18] mt-1.5">{value}</p>
+    <p className={cx('text-xs mt-0.5', alert ? 'text-red-700 font-semibold' : 'text-[#8A7970]')}>{hint}</p>
+  </Card>
+);
+
 // ---- Switch ----------------------------------------------------------------
 
 export const Switch: React.FC<{ checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }> = ({
