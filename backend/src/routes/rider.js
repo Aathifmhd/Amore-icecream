@@ -16,6 +16,7 @@ import { kickFeedbackEmails } from '../feedback.js';
  *                               ready to pick up at my parlour, mine on the way, my deliveries today,
  *                               the cash I hold (and what is left from earlier days), my star rating
  *   GET  /ratings               my stars from customers (comments are for the parlour only)
+ *   GET  /photo                 my photo (set by the parlour), for the app header
  *   POST /orders/:ref/pickup    take a ready order (only one rider can)
  *   POST /orders/:ref/delivered { cashCollected } hand it over at the door
  *   POST /orders/:ref/hand-back { reason } couldn't deliver: it goes back to the parlour's ready list
@@ -81,6 +82,11 @@ router.get('/orders', async (req, res) => {
 });
 
 router.get('/ratings', async (req, res) => res.json(await riderRatings(req.rider.id)));
+
+router.get('/photo', async (req, res) => {
+  const r = await col('riders').findOne({ id: req.rider.id }, { projection: { _id: 0, photo: 1 } });
+  res.json({ photo: r?.photo || null });
+});
 
 const findMine = async (req) => {
   const order = await col('orders').findOne({ orderReference: req.params.ref, riderId: req.rider.id }, PUBLIC);

@@ -1,7 +1,7 @@
 /**
  * Dashboard: today at a glance for the branch(es) this admin looks after — sales, orders,
- * what needs doing now, the last 7 days, what's sold out and (super admin) each branch
- * and the latest activity. Everything is worked out from the orders and menu already loaded.
+ * what needs doing now, the last 7 days, the delivery riders and customers' ratings, what's
+ * sold out and (super admin) each branch and the latest activity. Everything is worked out from the orders and menu already loaded.
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, ArrowDownRight, ArrowRight, ArrowUpRight, CircleSlash, ClipboardList, IdCard, Activity } from 'lucide-react';
@@ -15,12 +15,13 @@ import { Badge, Button, Card, cx } from './ui';
 import { BranchFilter, MenuData, inBranch } from './useConsoleData';
 import { saleTime, stageOf, statusLabel, timeAgo, shortRef } from './orderMeta';
 import { ActivityRow, type ActivityItem } from './ActionCenterView';
+import { RatingsCard, RidersCard } from './DashboardRiders';
 
 const lkr = (n: number) => formatPrice(n, 'LKR');
 const BRANCH_SHORT: Record<BranchId, string> = { akurana: 'Akurana', colombo: 'Colombo', arugambay: 'Arugam Bay' };
 const DAY = 24 * 3600 * 1000;
 
-type Go = 'orders' | 'menu' | 'employees' | 'activity' | 'reports';
+type Go = 'orders' | 'menu' | 'employees' | 'activity' | 'reports' | 'riders' | 'feedback';
 
 const startOfDay = (offsetDays = 0) => {
   const d = new Date();
@@ -396,6 +397,12 @@ export const DashboardView: React.FC<{
           </div>
         </div>
       )}
+
+      {/* Deliveries: riders, and what customers said */}
+      <div className="grid lg:grid-cols-2 gap-4 items-start">
+        <RidersCard branch={branch} onOpen={() => onGo('riders')} />
+        <RatingsCard orders={orders} branch={branch} onOpen={() => onGo('feedback')} onOpenOrder={onOpenOrder} />
+      </div>
 
       <div className={cx('grid gap-4 items-start', isSuper ? 'lg:grid-cols-3' : 'lg:grid-cols-2')}>
         <Card className="p-5">

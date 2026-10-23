@@ -77,7 +77,7 @@ The console is at **/admin** (it is not linked from the storefront).
 
 | | Super admin | Branch admin |
 | --- | --- | --- |
-| Dashboard | today for all branches (or one), each branch, latest activity | today for own branch |
+| Dashboard | today for all branches (or one), each branch, delivery riders, ratings & feedback, latest activity | today for own branch, its riders and ratings |
 | Action Center | everything that happens at every branch | — |
 | Orders, refunds, reports | all branches | own branch only |
 | Menu | add, edit, remove items (the standard for all branches); any branch's own version; stock at any branch | own branch's prices, photos and text; stock at own branch |
@@ -162,7 +162,7 @@ branch admin manages their own parlour's riders. The personal details are for th
 (never the rider app or customers); riders added before them can be filled in later, and once
 given they can be changed but not emptied. Clicking a rider shows their details and deliveries.
 Riders open **/rider** on their phone (it can be saved to the home screen) and sign in with their
-mobile number and PIN.
+mobile number and PIN. The app header shows the rider's photo, if the parlour added one.
 
 A delivery order moves like this:
 

@@ -352,7 +352,7 @@ const shortName = (full: string) => {
   return w.length > 2 ? `${w[0]} ${w[w.length - 1]}` : w.join(' ');
 };
 
-const RiderAvatar: React.FC<{ name: string; photo?: string; active?: boolean; size?: string }> = ({ name, photo, active = true, size = 'w-11 h-11' }) =>
+export const RiderAvatar: React.FC<{ name: string; photo?: string; active?: boolean; size?: string }> = ({ name, photo, active = true, size = 'w-11 h-11' }) =>
   photo ? (
     <img src={photo} alt="" className={cx(size, 'rounded-full object-cover shrink-0 bg-[#F3EDE3]', !active && 'grayscale opacity-60')} />
   ) : (

@@ -46,6 +46,7 @@ import {
   dayOrClock,
   directionsUrl,
   handBack,
+  loadMyPhoto,
   loadRatings,
   markDelivered,
   minutesSince,
@@ -81,6 +82,13 @@ export default function RiderApp() {
 const RiderHome: React.FC<{ onSignedOut: (why: string | null) => void }> = ({ onSignedOut }) => {
   // The demo button shows tomorrow's Done page (nothing is changed)
   const [nextDay, setNextDay] = useState(false);
+  // The rider's photo for the header (loaded once; the parlour sets it in the console)
+  const [photo, setPhoto] = useState<string | null>(null);
+  useEffect(() => {
+    loadMyPhoto()
+      .then(setPhoto)
+      .catch(() => {});
+  }, []);
   const { board, offline, reload } = useRiderBoard(() => onSignedOut('Please sign in again.'), nextDay);
   const [tab, setTab] = useState<Tab>('ready');
   const [toast, setToast] = useState<string | null>(null);
@@ -182,7 +190,11 @@ const RiderHome: React.FC<{ onSignedOut: (why: string | null) => void }> = ({ on
       {/* Header */}
       <header className="sticky top-0 z-30 bg-[#FAF7F2]/95 backdrop-blur-md border-b border-[#EDE3D4]">
         <div className="max-w-md mx-auto px-4 h-16 flex items-center gap-3">
-          <AmoreLogo size="sm" showShadow={false} />
+          {photo ? (
+            <img src={photo} alt="" className="w-11 h-11 rounded-full object-cover shrink-0 ring-2 ring-[#8C102A] ring-offset-2 ring-offset-[#FAF7F2]" />
+          ) : (
+            <AmoreLogo size="sm" showShadow={false} />
+          )}
           <div className="min-w-0 flex-1 leading-tight">
             <p className="font-bold truncate flex items-center gap-1.5">
               Hi, {rider.name.split(' ')[0]}
@@ -239,7 +251,9 @@ const RiderHome: React.FC<{ onSignedOut: (why: string | null) => void }> = ({ on
                       </span>
                     </p>
                     <div className="flex flex-wrap items-center gap-2 mt-3">
-                      <Chip>{o.items.reduce((s, i) => s + i.quantity, 0)} items</Chip>
+                      <Chip>
+                        {o.items.reduce((s, i) => s + i.quantity, 0)} {o.items.reduce((s, i) => s + i.quantity, 0) === 1 ? 'item' : 'items'}
+                      </Chip>
                       <PayChip order={o} />
                     </div>
                     <button

@@ -323,7 +323,8 @@ export async function riderLogin(phone, pin) {
 async function riderFromToken(token) {
   const payload = await readToken(token);
   if (!payload?.sub) return null;
-  const rider = await col('riders').findOne({ id: payload.sub });
+  // Without the photo: this runs on every request from the rider app (GET /api/rider/photo has it)
+  const rider = await col('riders').findOne({ id: payload.sub }, { projection: { photo: 0 } });
   if (!rider || rider.active === false || (rider.sessionVersion ?? 0) !== payload.ver) return null;
   return rider;
 }

@@ -84,6 +84,8 @@ export const handBack = (ref: string, reason: string) =>
   api<{ order: RiderOrder }>(`/rider/orders/${encodeURIComponent(ref)}/hand-back`, { method: 'POST', body: { reason }, as: 'rider' });
 
 export const loadRatings = () => api<RiderRatings>('/rider/ratings', { as: 'rider' });
+/** The rider's photo (set by the parlour), or null */
+export const loadMyPhoto = () => api<{ photo: string | null }>('/rider/photo', { as: 'rider' }).then((r) => r.photo);
 
 /** The rider's board, kept fresh (every few seconds while the app is open). `nextDay`: the demo of tomorrow. */
 export function useRiderBoard(onSignedOut: () => void, nextDay = false) {
